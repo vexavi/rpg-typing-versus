@@ -16,11 +16,38 @@ const samples={
   3:[{prompt:'みどり',answer:'green'},{prompt:'みず',answer:'water'},{prompt:'うれしい',answer:'happy'}]
 };
 const titles={1:'Type a word',2:'Falling words',3:'Defeat the boss',4:'Recruitment'};
-const hints={1:'The Japanese word is shown. Type its English answer and press Enter.',2:'Type the English answers before the words reach the bottom.',3:'Each correct answer damages the enemy. Clear all three words!',4:'Open Recruitment to obtain your first ten characters.'};
+const hints={1:'The Japanese word is shown. Type the English translation and press Enter.',2:'Type the English translations before the words reach the bottom.',3:'Each correct answer damages the enemy. Clear all three words!',4:'Open Recruitment to obtain your first ten characters.'};
+const lessonGuidance={
+  1:'Look at the Japanese word. The English translation is "apple". Type apple, then press Enter.',
+  2:'Words fall, just like Normal Mode. Type their English translations before they reach the bottom.',
+  3:'Defeat the training opponent by clearing the words and watching the HP bars.',
+  4:'Select Recruitment from the menu to continue the tutorial.'
+};
+const focusMap={
+  1:{focus:['#trainingWord','.inputBar','#lessonPanel','.training-coach'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
+  2:{focus:['#trainingWord','.inputBar','#lessonPanel','.training-coach'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
+  3:{focus:['#trainingWord','.inputBar','.bossWrap','#statusPanel','.training-coach'],dim:['.adventure-topbar']},
+  4:{focus:['#tutorialModeOverlay .overlayBox','.tutorial-target'],dim:['.adventure-topbar','.bossWrap','.inputBar','#lessonPanel','#statusPanel','.training-coach']}
+};
 let stage=1,stepCount=0,playerHP=10,frameId=null,startMs=0,busy=false;
 const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function log(message){$('messageLog').textContent=message;}
 function status(message){$('status').textContent=message||'';}
+function clearTutorialFocus(){
+  document.querySelectorAll('.tutorial-focus').forEach(el=>el.classList.remove('tutorial-focus'));
+  document.querySelectorAll('.tutorial-dim').forEach(el=>el.classList.remove('tutorial-dim'));
+}
+function applyTutorialFocus(i){
+  clearTutorialFocus();
+  const cfg=focusMap[i];
+  if(!cfg)return;
+  for(const selector of cfg.focus||[]){
+    document.querySelectorAll(selector).forEach(el=>el.classList.add('tutorial-focus'));
+  }
+  for(const selector of cfg.dim||[]){
+    document.querySelectorAll(selector).forEach(el=>el.classList.add('tutorial-dim'));
+  }
+}
 function stop(){if(frameId!==null){cancelAnimationFrame(frameId);frameId=null;}}
 function routeMenu(){
  if(demo){location.replace('tutorial-preview.html?demo=1');return;}
@@ -33,6 +60,7 @@ function nextWord(){
  const word=document.createElement('div');word.className='word';word.id='trainingWord';word.style.setProperty('--y','18px');
  word.innerHTML=`<span class="prompt">${escapeHtml(record.prompt)}</span><span class="right"><span class="tag">${stage===1?'TRAINING':'FALLING'}</span></span>`;
  lane.appendChild(word);
+ applyTutorialFocus(stage);
  $('answerInput').value='';$('answerInput').disabled=false;$('answerInput').focus({preventScroll:true});
  $('progressText').textContent=`${stepCount} / ${samples[stage].length} words cleared`;
  if(stage===1)return;
@@ -72,7 +100,8 @@ function lesson(i){
  $('wordLane').replaceChildren();status('');
  updateBars();
  if(i===4){showModeSelect();return;}
- log(i===1?'Look at the Japanese word. Type apple, then press Enter.':i===2?'Words fall, just like Normal Mode. Type their English meanings.':'Defeat the training opponent by clearing the words.');
+ log(lessonGuidance[i]||'');
+ applyTutorialFocus(i);
  nextWord();
 }
 async function advance(){
@@ -114,6 +143,7 @@ function showModeSelect(){
   choices.appendChild(button);
  }
  $('tutorialModeOverlay').classList.add('show');$('tutorialModeOverlay').setAttribute('aria-hidden','false');
+ applyTutorialFocus(4);
  choices.querySelector('.tutorial-target')?.focus({preventScroll:true});
 }
 function completed(){

@@ -46,3 +46,29 @@ body.tutorial-client .uiRow .barLine .meter{background:#e0e2e1;opacity:1!importa
 .tutorial-client #tutorialModeOverlay .choiceBtn.tutorial-target:focus-visible{
  outline:3px solid #767d00;outline-offset:2px;
 }
+
+
+/* v86.3: lesson focus masking and highlight treatment */
+.tutorial-client .tutorial-dim{
+  opacity:.22 !important;
+  filter:grayscale(.2) brightness(.7);
+  transition:opacity .18s ease, filter .18s ease;
+}
+.tutorial-client .tutorial-focus{
+  position:relative;
+  z-index:12;
+  opacity:1 !important;
+  filter:none !important;
+}
+.tutorial-client .tutorial-focus::after{
+  content:'';
+  position:absolute;
+  inset:-4px;
+  border:4px solid #fff200;
+  box-shadow:0 0 0 2px rgba(40,40,40,.92), 0 0 18px rgba(255,242,0,.35);
+  pointer-events:none;
+}
+.tutorial-client #trainingWord.tutorial-focus::after{border-radius:4px}
+.tutorial-client #lessonPanel.tutorial-focus::after,.tutorial-client #statusPanel.tutorial-focus::after,.tutorial-client #bossWrap.tutorial-focus::after,.tutorial-client .inputBar.tutorial-focus::after,.tutorial-client .training-coach.tutorial-focus::after{border-radius:3px}
+.tutorial-client #tutorialModeOverlay .overlayBox.tutorial-focus::after{border-radius:6px}
+.tutorial-client #tutorialModeOverlay .choiceBtn.tutorial-target{border-left:7px solid #fff200;background:#fffbd1;cursor:pointer;animation:tutorial-pulse 1.3s ease-in-out infinite alternate}
