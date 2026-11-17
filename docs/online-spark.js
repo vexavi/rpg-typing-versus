@@ -447,11 +447,23 @@ window.addEventListener('offline',()=>lost('Internet connection lost.'));
 // Realtime Database listener resumes transport; an interrupted run requires manual reload.
 window.addEventListener('online',()=>{if(blocked)message('Internet restored. Reload to start a new online session.');});
 const ready=check();
+// Practice/Story teacher settings: at most one verified fetch per scope set / 15 minutes.
+const soloBalanceSyncs=new Map();
 window.RPG_V68_CONNECTION={get connected(){return bootReady&&!blocked&&rtdbConnected;},get blocked(){return blocked;}};
 window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await teacher();return auth.currentUser.getIdToken();},
+ async fetchSoloBalance(mode,stageIds=[],chapterId=null){
+  if(blocked||!['practice','story'].includes(mode))return false;
+  const scopes=[`mode:${mode}`,...(chapterId?[`chapter:${chapterId}`]:[]),...stageIds.map(x=>`stage:${mode}:${x}`)];
+  const key=scopes.join('|');
+  if(Date.now()-(soloBalanceSyncs.get(key)||0)<15*60*1000)return true;
+  // Failure is not fatal: the runtime uses locally cached/built-in values for unranked play.
+  const configs=await Promise.all(scopes.map(scope=>read('gameBalance',scope)));
+  for(let i=0;i<scopes.length;i++)window.RPG_BALANCE?.apply(scopes[i],configs[i]||{},'server');
+  soloBalanceSyncs.set(key,Date.now());return true;
+ },
  async prepareBalanceRun(mode,stageIds=[],chapterId=null){if(blocked)err('Connection required.');const before=await currentConfig();
  const scopes=[`mode:${mode}`,...(chapterId?[`chapter:${chapterId}`]:[]),...stageIds.map(x=>`stage:${mode}:${x}`)];
- for(const scope of scopes){const s=await read('gameBalance',scope);window.RPG_BALANCE?.apply(scope,s||{});}
+ for(const scope of scopes){const s=await read('gameBalance',scope);window.RPG_BALANCE?.apply(scope,s||{},'server');}
  const after=await currentConfig();if(before!==after)err('Difficulty settings changed during run setup.');window.RPG_V66_PREPARED_REVISION=after;return after;},
  watchRankings(mode,grade,update){let disposed=false;Promise.all([read('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig()]).then(([v,c])=>{
  if(disposed||!v)return;return onSnapshot(rankQuery(mode,grade,Number(v.revision)||1,c,20),{includeMetadataChanges:true},snap=>{

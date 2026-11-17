@@ -1,9 +1,17 @@
 /* Global, synchronous cache + resolution for the active Adventure mode/stage.
- * Firebase is required: never read cached teacher settings offline. */
+ * Saved server settings are read-only for offline UNRANKED play. */
 (function(){
  'use strict';
  const allowed=['normal','extra','story','practice','challenge'];
  const cache=new Map();let effective=null;let active={mode:'normal',stage:'1',chapter:null};
+ const STORAGE='rpgTeacherBalance_v869';
+ const saved=(()=>{try{const x=JSON.parse(localStorage.getItem(STORAGE)||'null');return x?.v===1&&Number.isFinite(x.updatedAt)&&x.updatedAt<=Date.now()+60000&&Date.now()-x.updatedAt<30*86400000&&Array.isArray(x.items)?x.items:[]}catch{return []}})();
+ // Firestore data is never restored as proof that a run can be ranked.
+ const cachedScopes=new Set();
+ function persist(){
+  try{localStorage.setItem(STORAGE,JSON.stringify({v:1,updatedAt:Date.now(),items:[...cache.entries()].slice(0,150)}))}catch(_){}
+ }
+
  const numeric={fallSpeedPxPerSec:[5,250],spawnEveryMs:[180,15000],bossMaxHp:[1,2000],hitDamage:[1,100]};
  function scopeList(a){return [`mode:${a.mode}`,...(a.chapter?[`chapter:${a.chapter}`]:[]),`stage:${a.mode}:${a.stage}`];}
  function setActive(mode,stage,chapter){
@@ -33,10 +41,10 @@
   }
   return out;
  }
- function apply(scope,data){
+ function apply(scope,data,source='local'){
   if(!/^((mode:(normal|extra|story|practice|challenge))|(chapter:[a-zA-Z0-9_-]+)|(stage:(normal|extra|story|practice|challenge):[a-zA-Z0-9_-]+))$/.test(scope))return;
   cache.set(scope,clean(data||{}));effective=null;
-  // No persistent offline balance cache in v66.
+  if(source==='server'){cachedScopes.add(scope);persist();}
   if(scopeList(active).includes(scope))window.dispatchEvent(new Event('rpg-balance-update'));
  }
  function merged(){
@@ -49,10 +57,12 @@
   }
   effective=out;return effective;
  }
+ // Load the last known validated teacher values without generating a cloud read.
+ for(const item of saved){if(Array.isArray(item)&&item.length===2&&typeof item[0]==='string')apply(item[0],item[1]);}
  const api={setActive,apply,get:(key,fallback)=>merged().values[key]??fallback,
   mechanic:(id,key,fallback)=>merged().mechanics?.[id]?.[key]??fallback,
   configSnapshot:()=>JSON.parse(JSON.stringify(merged())),
-  scopes:()=>scopeList(active),snapshot:()=>({...active}),clear:scope=>{cache.delete(scope);effective=null;window.dispatchEvent(new Event('rpg-balance-update'))}};
+  scopes:()=>scopeList(active),snapshot:()=>({...active}),clear:scope=>{cache.delete(scope);effective=null;persist();window.dispatchEvent(new Event('rpg-balance-update'))}};
  window.RPG_BALANCE=Object.freeze(api);
  window.dispatchEvent(new CustomEvent('rpg-balance-scopes',{detail:api.scopes()}));
 })();

@@ -123,19 +123,19 @@ function fitAnswerToRight(wordEl){
   let assignedVocabGrade = null;
   let assignedVocabRevision = 0;
   let assignedRankGrade = null;
-  let vocabLastServerSuccess = false;
+  let vocabLastServerSuccess = !!window.RPG_VERIFIED_VOCAB_SYNC_AT;
   // v86.8: fetched-and-verified vocabulary, scoped to the signed-in Adventure Card.
   // Built-in words and legacy unscoped caches are NOT trusted for a playable run.
   const OFFLINE_VOCAB_KEY = adventureKey('bossTyping_verifiedVocab_v3');
   const VOCAB_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-  let vocabRefreshedAt = 0;
+  let vocabRefreshedAt = Number(window.RPG_VERIFIED_VOCAB_SYNC_AT)||0;
   let vocabRefreshInFlight = null;
   let vocabRefreshMode = null;
   let verifiedSessionVocab = null;
-  let vocabRefreshedForMode = null;
+  let vocabRefreshedForMode = window.RPG_VERIFIED_VOCAB_SYNC_AT?'normal':null;
   let runLocalOnly = false; // Never save cloud progress, unlocks, coins or rankings from cached runs.
   let offlineBadge = null;
-  function unverifiedRun(){return runLocalOnly||Boolean(window.RPG_V66_DISCONNECTED)||!navigator.onLine;}
+  function unverifiedRun(){return runLocalOnly||!ADVENTURE_CONTEXT.online||Boolean(window.RPG_V66_DISCONNECTED)||!navigator.onLine;}
   function verifiedCache(){
     try{
       const data=verifiedSessionVocab||JSON.parse(localStorage.getItem(OFFLINE_VOCAB_KEY)||'null');
@@ -1427,7 +1427,9 @@ const achOverlay = document.getElementById("achOverlay");
         best_normal:loadHighScore("normal"),best_extra:loadHighScore("extra"),
         normal_clear:loadNormalCleared(),extra_clear:loadExtraCleared()
       };
-      try{await fetch("/api/adventure/progress",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});}catch(_){}
+      try{const res=await fetch("/api/adventure/progress",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+        if(res.ok&&!unverifiedRun())void window.RPG_LOCAL_PRACTICE?.confirmedProgress?.(payload);
+      }catch(_){}
     },12000);
   }
   // v66: never use unload beacon to submit cloud progress; authenticated callable only.
@@ -2873,6 +2875,7 @@ async function completeStoryStage(stage,damage=null){
   try{ await window.RPG_STORY.showSlides(stage.outro,stage.id,'outro'); }catch(e){console.warn(e)}
   let result=null;
   if(runLocalOnly||window.RPG_V66_DISCONNECTED||!navigator.onLine){
+    try{window.RPG_LOCAL_PRACTICE?.record({mode:'story',stageId:stage.id});}catch(_){}
     const stars=damage===null?null:window.RPG_STORY.starsForDamage(damage);
     result={stars,best:stars,firstClear:false,offline:true};
   }else{
@@ -2968,24 +2971,30 @@ function showModeSelectScreen(){
     lockedReason:'Clear Normal Mode to unlock',onClick:()=>{
       setMode('extra');showOverlay(false);startGame();
     }});
-  addMode('Challenge Mode', {disabled:!extraCleared,
-    lockedReason:'Clear Extra Mode to unlock',onClick:()=>{
+  addMode('Challenge Mode', {disabled:!extraCleared||!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
+    lockedReason:!extraCleared?'Clear Extra Mode to unlock':'Online Firebase required',onClick:()=>{
       setMode('challenge');showOverlay(false);startGame();
     }});
-  addMode('All Grades Challenge', {onClick:()=>{
+  addMode('All Grades Challenge', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     setMode('shared');showOverlay(false);startGame();
   }});
-  addMode('Profile', {onClick:()=>{
+  addMode('Profile', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     window.location.assign('profile.html');
   }});
-  addMode('Recruitment', {onClick:()=>{
+  addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     window.location.assign('recruitment.html');
   }});
-  addMode('Rankings', {onClick:()=>{
+  addMode('Rankings', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     void openRankings('normal');
   }});
   addMode('Tournament', {disabled:true,
     lockedReason:'Scan your teacher’s tournament QR code to join'});
+  if(!ADVENTURE_CONTEXT.online){
+    const note=document.createElement('p');note.setAttribute('role','status');note.id='localPracticeNotice';
+    note.style.cssText='font:800 12px/1.5 system-ui;background:#fff4a8;color:#1b1b1b;padding:9px 12px;margin:10px 0 0';
+    note.textContent='LOCAL PRACTICE · UNRANKED · PROGRESS NOT SYNCED';
+    overlayChoices.appendChild(note);
+  }
   const box = overlayChoices.closest('.overlayBox');
   if(box) box.scrollTop = 0;
 
@@ -5977,6 +5986,15 @@ function damagePlayer(amount, reason){
         else{showModeSelectScreen();alert('Cannot load game settings. '+String(e.message||e));return;}
       }
     }
+    if(['practice','story'].includes(currentMode)&&!runLocalOnly){
+      const storyId=storySelectedStage?.id||'1-1';
+      const stageIds=currentMode==='story'?[storyId]:['1','2','3','4','5'];
+      const chapterId=currentMode==='story'?storyId.split('-')[0]:null;
+      try{await window.RPG_V66?.fetchSoloBalance?.(currentMode,stageIds,chapterId);}catch(e){
+        console.info('Using saved teacher difficulty settings:',e?.message||e);
+      }
+      if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
+    }
     continuesLeft = (currentMode === "practice") ? Infinity : (currentMode === "shared" ? 0 : MAX_CONTINUES);
     resetRunScoring();
     if(currentMode === "shared") resetSharedBuckets();
@@ -6194,7 +6212,8 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
   }
 
   function onVictory(){
-  if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
+  if(window.RPG_V66_DISCONNECTED||!navigator.onLine||!ADVENTURE_CONTEXT.online)setLocalOnlyRun(true);
+  if(runLocalOnly){try{window.RPG_LOCAL_PRACTICE?.record({mode:currentMode,score:getActiveScore()});}catch(_){}}
   cleanupContinueListeners();
   gameState = "victory";
   setInputsEnabled(false);

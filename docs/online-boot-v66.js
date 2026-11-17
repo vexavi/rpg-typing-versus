@@ -3,7 +3,7 @@
  * New cards ask for a username once; no one has to type their QR code.
  * The existing Firebase Spark bridge remains authoritative for registration.
  */
-import {ensureStudent} from './cloud-api.js';
+import {offlineCardCache} from './offline-session.js?v=86.9';
 
 const gate=document.createElement('div');
 gate.id='adventureGate';
@@ -30,7 +30,7 @@ gate.innerHTML=`
     </form>
     <button class="ag-secondary" id="ag-retry" type="button" hidden>RETRY</button>
   </main>
-  <div class="ag-footer">RPG TYPING VERSUS <span>·</span> ONLINE ADVENTURE</div>`;
+  <div class="ag-footer">RPG TYPING VERSUS <span>·</span> ADVENTURE</div>`;
 const style=document.createElement('style');
 style.textContent=`
   #adventureGate{position:fixed;inset:0;z-index:99999;overflow:auto;background:#f3f4f5;color:#141518;display:flex;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;padding:24px;isolation:isolate}
@@ -62,6 +62,8 @@ style.textContent=`
 `;
 document.head.append(style);
 document.body.append(gate);
+// Startup screen used to wait for Firebase before showing any UI.
+document.getElementById('v66Startup')?.remove();
 
 const $=id=>document.getElementById(id);
 const cached=(()=>{try{return JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'null')}catch{return null}})();
@@ -73,6 +75,36 @@ const resume=sessionStorage.getItem('rpgReturnToAdventureModeSelect')==='1';
 let code=qrCode||(resume?clean(cached?.card_code):'');
 let busy=false;
 let readyPromise=null;
+// Keep the app shell available when the browser has previously visited this site.
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./offline-sw.js?v=86.9',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
+}
+function installOfflineBridge(){
+ window.RPG_V66_DISCONNECTED=true;
+ window.RPG_OFFLINE_SESSION=true;
+ sessionStorage.setItem('rpgV66Interrupted','1');
+ window.RPG_V66={ready:Promise.resolve(false),
+  call:async()=>{throw Error('Online Firebase required for this operation.');},
+  prepareBalanceRun:async()=>{throw Error('Ranked runs require Firebase.');},
+  watchRankings:()=>()=>{},ping:async()=>{throw Error('Offline session.');}};
+ window.RPG_V68_CONNECTION={get connected(){return false;},get blocked(){return true;}};
+}
+const isTransportFailure=e=>!navigator.onLine||Boolean(window.RPG_V66_DISCONNECTED)||
+  /online firebase connection required|network|offline|unavailable|timeout|connection interrupted|could not connect|failed to fetch|importing a module script|dynamically imported module/i.test(String(e?.message||e));
+async function offlineResume(problem){
+ const record=await offlineCardCache.get(code);
+ if(!record || !record.vocabularyAvailable)return false;
+ installOfflineBridge();
+ const identity={...record.identity,card_code:code,online:false,cloud:false,offline:true,
+  recruitment:null,
+  // Offline entry only permitted after the authoritative tutorial was completed.
+  tutorial:record.identity.tutorial};
+ sessionStorage.setItem('rpgAdventureContext',JSON.stringify(identity));
+ view('checking','LOCAL PRACTICE','Offline Adventure Card · saved vocabulary · no rankings or rewards.');
+ await load(identity,record.progress,{offline:true});
+ return true;
+}
+
 
 function status(message){$('ag-status').textContent=String(message||'').slice(0,190)}
 function view(mode,title,message){
@@ -84,18 +116,22 @@ function view(mode,title,message){
  status(message);
 }
 async function onlineReady(){
+ if(!navigator.onLine)throw Error('Offline: Firebase unavailable.');
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
+   // Never import Firebase on the offline path: the SDK is hosted on a different origin.
+   await import('./online-spark.js?v=84.1');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
-   await ensureStudent();
  })();}
- return readyPromise;
+ // Prevent a broken RTDB handshake from blocking an already-verified card indefinitely.
+ return Promise.race([readyPromise,new Promise((_,reject)=>setTimeout(()=>reject(Error('Firebase connection timeout')),9000))]);
 }
-async function load(identity,progress){
+async function load(identity,progress,{offline=false}={}){
  window.ADVENTURE_PLAYER=identity;
- window.RPG_RESUME_MODE_SELECT=resume;
+ window.RPG_LOCAL_PRACTICE={record:entry=>offlineCardCache.recordLocalResult(identity.public_id,entry),confirmedProgress:progress=>offlineCardCache.updateConfirmedProgress(code,progress)};
+ window.RPG_RESUME_MODE_SELECT=resume||offline;
  sessionStorage.removeItem('rpgReturnToAdventureModeSelect');
  const scope=String(identity.public_id).replace(/[^A-Z0-9_-]/gi,'').slice(0,32),key=k=>`${k}__${scope}`;
  const playerKey=key('bossTyping_profile_v1');let profile={};
@@ -108,20 +144,27 @@ async function load(identity,progress){
  for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear],['bossTyping_extraCleared_v1',progress?.extra_clear]])localStorage.setItem(key(k),val?'1':'0');
  window.RPG_PERF?.begin('Game scripts');
  for(const file of ['story-mode.js','adventure_rewards.js','guild-coins.js','adventure_engine.js'])await new Promise((resolve,reject)=>{
-   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'86.8':file==='story-mode.js'?'86.8':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
+   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'86.9':file==='story-mode.js'?'86.9':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
  });
  window.RPG_PERF?.end('Game scripts');
  gate.remove();
 }
 async function finish(card){
  status('Loading your saved progress…');
- const [progress,profile]=await Promise.all([
+ const vocabPromise=Promise.race([window.RPG_V66.call('/api/vocab/load',{card_code:code,mode:'normal'}),
+   new Promise((_,reject)=>setTimeout(()=>reject(Error('Vocabulary prefetch timed out')),4000))]).catch(e=>{console.info('Vocabulary will refresh on first play:',e?.message||e);return null});
+ const [progress,profile,vocab]=await Promise.all([
    window.RPG_V66.call('/api/adventure/progress',{card_code:code,action:'load'}),
-   window.RPG_V66.call('/api/profile',{card_code:code}).catch(()=>null)
+   window.RPG_V66.call('/api/profile',{card_code:code}).catch(()=>null),
+   vocabPromise
  ]);
  const selectedCharacter=String(profile?.selected_character||profile?.cosmetics?.featured||'mc');
  const identity={public_id:card.public_id,name:card.name,card_code:code,online:true,cloud:true,selected_character:selectedCharacter,cosmetics:profile?.cosmetics||null,recruitment:profile?.recruitment||null,tutorial:profile?.tutorial||{version:1,step:5}};
  sessionStorage.setItem('rpgAdventureContext',JSON.stringify(identity));
+ // A verified online visit saves ONLY read-only progress identity + the class word list.
+ // Never persist the bearer code in localStorage or any queued cloud write.
+ await offlineCardCache.save(code,identity,progress);
+ if(vocab && offlineCardCache.saveVocabulary(identity.public_id,vocab) && Array.isArray(vocab.words) && vocab.words.some(w=>w.active!==false&&String(w.answer||'').trim()&&String(w.prompt||'').trim()))window.RPG_VERIFIED_VOCAB_SYNC_AT=Date.now();
  await load(identity,progress);
 }
 async function resolveCard(){
@@ -134,7 +177,13 @@ async function resolveCard(){
    const card=await window.RPG_V66.call('/api/adventure/card',{card_code:code,name:'',probe:true});
    if(card.registration_required){view('register','WELCOME, ADVENTURER','');}
    else await finish(card);
- }catch(e){view('error','COULD NOT CONNECT',e?.message||'Card verification failed.');}
+ }catch(e){
+   // A revoked/unregistered card must NEVER fall back to saved local identity.
+   if(isTransportFailure(e)){
+     try{if(await offlineResume(e))return;}catch(error){console.warn('Local practice not available:',error);}
+   }
+   view('error','COULD NOT CONNECT',e?.message||'Card verification failed.');
+ }
  finally{busy=false;}
 }
 async function registerCard(e){
