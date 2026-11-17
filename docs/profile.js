@@ -187,7 +187,7 @@
   if(b.dataset.themeChoice){draft.theme=b.dataset.themeChoice;renderEditor();refocusOption('data-theme-choice',draft.theme);return}
   if(b.id==='swap-showcase'){draft.showcase=[...draft.showcase].reverse();renderEditor();return}
   if(b.dataset.background){if(b.dataset.background==='default'){draft.background='default';renderEditor();refocusOption('data-background',draft.background)}return}
-  if(b.id==='change-card'){sessionStorage.removeItem('rpgAdventureContext');sessionStorage.removeItem('rpgReturnToAdventureModeSelect');window.location.assign('adventure.html');return}
+  if(b.id==='change-card'){sessionStorage.removeItem('rpgAdventureContext');sessionStorage.removeItem('rpgReturnToAdventureModeSelect');window.location.assign('adventure.html?switch=1');return}
 
   // Progress is synchronized automatically through the authenticated Firebase API.
   if(b.id==='exchange-coins'){void exchangeCoins();return}

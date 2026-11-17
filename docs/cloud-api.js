@@ -15,6 +15,12 @@ export async function ensureStudent(){
  await auth.authStateReady();
  return auth.currentUser||(await signInAnonymously(auth)).user;
 }
+// An explicit player switch clears Firebase Auth persistence for this browser.
+// The previous player's Firestore session remains inaccessible to the new UID.
+export async function forgetStudentSignIn(){
+ await auth.authStateReady();
+ if(auth.currentUser)await signOut(auth);
+}
 export async function googleTeacher(){
  await setPersistence(auth,browserLocalPersistence);
  const user=(await signInWithPopup(auth,new GoogleAuthProvider())).user;

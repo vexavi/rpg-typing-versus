@@ -2,7 +2,7 @@
  * No Functions, Cloud Run, or offline queue.
  * Scores/XP are client-reported (not secure against a modified browser).
  * Never trust this bridge for paid or scarce rewards. */
-import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js';
+import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js?v=86.22';
 import {makePull,getJstDate} from './recruitment-core.mjs';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
@@ -30,6 +30,16 @@ const defaultPlayer=(card)=>({publicId:card.publicId,username:card.username,char
  adventure:{xp:0,best_normal:0,best_extra:0,normal_clear:false,extra_clear:false,achievements:[]},
  cosmetics:{nickname:card.username,motto:'',theme:'signal',background:'default',featured:'mc',showcase:['crimson_knight','silver_knight']},
  story:{completed:[],best_stars:{}},tutorial:{version:0,step:1,updatedAt:null},recruitment:{coins:0,permits:0,pity_six:0,owned:{},recent:[],shards:0,auras:{}},tournament:{count:0,history:[],trophies:{gold:0,silver:0,bronze:0}}});
+// Remembered browser sign-in: Firebase Auth already persists its anonymous UID.
+// Only a server-verified cardSessions document can restore the linked card.
+// Do not save the bearer code to localStorage or trust local identity as login proof.
+async function resumeCard(){
+ await ensureStudent();
+ const p=await currentPlayer();
+ if(!p.card.username || typeof p.card.username!=='string')err('Adventure Card registration must be completed again.');
+ return {ok:true,public_id:p.id,name:p.card.username,grade:p.card.grade||null,
+  card_code:p.session.code,online:true,cloud:true,remembered:true};
+}
 async function openCard(b){
  await ensureStudent();
  const {code,card:c}=await codeInfo(b.card_code),n=name(b.name);
@@ -386,6 +396,7 @@ async function call(path,body={}){
  if(path==='ping'){await currentConfig();return {ok:true,source:'firestore'};}
  if(path==='/api/config/version')return {ok:true,revision:await currentConfig()};
  if(path==='/api/adventure/card')return openCard(body);
+ if(path==='/api/adventure/resume')return resumeCard();
  if(path==='/api/adventure/progress')return adventureProgress(body);
  if(path==='/api/profile')return profile(body);
  if(path==='/api/tutorial/state')return tutorialState(body);

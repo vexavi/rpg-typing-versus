@@ -1170,6 +1170,21 @@ width:min(600px, calc(100% - 30px));
       gap:14px;
       padding:0 18px 0 0;
     }
+    .introSwitchPlayer{
+      font-family:inherit;
+      font-weight:900;
+      font-size:11px;
+      letter-spacing:.09em;
+      min-height:42px;
+      padding:9px 13px;
+      background:#f9fafbd9;
+      color:#292a30;
+      border:1px solid #6d7179;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .introSwitchPlayer:hover{background:#fff;border-color:#23252a}
+    .introSwitchPlayer:focus-visible{outline:3px solid #d0b800;outline-offset:2px}
     .introStartBtn{
       font-family: inherit;
       font-weight: 1000;
@@ -1285,6 +1300,7 @@ width:min(600px, calc(100% - 30px));
       .introYellowBar{ top:63%; height:14px; }
       .introContinueBar{ left:0; right:0; top:68%; justify-content:flex-end; padding-right:0; }
       .introStartBtn{ min-width: 260px; height:48px; font-size:16px; }
+      .introSwitchPlayer{position:absolute;right:10px;bottom:calc(100% + 10px);font-size:10px;min-height:35px;padding:6px 9px} 
       .introProfileCard{ left:12px; right:12px; bottom:12px; max-width:none; }
       .introProfileIcon{ width:60px; height:60px; }
       .introProfileName{ font-size:20px; max-width:210px; }
@@ -1982,6 +1998,7 @@ width:min(600px, calc(100% - 30px));
     </div>
 
     <div class="introContinueBar">
+      <button class="introSwitchPlayer" id="introSwitchPlayer" type="button">SWITCH PLAYER</button>
       <div class="introNote" id="introNote"></div>
       <button class="introStartBtn" id="introStartBtn" type="button">Start <span class="introStartArrow">▶</span></button>
     </div>
@@ -1998,9 +2015,9 @@ width:min(600px, calc(100% - 30px));
 // An old offline shell may cache old JavaScript even after GitHub Pages publishes new files.
 // Request the updated worker from fresh HTML before starting the application.
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./offline-sw.js?v=86.11',{scope:'./'}).catch(()=>{});
+  navigator.serviceWorker.register('./offline-sw.js?v=86.22',{scope:'./'}).catch(()=>{});
 }
 </script>
-<script type="module">await import("./online-boot-v66.js?v=86.12");</script>
+<script type="module">await import("./online-boot-v66.js?v=86.22");</script>
 </body>
 </html>

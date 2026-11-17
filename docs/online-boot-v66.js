@@ -1,7 +1,6 @@
-/* v81 Adventure Card QR login.
- * Scanned cards have ?card=... in the URL. Registered cards open directly.
- * New cards ask for a username once; no one has to type their QR code.
- * The existing Firebase Spark bridge remains authoritative for registration.
+/* v86.22 Adventure Card login. QR/manual entry links the Firebase Auth UID once;
+ * next time on the same browser the saved Firebase UID restores the card session.
+ * No bearer card credentials are persisted in localStorage.
  */
 import {offlineCardCache} from './offline-session.js?v=86.11';
 
@@ -81,14 +80,15 @@ const params=new URLSearchParams(location.search);
 const clean=s=>String(s||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
 const cardPattern=/^[A-HJ-NP-Z2-9]{16}$/;
 const qrCode=clean(params.get('card'));
+const switchPlayer=params.get('switch')==='1' && !qrCode;
 const resume=sessionStorage.getItem('rpgReturnToAdventureModeSelect')==='1';
-let code=qrCode||(resume?clean(cached?.card_code):'');
+let code=qrCode||(!switchPlayer&&resume?clean(cached?.card_code):'');
 let busy=false;
 let teacherAssignedGrade=null;
 let readyPromise=null;
 // Keep the app shell available when the browser has previously visited this site.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./offline-sw.js?v=86.12',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
+  navigator.serviceWorker.register('./offline-sw.js?v=86.22',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
 }
 function installOfflineBridge(){
  window.RPG_V66_DISCONNECTED=true;
@@ -134,7 +134,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=86.12');
+   await import('./online-spark.js?v=86.22');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
@@ -180,6 +180,44 @@ async function finish(card){
  await offlineCardCache.save(code,identity,progress);
  if(vocab && offlineCardCache.saveVocabulary(identity.public_id,vocab) && Array.isArray(vocab.words) && vocab.words.some(w=>w.active!==false&&String(w.answer||'').trim()&&String(w.prompt||'').trim()))window.RPG_VERIFIED_VOCAB_SYNC_AT=Date.now();
  await load(identity,progress);
+}
+// Recover the card through Firestore using the browser's persisted Firebase Auth UID.
+// Never use a locally cached display name as authority to enter someone else's account.
+async function resumeRememberedCard(){
+ if(busy)return;
+ busy=true;view('checking','WELCOME BACK','Restoring this browser’s Adventure Card…');
+ try{
+  await onlineReady();
+  const saved=await window.RPG_V66.call('/api/adventure/resume',{});
+  const verified=clean(saved?.card_code);
+  if(!cardPattern.test(verified)||!saved?.public_id)throw Error('Saved card session unavailable.');
+  code=verified;
+  await finish(saved);
+ }catch(e){
+  console.info('Adventure Card auto-resume unavailable:',String(e?.message||e));
+  // No remembered Firebase session, cleared browser storage, disabled card, or network issue.
+  // Fall back to manual entry, not a local-only identity that bypasses account validation.
+  const message=isTransportFailure(e)?
+   'Could not restore this browser’s sign-in. Connect to the internet, or enter your card code for offline practice.':
+   'Scan your Adventure Card or enter its code below.';
+  view('manual','SCAN YOUR CARD',message);
+ }finally{busy=false;}
+}
+// Explicit switching is safe on shared school computers: sign out of persisted Auth
+// before opening a different student's card. Does not require Firestore rule changes.
+async function beginSwitchPlayer(){
+ sessionStorage.removeItem('rpgAdventureContext');
+ sessionStorage.removeItem('rpgReturnToAdventureModeSelect');
+ view('checking','SWITCH PLAYER','Clearing this browser’s previous sign-in…');
+ try{
+  const cloud=await import('./cloud-api.js?v=86.22');
+  await cloud.forgetStudentSignIn();
+  // A one-time URL flag must not linger after a successful sign-out.
+  const next=new URL(location.href);next.searchParams.delete('switch');
+  history.replaceState(null,'',next.pathname+next.search+next.hash);
+  code='';
+  view('manual','SCAN YOUR CARD','Enter the Adventure Card code for the player using this computer.');
+ }catch(e){view('error','COULD NOT SWITCH',String(e?.message||e).slice(0,150));}
 }
 async function resolveCard(){
  if(busy)return;
@@ -228,8 +266,13 @@ async function registerCard(e){
 }
 $('ag-register').addEventListener('submit',registerCard);
 $('ag-manual').addEventListener('submit',e=>{e.preventDefault();if(busy)return;code=clean($('ag-code').value);void resolveCard();});
-$('ag-retry').addEventListener('click',()=>{readyPromise=null;void resolveCard();});
+$('ag-retry').addEventListener('click',()=>{readyPromise=null;if(switchPlayer)void beginSwitchPlayer();else if(code)void resolveCard();else void resumeRememberedCard();});
+// Switch Player is available on the already-logged-in start screen.
+document.getElementById('introSwitchPlayer')?.addEventListener('click',()=>{
+ window.location.assign('adventure.html?switch=1');
+});
 
-// A printed QR links directly to adventure.html?card=...; returning scans need no form.
-if(code)void resolveCard();
-else view('manual','SCAN YOUR CARD','Scan the QR code on your Adventure Card or enter its code below.');
+// Explicit QR entry always wins; otherwise first try a verified remembered Firebase session.
+if(switchPlayer)void beginSwitchPlayer();
+else if(code)void resolveCard();
+else void resumeRememberedCard();
