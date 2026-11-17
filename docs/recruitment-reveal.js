@@ -22,7 +22,7 @@
   if(operator.duplicate)return `<span class="panel-reward-value">+${Math.max(0,operator.shards|0)}</span><span class="panel-reward-label">SHARDS</span>`;
   return '<span class="panel-badge panel-badge-new">NEW</span><span class="panel-reward-label">NEW RECRUIT</span>';
  }
- function panel(operator,index){const rarity=operator.rarity,tag=rarity===6?'scout-six':'';
+ function panel(operator,index){const rarity=operator.rarity,tag=rarity===6?'scout-six':(rarity===5?'scout-five':'');
   return `<article class="panel-recruit-card scout-card ${tag}" data-slot="${index}" data-state="hidden" style="${theme(rarity)}" aria-label="Recruitment slot ${index+1}: concealed">
     <div class="panel-slice-bg"></div><div class="panel-grid-overlay"></div>
     <div class="panel-rarity-label">${'★'.repeat(rarity)}</div>
@@ -104,9 +104,10 @@
   if(fiveStar.length){
    at(280,()=>{phase('five-wait');root.querySelector('#scoutBeam')?.classList.remove('active');setWords('ENHANCED SIGNAL','5★ IDENTIFICATION PENDING',`${fiveStar.length} advanced ${fiveStar.length===1?'signal remains':'signals remain'}`);});
    fiveStar.forEach((i,number)=>{
-    at(260,()=>{phase('five-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('ENHANCED SIGNAL','GOLD WAVE RISING…',`Priority reveal ${number+1} / ${fiveStar.length}`);});
+    at(260,()=>{phase('five-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));trace(i);const beam=root?.querySelector('#scoutBeam');beam?.style.setProperty('--beam-color','#ffd86a');setWords('ENHANCED SIGNAL','GOLD WAVE RISING…',`Priority reveal ${number+1} / ${fiveStar.length}`);});
     at(280,()=>{card(i)?.classList.add('scout-gold-pulse');});
     at(420,()=>{reveal(i);setWords('5★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
+    at(240,()=>{root?.querySelector('#scoutBeam')?.classList.remove('active');});
     at(340,()=>{card(i)?.classList.remove('scout-gold-pulse');});
    });
   }
