@@ -35,21 +35,74 @@
  function getCosmeticCache(id){try{return JSON.parse(localStorage.getItem(storageKey('rpgProfileCosmetics',id))||'null')}catch{return null}}
  function setCosmeticCache(id,c){try{localStorage.setItem(storageKey('rpgProfileCosmetics',id),JSON.stringify(c))}catch{}}
  function cosmetics(p){const saved=getCosmeticCache(p.public_id),raw=p.cosmetics||saved||{};return {...defaults(),...raw,featured:raw.featured||p.selected_character||'mc',showcase:Array.isArray(raw.showcase)&&raw.showcase.length===2?raw.showcase:['crimson_knight','silver_knight'],background:'default'}}
- function applyTheme(){document.body.className='theme-'+(themes.some(t=>t.id===player?.cosmetics?.theme)?player.cosmetics.theme:'signal')}
+ function applyTheme(){document.body.className='profile-client theme-'+(themes.some(t=>t.id===player?.cosmetics?.theme)?player.cosmetics.theme:'signal')}
  async function api(path,body){const control=new AbortController(),timeout=setTimeout(()=>control.abort(),3600);try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:control.signal}),j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}finally{clearTimeout(timeout)}}
  function localPlayer(){let id=localId();return {public_id:id,name:localStorage.getItem('rpgAdventureOfflineName')||'Adventurer',selected_character:'mc',adventure:localAdventure(id),tournament:{count:null,history:[],trophies:null},collection:{owned:['crimson_knight','silver_knight'],available:['crimson_knight','silver_knight']},recruitment:{status:'offline',permits:null,coins:null,pity_six:0,owned:{},catalog:[]}}}
- function login(error=''){applyTheme();root.innerHTML=`<section class="setup"><small>// PLAYER PROFILE</small><h1>Adventure Card</h1><form id="profile-login" class="loginform"><label>CARD CODE<input id="card-code" maxlength="19" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" value="${esc(code.replace(/(.{4})/g,'$1-').replace(/-$/,''))}" required></label><label>USERNAME <small>(NEW CARDS)</small><input id="player-register" autocomplete="off" maxlength="20" placeholder="Adventurer" value="${esc(session.name||'')}"></label><label>GRADE <small>(NEW CARDS)</small><select id="player-grade"><option value="" selected>Choose grade</option><option value="1">1年生 · Grade 1</option><option value="2">2年生 · Grade 2</option><option value="3">3年生 · Grade 3</option></select></label><button class="primary" type="submit">OPEN PROFILE</button></form><p class="error" role="alert">${esc(error)}</p></section>`}
- async function openCard(regName='',regGrade=''){
-  if(!/^[A-HJ-NP-Z2-9]{16}$/.test(code)){login('Enter a valid card code.');return}
-  root.innerHTML='<section class="setup"><h1>Connecting to Firebase…</h1></section>';
+ function profileStatus(title,message='',actions=''){
+  root.innerHTML=`<section class="setup profile-gate"><small>PLAYER PROFILE</small><h1>${esc(title)}</h1><p>${esc(message)}</p>${actions}</section>`;
+ }
+ function login(error=''){
+  applyTheme();
+  root.innerHTML=`<section class="setup profile-gate"><small>ADVENTURE CARD</small><h1>OPEN PROFILE</h1>
+  <p>Your profile uses the same Adventure Card as the game. Scan your card in Adventure if this is a new browser.</p>
+  <a class="primary profile-gate-link" href="adventure.html">GO TO ADVENTURE</a>
+  <form id="profile-login" class="loginform"><label>OR ENTER CARD CODE<input id="card-code" maxlength="19" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" value="${esc(code.replace(/(.{4})/g,'$1-').replace(/-$/,''))}" required></label>
+  <button class="smallbtn" type="submit">USE CARD</button></form><p class="error" role="alert">${esc(error)}</p></section>`;
+ }
+ async function waitFirebase(){
+  if(!window.RPG_V66?.ready)throw Error('Firebase session is not initialized. Reload this page.');
+  if(!await window.RPG_V66.ready)throw Error('Firebase connection unavailable. Check your connection and reload.');
+ }
+ async function setPlayer(next){
+  player=next;mode='server';code=cleanCode(next.card_code||code);
+  notice='';player.cosmetics={...defaults(),...(player.cosmetics||{}),background:'default'};
+  await loadOwnedOperators();
   try{
-   await api('/api/adventure/card',{card_code:code,name:regName,grade:regGrade});
-   player=await api('/api/profile',{card_code:code});mode='server';notice='FIREBASE · ONLINE';
-   player.cosmetics={...defaults(),...(player.cosmetics||{}),background:'default'};
-   await loadOwnedOperators();
-   sessionStorage.setItem('rpgAdventureContext',JSON.stringify({public_id:player.public_id,name:player.name,card_code:code,online:true,cloud:true}));
-   render();
-  }catch(e){login(e?.message||'Firebase connection required.');}
+   const current=JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')||{};
+   const samePlayer=current.public_id===player.public_id;
+   const context={...(samePlayer?current:{}),public_id:player.public_id,name:player.name,online:true,cloud:true,selected_character:player.selected_character};
+   if(code)context.card_code=code;
+   sessionStorage.setItem('rpgAdventureContext',JSON.stringify(context));
+  }catch(_){/* Session storage may be disabled. */}
+  render();
+ }
+ async function openCard(){
+  if(!/^[A-HJ-NP-Z2-9]{16}$/.test(code)){login('Enter a valid card code.');return;}
+  profileStatus('OPENING PROFILE','Checking your Adventure Card…');
+  try{
+   await waitFirebase();
+   // Only explicitly supplied cards need linking. Existing players are read directly.
+   await api('/api/adventure/card',{card_code:code});
+   await setPlayer(await api('/api/profile',{card_code:code}));
+  }catch(e){
+   const message=String(e?.message||e);
+   if(/enter your name to register|choose grade|registration/i.test(message)){
+    profileStatus('FIRST-TIME SETUP','Finish registering this new card in Adventure before opening Profile.',`<a class="primary profile-gate-link" href="adventure.html?card=${encodeURIComponent(code)}">REGISTER IN ADVENTURE</a>`);
+   }else if(/card not registered|card disabled|card not found|card code|invalid card/i.test(message))login(message);
+   else profileStatus('PROFILE UNAVAILABLE',message,'<button class="primary" type="button" id="retry-profile">RETRY</button><a class="smallbtn profile-gate-link" href="adventure.html">BACK TO ADVENTURE</a>');
+  }
+ }
+ async function restoreProfile(){
+  if(!code){login('Scan your Adventure Card to sign in on this tab.');return;}
+  profileStatus('LOADING PROFILE','Loading your saved Adventure Card session…');
+  try{
+   await waitFirebase();
+   // Reuse the card code saved only for this browser tab by Adventure login.
+   // Do not re-register, ask for a username, or prompt for a card again.
+   if(params.has('card')){await openCard();return;}
+   const next=await api('/api/profile',code?{card_code:code}:{});
+   await setPlayer(next);
+  }catch(e){
+   const message=String(e?.message||e);
+   if(/scan your Adventure Card first|card session expired|Adventure Card does not match your session/i.test(message)){
+    if(code){
+     // A fresh tab can have context from an earlier verified visit but no Firebase card session.
+     await openCard();
+    }else login('Open Adventure with your card once to connect your profile.');
+   }else{
+    profileStatus('PROFILE UNAVAILABLE',message,'<button class="primary" type="button" id="retry-profile">RETRY</button><a class="smallbtn profile-gate-link" href="adventure.html">BACK TO ADVENTURE</a>');
+   }
+  }
  }
  function metric(value,label){return `<div class="metric"><strong>${esc(value)}</strong><small>${esc(label)}</small></div>`}
  function trophyCount(){let t=player.tournament?.trophies;return t?num(t.gold)+num(t.silver)+num(t.bronze):null}
@@ -112,14 +165,11 @@
  function rememberModeReturn(){
   try{
     if(player){
-      const identity={public_id:player.public_id,name:player.name};
+      let existing={};
+      try{existing=JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')||{}}catch(_){/* no context */}
+      const identity={...(existing.public_id===player.public_id?existing:{}),public_id:player.public_id,name:player.name,selected_character:player.selected_character,online:true,cloud:true};
       if(code)identity.card_code=code;
       sessionStorage.setItem('rpgAdventureContext',JSON.stringify(identity));
-      // Persist only this online card's navigation context.
-      if(false){
-        localStorage.setItem('rpgAdventureOfflinePlayerId',player.public_id);
-        localStorage.setItem('rpgAdventureOfflineName',player.name);
-      }
     }
     sessionStorage.setItem('rpgReturnToAdventureModeSelect','1');
   }catch(_){/* Browser storage disabled: Adventure will show login normally. */}
@@ -137,13 +187,14 @@
   if(b.dataset.themeChoice){draft.theme=b.dataset.themeChoice;renderEditor();refocusOption('data-theme-choice',draft.theme);return}
   if(b.id==='swap-showcase'){draft.showcase=[...draft.showcase].reverse();renderEditor();return}
   if(b.dataset.background){if(b.dataset.background==='default'){draft.background='default';renderEditor();refocusOption('data-background',draft.background)}return}
-  if(b.id==='change-card'){player=null;mode='server';code='';section='overview';sessionStorage.removeItem('rpgAdventureContext');sessionStorage.removeItem('rpgReturnToAdventureModeSelect');login();return}
+  if(b.id==='change-card'){sessionStorage.removeItem('rpgAdventureContext');sessionStorage.removeItem('rpgReturnToAdventureModeSelect');window.location.assign('adventure.html');return}
 
   // Progress is synchronized automatically through the authenticated Firebase API.
   if(b.id==='exchange-coins'){void exchangeCoins();return}
   if(b.id==='do-ten-pull'){void pullTen();return}
  });
- root.addEventListener('submit',e=>{if(e.target.id==='profile-login'){e.preventDefault();code=cleanCode($('card-code').value);void openCard($('player-register')?.value?.trim()||'',$('player-grade')?.value||'')}});
+ root.addEventListener('submit',e=>{if(e.target.id==='profile-login'){e.preventDefault();code=cleanCode($('card-code').value);void openCard()}});
+ root.addEventListener('click',e=>{if(e.target.closest('#retry-profile'))void restoreProfile();});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&editor){editorClose()}});
- if(code)void openCard((!params.get('card')||cleanCode(params.get('card'))===cleanCode(session.card_code))?session.name||'':'');else login();
+ void restoreProfile();
 })();

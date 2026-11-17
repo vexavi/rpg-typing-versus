@@ -1,0 +1,103 @@
+/* v86.21 — Profile integrated with RPG Typing Versus Adventure theme.
+   Visual-only: leaves account, reward and cosmetic logic unchanged. */
+:root{--student-accent:var(--rpg-gold)}
+html{min-height:100%;background:#0a0c13}
+body.profile-client{--student-accent:var(--rpg-gold);background:radial-gradient(850px 440px at 50% -10%,#6678b62b,transparent 70%),radial-gradient(850px 500px at 10% 100%,#da997020,transparent 60%),var(--rpg-bg);color:var(--rpg-text);font:14px/1.45 ui-monospace,"MS Gothic","Noto Sans JP",monospace;padding:10px 12px}
+body.profile-client .page{max-width:1150px;min-height:calc(100dvh - 20px);margin:0 auto;border:6px solid var(--rpg-gold);box-shadow:inset 0 0 0 2px #000a,0 18px 48px #0009;background:linear-gradient(180deg,#1c1a32,#0d0e1c 75%)}
+body.profile-client .top{min-height:53px;display:flex;flex-wrap:wrap;gap:8px;padding:8px 15px;color:var(--rpg-text);background:#19162e;border-bottom:4px solid var(--rpg-gold)}
+body.profile-client .brand{font-size:16px;line-height:1.2;color:var(--rpg-text);white-space:normal}
+body.profile-client .brand small{color:var(--rpg-gold);font-size:11px;white-space:nowrap}
+body.profile-client .signal-mark{color:var(--rpg-gold);font-size:20px;margin-right:8px}
+body.profile-client .topnav{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:5px}
+body.profile-client .topnav a{display:grid;place-items:center;min-height:36px;padding:7px 10px;border:2px solid #5f526f;color:#f0eef8;background:#24203b;font:800 11px ui-monospace,monospace;letter-spacing:.02em}
+body.profile-client .topnav a:hover,body.profile-client .topnav a.current{color:var(--rpg-gold);border-color:var(--rpg-gold);background:#302944}
+body.profile-client #app{min-height:calc(100dvh - 93px)}
+body.profile-client .hero-area{background:linear-gradient(155deg,#24203c 0%,#17172c 60%,#121326 100%);min-height:0;padding:28px clamp(16px,3.8vw,42px) 24px;border-bottom:4px solid var(--rpg-gold)}
+body.profile-client .hero-area::before{opacity:.16;background:repeating-linear-gradient(90deg,#e6d99c12 0px,#e6d99c12 1px,transparent 1px,transparent 40px),repeating-linear-gradient(0deg,#e6d99c12 0px,#e6d99c12 1px,transparent 1px,transparent 40px)}
+body.profile-client .hero-area::after{opacity:.08;border-color:var(--rpg-gold)}
+body.profile-client .crumbs{margin:0 0 18px;color:var(--rpg-muted)}
+body.profile-client .crumbs b{color:var(--rpg-gold)}
+body.profile-client .hero-grid{gap:clamp(16px,2vw,26px);grid-template-columns:minmax(0,1fr) minmax(290px,.85fr)}
+body.profile-client .avatar{width:108px;height:120px;flex-basis:108px;border:4px solid var(--rpg-gold);background:#0e0c17;box-shadow:inset 0 0 0 2px #0009,0 8px 16px #0008}
+body.profile-client .avatar img{height:155px}
+body.profile-client .avatar::after{color:#0b0b14;background:var(--rpg-gold)}
+body.profile-client .player-name{font-size:clamp(24px,3vw,36px);color:var(--rpg-text)}
+body.profile-client .idline{color:var(--rpg-muted)}
+body.profile-client .motto{color:#dddff1}
+body.profile-client .pill{background:#100f22;border:2px solid var(--rpg-gold);border-left-width:5px;color:#fff1c7;padding:6px 9px}
+body.profile-client .editbtn{color:var(--rpg-gold);background:#151226;border:2px solid #736582;min-width:32px;min-height:32px}
+body.profile-client .editbtn:hover{background:#302945;border-color:var(--rpg-gold)}
+body.profile-client .summary-num{border-color:#8b795869}
+body.profile-client .summary-num b{color:var(--rpg-gold)}
+body.profile-client .summary-num small{color:#d4d1e5}
+body.profile-client .dark-card{border:3px solid var(--rpg-gold);background:linear-gradient(160deg,#1e1a35,#111022);padding:13px;box-shadow:inset 0 0 0 2px #0009}
+body.profile-client .dark-card h2{color:var(--rpg-text)}
+body.profile-client .mini-kicker{color:var(--rpg-muted)}
+body.profile-client .xpbar{background:#0b0918;border:1px solid #5a516e;height:12px}
+body.profile-client .xpbar>div{background:var(--rpg-gold)}
+body.profile-client .xp-line{color:#d0d1e7}
+body.profile-client .showcase-tile{border:2px solid #716485;background:linear-gradient(#26243e,#0e0e1c)}
+body.profile-client .showcase-tile:not(.locked):hover{border-color:var(--rpg-gold)}
+body.profile-client .tile-label{color:var(--rpg-text);background:#05030cac;padding:2px 4px}
+body.profile-client .lower{padding:20px clamp(16px,3.8vw,42px) 25px;background:#0e0e1c;color:var(--rpg-text)}
+body.profile-client .lower-head strong{font:900 21px ui-monospace,monospace;color:var(--rpg-gold)}
+body.profile-client .lower-head .subtext{color:var(--rpg-muted)}
+body.profile-client .primary,body.profile-client .smallbtn{font:850 12px ui-monospace,monospace;min-height:42px;border:2px solid var(--rpg-gold);border-radius:0;cursor:pointer;text-decoration:none}
+body.profile-client .primary{background:#241d37;color:#fff1ba}
+body.profile-client .smallbtn{background:#1c1b30;color:#f0edf9;border-color:#736486}
+body.profile-client .primary:hover,body.profile-client .smallbtn:hover{background:#302a47;color:#fff1ba;border-color:var(--rpg-gold);filter:none}
+body.profile-client .quickrow{gap:8px;margin:0 0 16px}
+body.profile-client .quickbtn{background:#1a1830;border:3px solid #51486a;border-left:5px solid #51486a;padding:11px 13px;min-height:78px;color:var(--rpg-text)}
+body.profile-client .quickbtn strong{color:var(--rpg-text);font-size:15px}
+body.profile-client .quickbtn span{color:var(--rpg-gold)}
+body.profile-client .quickbtn small{color:var(--rpg-muted);font-size:10px}
+body.profile-client .quickbtn:hover,body.profile-client .quickbtn.active{background:#2b2541;border-color:var(--rpg-gold);border-left-color:var(--rpg-gold);outline:0}
+body.profile-client .lower-grid{gap:12px}
+body.profile-client .light-card{border:3px solid var(--rpg-gold);background:linear-gradient(160deg,#1a182f,#121222);color:var(--rpg-text);padding:15px;box-shadow:inset 0 0 0 2px #0009}
+body.profile-client .light-title h2{font:900 16px ui-monospace,monospace;color:var(--rpg-gold)}
+body.profile-client .light-title span,body.profile-client .bg-hint{color:var(--rpg-muted)}
+body.profile-client .metrics{background:#4e455f;border-color:#554965}
+body.profile-client .metric{background:#201d35;color:var(--rpg-text);padding:12px 9px}
+body.profile-client .metric strong{color:var(--rpg-text)}
+body.profile-client .metric small{color:#c8c5df}
+body.profile-client .detail-panel{background:#151328;border-top:2px solid #5d536d;color:var(--rpg-text)}
+body.profile-client .detail-panel .record{border-color:#4d445e;color:var(--rpg-text)}
+body.profile-client .detail-panel .record strong{color:#e3d4a0}
+body.profile-client .detail-panel .subtext{color:var(--rpg-muted)}
+body.profile-client .bg-preview{background:repeating-linear-gradient(145deg,#24233f 0 1px,#131322 1px 12px);color:var(--rpg-muted);border:2px solid #665c77}
+body.profile-client .bg-preview:before{border-color:#c8b97826;background:linear-gradient(45deg,#d9c27a1b,transparent 50%)}
+body.profile-client .level-line{color:var(--rpg-text)}
+body.profile-client .notice{background:#1b1a30;border-left-color:var(--rpg-gold)}
+body.profile-client .statusfoot{color:var(--rpg-muted)}
+body.profile-client .statusfoot button{background:#1b1a30;border:2px solid #5c506d;color:var(--rpg-text)}
+body.profile-client .statusfoot button:hover{border-color:var(--rpg-gold)}
+body.profile-client .profile-mode-return{border:2px solid var(--rpg-gold);background:#262139;color:#fff1c7}
+body.profile-client .profile-mode-return:hover{background:#302a47}
+body.profile-client .setup{max-width:480px;margin:clamp(30px,7vh,80px) auto;padding:25px;border:4px solid var(--rpg-gold);background:linear-gradient(170deg,#24203e,#151326);color:var(--rpg-text);box-shadow:inset 0 0 0 2px #0009}
+body.profile-client .setup small{color:var(--rpg-gold);letter-spacing:.13em;font-weight:900}
+body.profile-client .setup h1{color:var(--rpg-text);font-size:28px}
+body.profile-client .setup p{color:var(--rpg-muted)}
+body.profile-client .loginform{margin-top:13px}
+body.profile-client .loginform label{color:var(--rpg-muted)}
+body.profile-client .loginform input{background:#100e20;color:var(--rpg-text);border:2px solid #665a76}
+body.profile-client .loginform input:focus{border-color:var(--rpg-gold)}
+body.profile-client .setup .error{color:#ffa8a4}
+body.profile-client .profile-gate-link{display:inline-flex;align-items:center;justify-content:center;min-height:45px;margin:8px 8px 0 0;padding:10px 14px;white-space:normal}
+body.profile-client .dialog-back{background:#06050dda}
+body.profile-client .editor{background:linear-gradient(160deg,#201c35,#111122);color:var(--rpg-text);border:4px solid var(--rpg-gold);box-shadow:inset 0 0 0 2px #0009,0 16px 70px #000d}
+body.profile-client .editor header,body.profile-client .editor footer{border-color:#716384}
+body.profile-client .editor h2{color:var(--rpg-text)}
+body.profile-client .field,body.profile-client .field small{color:var(--rpg-muted)}
+body.profile-client .edit-input{background:#100e20;color:var(--rpg-text);border:2px solid #6f627e}
+body.profile-client .edit-input:focus{border-color:var(--rpg-gold)}
+body.profile-client .pick{background:#211d35;color:var(--rpg-text);border:2px solid #5f536d}
+body.profile-client .pick.active{border-color:var(--rpg-gold);box-shadow:inset 0 0 0 2px #a9955a}
+body.profile-client .pick small{color:var(--rpg-muted)}
+body.profile-client .pick.placeholder{background:linear-gradient(145deg,#2b2840,#181528);color:var(--rpg-text)}
+body.profile-client .pick.placeholder small{color:var(--rpg-muted)}
+body.profile-client .hint{color:var(--rpg-muted)}
+body.profile-client .help{background:#211d35;color:var(--rpg-muted);border-color:var(--rpg-gold)}
+body.profile-client .modalerror{color:#ffadae}
+body.profile-client a:focus-visible,body.profile-client button:focus-visible,body.profile-client input:focus-visible,body.profile-client textarea:focus-visible{outline:3px solid #edcf7a;outline-offset:2px}
+@media(max-width:830px){body.profile-client .hero-grid{grid-template-columns:1fr}body.profile-client .hero-right{grid-template-columns:repeat(2,minmax(0,1fr))}body.profile-client .top{padding:10px 12px}body.profile-client .topnav{justify-content:flex-start;width:100%}body.profile-client .lower-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){body.profile-client{padding:4px}body.profile-client .page{border-width:4px;min-height:calc(100dvh - 8px)}body.profile-client .top{border-bottom-width:3px}body.profile-client .hero-area{padding:17px 13px;border-bottom-width:3px}body.profile-client .lower{padding:14px 12px 20px}body.profile-client .hero-right,body.profile-client .lower-grid{grid-template-columns:1fr}body.profile-client .quickrow{grid-template-columns:repeat(2,minmax(0,1fr))}body.profile-client .avatar{width:85px;height:95px;flex-basis:85px}body.profile-client .avatar img{height:126px}body.profile-client .topnav a{font-size:10px;padding:7px 9px}body.profile-client .brand{font-size:13px}body.profile-client .statusfoot{gap:12px}}
