@@ -1,0 +1,23 @@
+/* Shared teacher navigation, isolated from existing admin page styles. */
+.teacher-hub-nav, .teacher-hub-nav * { box-sizing:border-box; }
+.teacher-hub-nav {
+  position:sticky;top:0;z-index:2000;
+  background:#152337;color:#eff4fb;border-bottom:3px solid #e8c949;
+  font:600 13px/1.4 system-ui,-apple-system,Segoe UI,Arial,sans-serif;
+  box-shadow:0 3px 14px #0b162325;
+}
+.teacher-hub-nav__inner {max-width:1360px;margin:auto;min-height:57px;padding:7px 14px;display:flex;align-items:center;gap:14px;}
+.teacher-hub-nav a {color:#e1e9f6;text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 12px;border-radius:6px;border:1px solid transparent;font:inherit;}
+.teacher-hub-nav a:hover {background:#2b405b;color:#fff;border-color:#57708d;}
+.teacher-hub-nav a:focus-visible {outline:3px solid #f4ce4e;outline-offset:2px;}
+.teacher-hub-nav__home {background:#e8ca49!important;color:#162130!important;font-weight:850!important;border:1px solid #d1b343!important;flex-shrink:0;gap:8px;}
+.teacher-hub-nav__home:hover {background:#f7dd75!important;}
+.teacher-hub-nav__links {display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#7386a2 transparent;flex:1;}
+.teacher-hub-nav__links a[aria-current="page"] {background:#3b5374;color:#fff;border-color:#617b9b;}
+.teacher-hub-nav__label {color:#b2c2d9;white-space:nowrap;letter-spacing:.07em;font-size:11px;text-transform:uppercase;font-weight:800;}
+body.teacher-nav-ready { scroll-padding-top:80px; }
+body.teacher-nav-ready > main { min-width:0; }
+@media(max-width:700px){.teacher-hub-nav__inner{flex-wrap:wrap;padding:8px;gap:5px}.teacher-hub-nav__home{padding:7px 10px!important}.teacher-hub-nav__label{display:none}.teacher-hub-nav__links{width:100%;flex-basis:100%;}.teacher-hub-nav a{min-height:34px;padding:6px 9px;font-size:12px;}}
+/* The old shard test page centers its body with CSS grid. The shared navigation must stay at the top. */
+body.teacher-nav-ready.teacher-nav-aura {display:block!important;} 
+body.teacher-nav-ready.teacher-nav-aura main {margin:30px auto 50px;}
