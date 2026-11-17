@@ -1,0 +1,350 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signedIn(){return request.auth != null;}
+  function teacher(){return signedIn() && request.auth.uid == '1BsaIx7kcfUSRO3rhNbHsJPRHkw1' && request.auth.token.firebase.sign_in_provider != 'anonymous';}
+  function session(){return get(/databases/$(database)/documents/cardSessions/$(request.auth.uid)).data;}
+  function ownPlayer(id){return signedIn() && session().publicId == id;}
+  function cardData(code){return get(/databases/$(database)/documents/cloudCards/$(code)).data;}
+  function ownSession(){return signedIn() && exists(/databases/$(database)/documents/cardSessions/$(request.auth.uid));}
+  function validGrade(g){return g in ['1','2','3','1b','2b','3b','all'];}
+  function validMode(m){return m in ['normal','extra','shared'];}
+  function poolFor(g){return g == 'all' ? 'all' : (g in ['1b','2b','3b'] ? 'b' : g);}
+  function playerForSession(){return get(/databases/$(database)/documents/players/$(session().publicId)).data;}
+  function configRevision(){return get(/databases/$(database)/documents/systemConfig/current).data.revision;}
+  function vocabRevision(pool){return get(/databases/$(database)/documents/vocabPools/$(pool)).data.revision;}
+  match /cloudConfig/{id}{
+    allow get:if signedIn(); allow list:if teacher();
+    allow create,update,delete:if teacher();
+  }
+  match /cloudCards/{code}{
+    // Card code = bearer credential. Only people possessing a QR code should request the exact document.
+    allow get:if signedIn();allow list:if teacher();
+    allow create,delete:if teacher();
+    allow update:if teacher() || (signedIn() && resource.data.username == null &&
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username']) &&
+      request.resource.data.username is string && request.resource.data.username.size() >= 1 && request.resource.data.username.size() <= 20 &&
+      resource.data.disabled == false && resource.data.deleted == false);
+  }
+  match /cardSessions/{userId}{
+    allow get:if signedIn() && (userId == request.auth.uid || teacher());
+    allow list:if false;
+    allow create,update:if signedIn() && userId==request.auth.uid &&
+     request.resource.data.keys().hasOnly(['code','publicId','linkedAt']) &&
+     request.resource.data.keys().hasAll(['code','publicId','linkedAt']) &&
+     request.resource.data.linkedAt == request.time &&
+     request.resource.data.code is string && request.resource.data.code.matches('^[A-HJ-NP-Z2-9]{16}$') &&
+     cardData(request.resource.data.code).publicId==request.resource.data.publicId &&
+     cardData(request.resource.data.code).username is string &&
+     cardData(request.resource.data.code).disabled==false &&
+     cardData(request.resource.data.code).deleted==false;
+    allow delete:if teacher();
+  }
+  // Guild Coins are CLIENT-REPORTED gameplay receipts, not secure rewards.
+  // Store one receipt + matching wallet update in the SAME Firestore transaction.
+  function claimPath(claimId){return /databases/$(database)/documents/guildClaims/$(claimId);}
+  function guildPlayerPath(playerId){return /databases/$(database)/documents/players/$(playerId);}
+  function firstStoryPath(playerId,stageId){let claimId=playerId+'__story-first-'+stageId;return claimPath(claimId);}
+  function ownGuildClaim(claimId){return ownSession() && claimId.matches('^'+session().publicId+'__.*$');}
+  function validGuildRank(r){
+   let rank=get(/databases/$(database)/documents/sparkRuns/$(request.auth.uid)).data;
+   return rank.publicId==r.publicId && rank.status=='submitted' && rank.mode==r.mode && rank.token==r.runToken;
+  }
+  function validGuildReceipt(id){
+   let r=request.resource.data;
+   return r.keys().hasOnly(['publicId','claimKey','mode','coins','correct','incorrect','runToken','stageId','attemptId','firstClear','createdAt']) &&
+    r.keys().hasAll(['publicId','claimKey','mode','coins','correct','incorrect','runToken','stageId','attemptId','firstClear','createdAt']) &&
+    r.publicId==session().publicId && id==r.publicId+'__'+r.claimKey && id.size()<=140 &&
+    r.mode in ['normal','extra','story'] &&
+    r.createdAt==request.time &&
+    r.coins is int && r.coins>=5 && r.coins<=20 &&
+    r.correct is int && r.correct>0 && r.correct<=1000000 &&
+    r.incorrect is int && r.incorrect>=0 && r.incorrect<=1000000 &&
+    r.firstClear is bool &&
+    (
+     (r.mode in ['normal','extra'] && r.stageId=='' && r.attemptId==null && r.firstClear==false &&
+      r.runToken is string && r.runToken.matches('^[0-9a-f-]{36}$') &&
+      r.claimKey==r.mode+'-'+r.runToken &&
+      validGuildRank(r) &&
+      r.coins==(r.mode=='normal'?10:15)+(r.correct*10>=9*(r.correct+r.incorrect)?5:0)) ||
+     (r.mode=='story' && r.stageId.matches('^[0-9]{1,4}-[0-9]{1,4}$') &&
+      r.attemptId is string && r.attemptId.matches('^[0-9a-f-]{36}$') &&
+      r.runToken==null &&
+      r.stageId in playerForSession().story.completed &&
+      ((r.claimKey=='story-first-'+r.stageId && r.coins==(r.firstClear?20:5)) ||
+       (!r.firstClear && r.coins==5 && r.claimKey=='story-replay-'+r.stageId+'-'+r.attemptId &&
+        exists(firstStoryPath(r.publicId,r.stageId)))))
+    ) &&
+    getAfter(guildPlayerPath(r.publicId)).data.recruitment.lastClaimId==id &&
+    getAfter(guildPlayerPath(r.publicId)).data.recruitment.coins ==
+     get(guildPlayerPath(r.publicId)).data.recruitment.coins+r.coins;
+  }
+  match /guildClaims/{claimId}{
+    allow get:if teacher() || (signedIn() && ownGuildClaim(claimId));
+    allow list:if teacher();allow update,delete:if false;
+    allow create:if signedIn() && ownGuildClaim(claimId) && validGuildReceipt(claimId);
+  }
+  // v76: Immutable audit receipts for manual Guild Coin grants.
+  // Grants are teacher-only; no student may create, edit, or list these records.
+  // The player's wallet update and this receipt must commit in the same transaction.
+  match /guildCoinGrants/{grantId}{
+    allow get,list:if teacher();
+    allow update,delete:if false;
+    allow create:if teacher() &&
+      request.resource.data.keys().hasOnly(['playerId','playerName','amount','balanceBefore','balanceAfter','reason','teacherUid','createdAt']) &&
+      request.resource.data.keys().hasAll(['playerId','playerName','amount','balanceBefore','balanceAfter','reason','teacherUid','createdAt']) &&
+      request.resource.data.playerId is string && request.resource.data.playerId.matches('^P[0-9]{6,}$') &&
+      request.resource.data.playerName is string && request.resource.data.playerName.size()<=30 &&
+      request.resource.data.reason is string && request.resource.data.reason.size()<=100 &&
+      request.resource.data.teacherUid==request.auth.uid && request.resource.data.createdAt==request.time &&
+      request.resource.data.amount is int && request.resource.data.amount>=1 && request.resource.data.amount<=1000000 &&
+      request.resource.data.balanceBefore is int && request.resource.data.balanceBefore>=0 &&
+      request.resource.data.balanceAfter is int && request.resource.data.balanceAfter<=1000000000 &&
+      request.resource.data.balanceAfter==request.resource.data.balanceBefore+request.resource.data.amount &&
+      get(guildPlayerPath(request.resource.data.playerId)).data.recruitment.coins==request.resource.data.balanceBefore &&
+      getAfter(guildPlayerPath(request.resource.data.playerId)).data.recruitment.coins==request.resource.data.balanceAfter &&
+      getAfter(guildPlayerPath(request.resource.data.playerId)).data.recruitment.lastTeacherGrantId==grantId;
+  }
+  function validGuildWalletUpdate(playerId){
+   let b=resource.data.recruitment;
+   let a=request.resource.data.recruitment;
+   let claimId=a.lastClaimId;
+   return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recruitment']) &&
+    a is map && b is map &&
+    a.diff(b).affectedKeys().hasOnly(['coins','lastClaimId']) &&
+    a.coins is int && a.coins>=0 && a.coins<=1000000000 &&
+    claimId is string && claimId.matches('^'+playerId+'__.*$') && claimId.size()<=140 &&
+    !exists(claimPath(claimId)) && existsAfter(claimPath(claimId)) &&
+    getAfter(claimPath(claimId)).data.publicId==playerId &&
+    getAfter(claimPath(claimId)).data.coins==a.coins-b.coins &&
+    getAfter(claimPath(claimId)).data.coins>=5 && getAfter(claimPath(claimId)).data.coins<=20;
+  }
+  // v74: Student aura changes are charged against *teacher-granted* shards only.
+  // No student path can add shards, grant operators, or lower their unlocked aura tier.
+  // The user's card is a bearer credential; this is classroom-grade protection, not
+  // a substitute for server-authoritative gacha transactions.
+  function auraTierCost(level){return level==1?10:level==2?20:level==3?40:level==4?80:-1;}
+  function validAuraRecord(x){
+   return x is map && x.keys().hasOnly(['level','equipped']) &&
+    x.keys().hasAll(['level','equipped']) && x.level is int && x.equipped is int &&
+    x.level>=0 && x.level<=4 && x.equipped>=0 && x.equipped<=x.level;
+  }
+  function validAuraWalletUpdate(playerId){
+   let before=resource.data.recruitment;
+   let after=request.resource.data.recruitment;
+   let id=after.lastAuraCharacter;
+   let oldAuras=before.get('auras',{});
+   let prev=oldAuras.get(id,{'level':0,'equipped':0});
+   let next=after.auras.get(id,{'level':-1,'equipped':-1});
+   let oldShards=before.get('shards',0);
+   return ownPlayer(playerId) &&
+    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recruitment']) &&
+    before is map && after is map && after.diff(before).affectedKeys().hasOnly(['shards','auras','lastAuraCharacter','lastAuraAt']) &&
+    id is string && id.matches('^[a-z][a-z0-9_]{0,39}$') &&
+    (id in ['crimson_knight','silver_knight'] || id in before.get('owned',{}).keys()) &&
+    after.lastAuraAt==request.time &&
+    oldShards is int && oldShards>=0 && oldShards<=100000000 &&
+    after.shards is int && after.shards>=0 && after.shards<=100000000 &&
+    after.auras is map && after.auras.size()<=200 && oldAuras is map &&
+    after.auras.diff(oldAuras).affectedKeys().hasOnly([id]) &&
+    after.auras.diff(oldAuras).affectedKeys().size()==1 &&
+    validAuraRecord(prev) && validAuraRecord(next) && (
+     (next.level==prev.level+1 && next.equipped==next.level &&
+      after.shards==oldShards-auraTierCost(next.level) && auraTierCost(next.level)>0) ||
+     (next.level==prev.level && next.equipped!=prev.equipped &&
+      after.shards==oldShards)
+    );
+  }
+  // v83: Client-created recruitment receipts + matching wallet updates.
+  // Classroom trust model: these rules check consistency and deduplicate grants,
+  // but CANNOT independently prove fairness of browser-generated RNG.
+  function drawPath(id){return /databases/$(database)/documents/recruitmentDraws/$(id);}
+  function validRecruitmentWalletUpdate(playerId){
+   let before=resource.data.recruitment;
+   let after=request.resource.data.recruitment;
+   let id=after.lastDrawId;
+   let receipt=getAfter(drawPath(id)).data;
+   return ownPlayer(playerId) &&
+    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recruitment']) &&
+    before is map && after is map &&
+    after.diff(before).affectedKeys().hasOnly(['coins','owned','pity_six','pity_five','featured_guarantee','shards','lastDrawId','lastDrawMode','lastDrawResults','lastDrawAt','recent','lastDailyDate','tutorialClaimed']) &&
+    id is string && id.matches('^'+playerId+'__[a-zA-Z0-9-]{10,64}$') &&
+    !exists(drawPath(id)) && existsAfter(drawPath(id)) &&
+    receipt.publicId==playerId && receipt.results==after.lastDrawResults &&
+    receipt.mode==after.lastDrawMode && receipt.count==after.lastDrawResults.size() &&
+    receipt.createdAt==request.time && after.lastDrawAt==request.time &&
+    before.coins is int && before.coins>=0 &&
+    after.coins is int && after.coins>=0 && after.coins<=1000000000 &&
+    receipt.coinsBefore==before.coins && receipt.coinsAfter==after.coins &&
+    receipt.spent==before.coins-after.coins && receipt.spent>=0 &&
+    (receipt.spent==0 || receipt.spent==receipt.count*100) &&
+    before.get('shards',0) is int && after.shards is int &&
+    after.shards==before.get('shards',0)+receipt.shardsEarned &&
+    after.shards>=0 && after.shards<=100000000 &&
+    after.owned is map && after.owned.size()<=200 &&
+    after.pity_six is int && after.pity_six>=0 && after.pity_six<=79 &&
+    after.pity_five is int && after.pity_five>=0 && after.pity_five<=9 &&
+    after.featured_guarantee is bool &&
+    after.recent is list && after.recent.size()<=10 &&
+    (receipt.mode=='paid' && receipt.spent==receipt.count*100 &&
+     after.get('lastDailyDate','')==before.get('lastDailyDate','') &&
+     after.get('tutorialClaimed',false)==before.get('tutorialClaimed',false) ||
+     receipt.mode in ['tutorial','daily'] && receipt.spent==0 && receipt.count==10 &&
+     receipt.dateJst==after.lastDailyDate && receipt.dateJst.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+     after.lastDailyDate!=before.get('lastDailyDate','') &&
+     (receipt.mode!='tutorial' && after.get('tutorialClaimed',false)==before.get('tutorialClaimed',false) ||
+      receipt.mode=='tutorial' && resource.data.tutorial.version==0 &&
+      resource.data.tutorial.step==4 && before.get('tutorialClaimed',false)==false &&
+      after.tutorialClaimed==true));
+  }
+  function validTutorialUpdate(){
+   let old=resource.data.get('tutorial',{'version':1,'step':5});
+   let next=request.resource.data.tutorial;
+   return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tutorial']) &&
+    old.version==0 && next is map && next.keys().hasOnly(['version','step','updatedAt']) &&
+    next.version is int && next.step is int && next.updatedAt==request.time &&
+    (next.version==0 && next.step==old.step+1 && next.step<=4 ||
+     next.version==1 && old.step==4 && next.step==5 && resource.data.recruitment.tutorialClaimed==true);
+  }
+  match /recruitmentDraws/{drawId}{
+   allow get:if teacher() || (ownSession() && drawId.matches('^'+session().publicId+'__.*$'));
+   allow list:if teacher();allow update,delete:if false;
+   allow create:if ownSession() &&
+    drawId.matches('^'+session().publicId+'__[a-zA-Z0-9-]{10,64}$') &&
+    request.resource.data.keys().hasOnly(['publicId','mode','count','spent','coinsBefore','coinsAfter','results','shardsEarned','featuredId','dateJst','createdAt']) &&
+    request.resource.data.keys().hasAll(['publicId','mode','count','spent','coinsBefore','coinsAfter','results','shardsEarned','featuredId','dateJst','createdAt']) &&
+    request.resource.data.publicId==session().publicId &&
+    request.resource.data.mode in ['paid','tutorial','daily'] &&
+    request.resource.data.count in [1,10] &&
+    request.resource.data.results is list && request.resource.data.results.size()==request.resource.data.count &&
+    request.resource.data.spent is int && request.resource.data.spent>=0 && request.resource.data.spent<=1000 &&
+    request.resource.data.shardsEarned is int && request.resource.data.shardsEarned>=0 && request.resource.data.shardsEarned<=80 &&
+    request.resource.data.createdAt==request.time &&
+    get(guildPlayerPath(session().publicId)).data.recruitment.coins==request.resource.data.coinsBefore &&
+    getAfter(guildPlayerPath(session().publicId)).data.recruitment.lastDrawId==drawId &&
+    getAfter(guildPlayerPath(session().publicId)).data.recruitment.coins==request.resource.data.coinsAfter &&
+    getAfter(guildPlayerPath(session().publicId)).data.recruitment.lastDrawResults==request.resource.data.results;
+  }
+  match /players/{playerId}{
+    allow get:if teacher() || ownPlayer(playerId);allow list:if teacher();
+    allow create:if teacher() || (ownPlayer(playerId) &&
+      request.resource.data.keys().hasOnly(['publicId','username','character','grade','rankIconId','rankIconUpdatedAt','disabled','adventure','cosmetics','story','recruitment','tournament','tutorial']) &&
+      request.resource.data.publicId==playerId && request.resource.data.username==cardData(session().code).username &&
+      request.resource.data.grade==cardData(session().code).get('grade',null) && request.resource.data.disabled==false &&
+      request.resource.data.recruitment.keys().hasOnly(['coins','permits','pity_six','owned','recent','shards','auras']) &&
+      request.resource.data.recruitment.coins==0 && request.resource.data.recruitment.permits==0 &&
+      request.resource.data.recruitment.pity_six==0 &&
+      request.resource.data.recruitment.shards==0 && request.resource.data.recruitment.auras=={} &&
+      request.resource.data.recruitment.owned=={} && request.resource.data.recruitment.recent==[] &&
+      request.resource.data.tutorial=={'version':0,'step':1,'updatedAt':null} &&
+      request.resource.data.tournament.count==0 &&
+      request.resource.data.adventure.xp==0 && request.resource.data.adventure.best_normal==0 &&
+      request.resource.data.adventure.best_extra==0);
+    // Player identity and permits remain protected. Guild Coin gains require atomic claim receipts.
+    allow update:if teacher() || (ownPlayer(playerId) && validGuildWalletUpdate(playerId)) || (ownPlayer(playerId) && validAuraWalletUpdate(playerId)) || (ownPlayer(playerId) && validRecruitmentWalletUpdate(playerId)) || (ownPlayer(playerId) && validTutorialUpdate()) || (ownPlayer(playerId) &&
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adventure','story','cosmetics','character','rankIconId','rankIconUpdatedAt']) &&
+      request.resource.data.adventure is map && request.resource.data.story is map && request.resource.data.cosmetics is map &&
+      request.resource.data.adventure.xp is number && request.resource.data.adventure.xp >= 0 && request.resource.data.adventure.xp <= 100000000 &&
+      request.resource.data.adventure.best_normal is number && request.resource.data.adventure.best_normal >= 0 && request.resource.data.adventure.best_normal <= 2000000 &&
+      request.resource.data.adventure.best_extra is number && request.resource.data.adventure.best_extra >= 0 && request.resource.data.adventure.best_extra <= 2000000 &&
+      request.resource.data.cosmetics.nickname is string && request.resource.data.cosmetics.nickname.size() <= 20 &&
+      request.resource.data.cosmetics.motto is string && request.resource.data.cosmetics.motto.size() <= 80 &&
+      request.resource.data.rankIconId.matches('^icon[0-9]{2}$') &&
+      request.resource.data.story.get('completed',[]).size() <= 200);
+    allow delete:if teacher();
+  }
+  // Teacher-edited recruitment banner text (NOT pulls, probabilities, or wallets).
+  function bannerText(b,id){
+   return b is map && b.keys().hasOnly(['id','tab','title','kicker','subtitle','description','featured_character_id']) &&
+    b.keys().hasAll(['id','tab','title','kicker','subtitle','description','featured_character_id']) && b.id==id &&
+    b.tab is string && b.tab.size()>=1 && b.tab.size()<=22 &&
+    b.title is string && b.title.size()>=1 && b.title.size()<=70 &&
+    b.kicker is string && b.kicker.size()>=1 && b.kicker.size()<=50 &&
+    b.subtitle is string && b.subtitle.size()<=110 &&
+    b.description is string && b.description.size()<=260 &&
+    b.featured_character_id is string && b.featured_character_id.matches('^[a-z][a-z0-9_]{0,39}$');
+  }
+  function validBannerConfig(){
+   return request.resource.data.keys().hasOnly(['revision','banners','updatedAt']) &&
+    request.resource.data.keys().hasAll(['revision','banners','updatedAt']) &&
+    request.resource.data.revision is int &&
+    request.resource.data.updatedAt==request.time &&
+    request.resource.data.banners is list && request.resource.data.banners.size()==1 &&
+    bannerText(request.resource.data.banners[0],'featured');
+  }
+  match /recruitmentConfig/{id}{
+   allow get:if signedIn() && id=='banners';allow list,delete:if false;
+   allow create:if teacher() && id=='banners' && validBannerConfig() && request.resource.data.revision==1;
+   allow update:if teacher() && id=='banners' && validBannerConfig() && request.resource.data.revision==resource.data.revision+1;
+  }
+  match /vocabPools/{pool}{
+    allow get:if signedIn();allow list:if teacher();
+    allow create:if teacher() && request.resource.data.keys().hasOnly(['words','revision','updatedAt']) &&
+      request.resource.data.words is list && request.resource.data.words.size() <= 1000 &&
+      request.resource.data.revision==1 && request.resource.data.updatedAt==request.time;
+    allow update:if teacher() && request.resource.data.keys().hasOnly(['words','revision','updatedAt']) &&
+      request.resource.data.words is list && request.resource.data.words.size() <= 1000 &&
+      request.resource.data.revision == resource.data.revision + 1 && request.resource.data.updatedAt==request.time;
+    allow delete:if false;
+  }
+  match /systemConfig/current{
+    allow get:if signedIn();allow list:if false;
+    allow create:if teacher() && request.resource.data.revision==1 && request.resource.data.updatedAt==request.time;
+    allow update:if teacher() && request.resource.data.revision==resource.data.revision+1 && request.resource.data.updatedAt==request.time;
+    allow delete:if false;
+  }
+  match /gameBalance/{scope}{
+    allow get:if signedIn();allow list:if false;
+    allow create,update:if teacher() && request.resource.data.keys().hasOnly(['values','mechanics','updatedAt']) &&
+      request.resource.data.values is map && request.resource.data.mechanics is map && request.resource.data.updatedAt==request.time;
+    allow delete:if teacher();
+  }
+  match /sparkRuns/{userId}{
+    allow get:if signedIn() && userId==request.auth.uid;allow list,delete:if false;
+    allow create,update:if signedIn() && userId==request.auth.uid && ownSession() &&
+      request.resource.data.uid==userId && request.resource.data.publicId==session().publicId &&
+      validMode(request.resource.data.mode) && validGrade(request.resource.data.grade) &&
+      request.resource.data.grade==(request.resource.data.mode=='shared'?'all':playerForSession().grade) &&
+      request.resource.data.pool==poolFor(request.resource.data.grade) &&
+      request.resource.data.vocabRevision==vocabRevision(request.resource.data.pool) &&
+      request.resource.data.configRevision==configRevision() && (
+        (request.resource.data.keys().hasOnly(['uid','publicId','mode','grade','pool','vocabRevision','configRevision','token','status','startedAt']) &&
+         request.resource.data.status=='active' && request.resource.data.startedAt==request.time &&
+         request.resource.data.token is string && request.resource.data.token.size() >= 30) ||
+        (resource != null && resource.data.status=='active' &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','score','finishedAt']) &&
+         request.resource.data.status=='submitted' && request.resource.data.finishedAt==request.time &&
+         request.resource.data.score is int && request.resource.data.score >= 1 && request.resource.data.score <= 2000000 &&
+         request.time >= resource.data.startedAt + duration.value(resource.data.mode=='shared'?115:15,'s'))
+      );
+  }
+  match /rankEntries/{entryId}{
+    allow get,list:if signedIn();
+    allow create,update:if signedIn() && ownSession() && entryId==session().publicId+'_'+request.resource.data.mode &&
+      request.resource.data.keys().hasOnly(['uid','public_id','name','icon_id','mode','grade','score','vocabRevision','configRevision','updatedAt']) &&
+      request.resource.data.uid==request.auth.uid &&
+      request.resource.data.public_id==session().publicId &&
+      request.resource.data.name==playerForSession().username &&
+      request.resource.data.icon_id==playerForSession().rankIconId &&
+      validMode(request.resource.data.mode) && validGrade(request.resource.data.grade) &&
+      request.resource.data.grade==(request.resource.data.mode=='shared'?'all':playerForSession().grade) &&
+      request.resource.data.vocabRevision==vocabRevision(poolFor(request.resource.data.grade)) &&
+      request.resource.data.configRevision==configRevision() &&
+      request.resource.data.score is int && request.resource.data.score>=1 && request.resource.data.score<=2000000 &&
+      request.resource.data.updatedAt==request.time &&
+      getAfter(/databases/$(database)/documents/sparkRuns/$(request.auth.uid)).data.status=='submitted' &&
+      getAfter(/databases/$(database)/documents/sparkRuns/$(request.auth.uid)).data.score==request.resource.data.score &&
+      getAfter(/databases/$(database)/documents/sparkRuns/$(request.auth.uid)).data.mode==request.resource.data.mode &&
+      getAfter(/databases/$(database)/documents/sparkRuns/$(request.auth.uid)).data.finishedAt==request.time &&
+      (resource==null || request.resource.data.score>resource.data.score ||
+        request.resource.data.vocabRevision!=resource.data.vocabRevision ||
+        request.resource.data.configRevision!=resource.data.configRevision ||
+        request.resource.data.grade!=resource.data.grade);
+    allow update:if signedIn() && ownSession() && resource.data.public_id==session().publicId &&
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['icon_id','updatedAt']) &&
+      request.resource.data.icon_id==playerForSession().rankIconId && request.resource.data.updatedAt==request.time;
+    allow delete:if teacher();
+  }
+  match /{document=**}{allow read,write:if false;}
+ }
+}

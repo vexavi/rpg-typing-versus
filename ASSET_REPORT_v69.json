@@ -1,0 +1,99 @@
+{
+  "media_count": 16,
+  "media_bytes": 617028,
+  "media_files": {
+    "assets/boss_hit.m4a": {
+      "hash": "e10f92a1c1ca",
+      "bytes": 9095
+    },
+    "assets/card_themes/crimson.webp": {
+      "hash": "5be48850718b",
+      "bytes": 38572
+    },
+    "assets/card_themes/forest.webp": {
+      "hash": "7eab83e086c8",
+      "bytes": 39694
+    },
+    "assets/card_themes/navy.webp": {
+      "hash": "7030992ba690",
+      "bytes": 36980
+    },
+    "assets/card_themes/violet.webp": {
+      "hash": "f17d39411803",
+      "bytes": 44098
+    },
+    "assets/characters/crimson_knight.webp": {
+      "hash": "067feda4bca5",
+      "bytes": 154002
+    },
+    "assets/characters/mc.webp": {
+      "bytes": 89040,
+      "hash": "c2e8b1f629ab"
+    },
+    "assets/characters/silver_knight.webp": {
+      "hash": "8326aa992638",
+      "bytes": 122338
+    },
+    "assets/player_hit.m4a": {
+      "hash": "96cdd53a2246",
+      "bytes": 9747
+    },
+    "icon01.webp": {
+      "hash": "ec498bbc53cb",
+      "bytes": 37136
+    },
+    "icon02.webp": {
+      "hash": "ad7209abc5fd",
+      "bytes": 30516
+    },
+    "story/images/map-placeholder.svg": {
+      "hash": "3a3612d98fd7",
+      "bytes": 2766
+    },
+    "story/images/placeholder-01.svg": {
+      "hash": "32eb46f43d05",
+      "bytes": 761
+    },
+    "story/images/placeholder-02.svg": {
+      "hash": "7a7fc63d15fc",
+      "bytes": 761
+    },
+    "story/images/placeholder-03.svg": {
+      "hash": "e912d7380321",
+      "bytes": 761
+    },
+    "story/images/placeholder-04.svg": {
+      "hash": "869c68b6d95d",
+      "bytes": 761
+    }
+  },
+  "optional_drop_in_assets_not_bundled": [
+    "stage1_bg.webp",
+    "stage1_boss.webp",
+    "stage1_boss2.webp",
+    "stage1_bgm.m4a",
+    "stage2_bg.webp",
+    "stage2_boss.webp",
+    "stage2_boss2.webp",
+    "stage2_bgm.m4a",
+    "stage3_bg.webp",
+    "stage3_boss.webp",
+    "stage3_boss2.webp",
+    "stage3_bgm.m4a",
+    "stage4_bg.webp",
+    "stage4_boss.webp",
+    "stage4_boss2.webp",
+    "stage4_bgm.m4a",
+    "stage5_bg.webp",
+    "stage5_boss.webp",
+    "stage5_boss2.webp",
+    "stage5_bgm.m4a",
+    "intro_locked_bg.webp",
+    "intro_unlocked_bg.webp",
+    "intro_master_bg.webp",
+    "intro_locked_bgm.m4a",
+    "intro_unlocked_bgm.m4a",
+    "intro_master_bgm.m4a"
+  ],
+  "note": "Unbundled optional media are omitted from requests and show the existing fallback. Rebuild this manifest when adding them."
+}

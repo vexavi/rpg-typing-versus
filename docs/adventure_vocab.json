@@ -1,0 +1,210 @@
+[
+  {
+    "prompt": "(...を)勉強する",
+    "answer": "study"
+  },
+  {
+    "prompt": "読む",
+    "answer": "read"
+  },
+  {
+    "prompt": "来る",
+    "answer": "come"
+  },
+  {
+    "prompt": "を持っている",
+    "answer": "have"
+  },
+  {
+    "prompt": "...を教える",
+    "answer": "teach"
+  },
+  {
+    "prompt": "泳ぐ",
+    "answer": "swim"
+  },
+  {
+    "prompt": "知っている",
+    "answer": "know"
+  },
+  {
+    "prompt": "...がわかる",
+    "answer": "see"
+  },
+  {
+    "prompt": "を書く",
+    "answer": "write"
+  },
+  {
+    "prompt": "...をする",
+    "answer": "do"
+  },
+  {
+    "prompt": "行く",
+    "answer": "go"
+  },
+  {
+    "prompt": "(ことば)を話す",
+    "answer": "speak"
+  },
+  {
+    "prompt": "...を得る",
+    "answer": "get"
+  },
+  {
+    "prompt": "大きい",
+    "answer": "big"
+  },
+  {
+    "prompt": "広い",
+    "answer": "large"
+  },
+  {
+    "prompt": "小さい",
+    "answer": "small"
+  },
+  {
+    "prompt": "高い",
+    "answer": "high"
+  },
+  {
+    "prompt": "背の高い",
+    "answer": "tall"
+  },
+  {
+    "prompt": "長い",
+    "answer": "long"
+  },
+  {
+    "prompt": "短い",
+    "answer": "short"
+  },
+  {
+    "prompt": "英語",
+    "answer": "English"
+  },
+  {
+    "prompt": "日本語",
+    "answer": "Japanese"
+  },
+  {
+    "prompt": "晴れた",
+    "answer": "sunny"
+  },
+  {
+    "prompt": "くもった",
+    "answer": "cloudy"
+  },
+  {
+    "prompt": "正しい、右",
+    "answer": "right"
+  },
+  {
+    "prompt": "左(に、へ)",
+    "answer": "left"
+  },
+  {
+    "prompt": "忙しい",
+    "answer": "busy"
+  },
+  {
+    "prompt": "ひまな",
+    "answer": "free"
+  },
+  {
+    "prompt": "よい",
+    "answer": "good"
+  },
+  {
+    "prompt": "すてきな",
+    "answer": "nice"
+  },
+  {
+    "prompt": "おもしろい",
+    "answer": "interesting"
+  },
+  {
+    "prompt": "美しい",
+    "answer": "beautiful"
+  },
+  {
+    "prompt": "遅く",
+    "answer": "late"
+  },
+  {
+    "prompt": "だれ",
+    "answer": "who"
+  },
+  {
+    "prompt": "何",
+    "answer": "what"
+  },
+  {
+    "prompt": "いつ",
+    "answer": "when"
+  },
+  {
+    "prompt": "どこ",
+    "answer": "where"
+  },
+  {
+    "prompt": "なぜ",
+    "answer": "why"
+  },
+  {
+    "prompt": "どちら",
+    "answer": "which"
+  },
+  {
+    "prompt": "だれの",
+    "answer": "whose"
+  },
+  {
+    "prompt": "どうやって",
+    "answer": "how"
+  },
+  {
+    "prompt": "すぐに",
+    "answer": "soon"
+  },
+  {
+    "prompt": "すべて",
+    "answer": "all"
+  },
+  {
+    "prompt": "ここで[に]",
+    "answer": "here"
+  },
+  {
+    "prompt": "そこに[で、へ]",
+    "answer": "there"
+  },
+  {
+    "prompt": "家へ",
+    "answer": "home"
+  },
+  {
+    "prompt": "速く",
+    "answer": "fast"
+  },
+  {
+    "prompt": "お願いします",
+    "answer": "please"
+  },
+  {
+    "prompt": "上手に",
+    "answer": "well"
+  },
+  {
+    "prompt": "確信している",
+    "answer": "sure"
+  },
+  {
+    "prompt": "例文",
+    "answer": "example"
+  },
+  {
+    "prompt": "卒業",
+    "answer": "graduation"
+  }
+]

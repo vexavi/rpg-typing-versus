@@ -1,0 +1,12 @@
+/* Shared Tournament / Adventure / Profile visual language.
+   Visual-only theme; does not alter data, combat, Firebase, or card permissions. */
+:root{
+  --rpg-bg:#0a0c13;
+  --rpg-panel:#17152b;
+  --rpg-panel-2:#121122;
+  --rpg-gold:#d9c27a;
+  --rpg-text:#f3f6ff;
+  --rpg-muted:#b8c3e6;
+  --rpg-edge:#51486a;
+  --rpg-glow:rgba(217,194,122,.28);
+}

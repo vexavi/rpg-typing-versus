@@ -1,0 +1,16 @@
+{
+  "version": 3,
+  "note": "Single Featured banner only. Character artwork is referenced by the catalog. Banner text and featured character can be changed by an authorized teacher; Recruitment outcomes are enabled in v83 under classroom-grade validation.",
+  "banners": [
+    {
+      "id": "featured",
+      "tab": "FEATURED",
+      "title": "CRIMSON SIGNAL",
+      "kicker": "SPECIAL RECRUITMENT",
+      "subtitle": "FEATURED 6★ OPERATOR",
+      "description": "Meet the current featured 6★ operator. Character artwork is shown for preview; earn characters and upgrade auras using duplicate shards.",
+      "art": null,
+      "featured_character_id": "tavi"
+    }
+  ]
+}

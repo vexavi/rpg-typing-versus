@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><script>document.documentElement.dataset.v66Teacher="required";</script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vocabulary Manager — RPG Typing Versus</title>
+<style>
+:root{font:15px system-ui,"Noto Sans JP",sans-serif;color:#202e40;background:#e9edf3}*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:26px auto;padding:18px}header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}h1{font-size:27px;margin:0 0 5px}h2{font-size:17px;margin:0}a{color:#2856a3}nav{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}nav a{text-decoration:none}.panel{border:1px solid #cbd3dd;background:#fff;border-radius:12px;padding:18px;margin-top:15px;box-shadow:0 4px 24px #2138590b}.tabs{display:flex;flex-wrap:wrap;gap:7px}button,select,input{font:inherit}button{cursor:pointer;border:1px solid #8795a7;border-radius:7px;background:#f8fafc;padding:9px 12px;white-space:nowrap}button:hover{background:#e7eef8}button:disabled{opacity:.5;cursor:not-allowed}.tabs button.active,.primary{background:#1e3a60;color:#fff;border-color:#1e3a60}.tabs button.active:hover,.primary:hover{background:#2a517d}button.danger{color:#a42231;border-color:#caa8af}.muted{color:#657387}.notice{font-weight:600;min-height:24px;font-size:14px;margin:8px 0}.layout{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:grid;gap:6px}.field label{font-size:12px;font-weight:700;color:#3e526a}.field input,.field select,.search{width:100%;min-width:0;border:1px solid #a9b8cb;border-radius:7px;padding:10px;background:#fff}.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.section-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}.scroll{max-height:520px;overflow:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:9px 8px;border-bottom:1px solid #e3e8ef;text-align:left;vertical-align:middle}th{background:#f6f8fb;position:sticky;top:0;z-index:1}td.ops{white-space:nowrap;width:200px}tbody tr.inactive{opacity:.54}td:nth-child(2){font-weight:600}code{background:#f0f3f7;border-radius:4px;padding:2px 5px}.hint{line-height:1.5;margin:7px 0;font-size:13px;color:#5d6e81}#csv-file{max-width:100%;font-size:14px}#groupNote{background:#e8f0fa;color:#2c4a73;border-radius:7px;padding:11px;font-size:13px}#message{color:#284b75}#message.err{color:#b72332}@media(max-width:650px){.layout{grid-template-columns:1fr}td.ops{white-space:normal}button{padding:7px 9px}}
+</style></head><body><div id="v66Startup" style="position:fixed;inset:0;z-index:2147483646;background:#111225;color:#ffecc0;display:grid;place-items:center;padding:20px;font:800 18px system-ui;text-align:center"><div>CONNECTING TO FIREBASE…<p style="font:400 14px system-ui;color:#e3def3">Internet connection required to play. If this screen stays here, check your connection and reload.</p></div></div><main>
+<header><div><h1>Vocabulary Manager</h1><p class="muted" style="margin:0">RPG Typing Versus · Firebase · online</p></div><nav><a href="index.html">Teacher Dashboard</a><a href="rankings-admin.html">Ranking Admin</a><a href="recruitment-admin.html">Banner Editor</a><a href="adventure.html">Adventure</a></nav></header>
+<section class="panel"><div class="section-head"><h2>Choose a vocabulary group</h2><span id="summary" class="muted">Loading…</span></div><div id="tabs" class="tabs" style="margin:14px 0">
+<button type="button" data-pool="1" class="active">1年生</button><button type="button" data-pool="2">2年生</button><button type="button" data-pool="3">3年生</button><button type="button" data-pool="b">1B / 2B / 3B</button><button type="button" data-pool="all">All Grades</button></div>
+<div id="groupNote">Standard first-year vocabulary.</div><p id="message" class="notice" role="status"></p></section>
+<section class="panel"><h2 id="addTitle">Add word</h2><form id="wordForm" style="margin-top:12px"><div class="layout"><div class="field"><label for="jp">Japanese prompt</label><input id="jp" maxlength="160" required placeholder="りんご"></div><div class="field"><label for="en">English answer</label><input id="en" maxlength="80" required placeholder="apple"></div></div><div class="actions" style="margin-top:12px"><button class="primary" id="saveWord" type="submit">Add Word</button><button type="button" id="cancelEdit" hidden>Cancel Edit</button></div></form></section>
+<section class="panel"><div class="section-head"><h2>Words</h2><div class="actions"><input id="search" class="search" type="search" placeholder="Search Japanese or English…" aria-label="Search vocabulary"><button id="export" type="button">Export CSV</button></div></div><p class="hint">Disable to hide a word from gameplay without deleting it. Delete permanently removes it from this group.</p><div class="scroll"><table><thead><tr><th>Japanese</th><th>English</th><th>Status</th><th>Actions</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+<section class="panel"><h2>Import vocabulary from CSV</h2><p class="hint">Accepts <code>japanese,english,active</code> or <code>prompt,answer,active</code>. The active column is optional. Maximum 1,000 words per import. English answers must be unique within a group.</p><div class="actions"><input id="csv-file" type="file" accept=".csv,text/csv"><select id="importMethod" aria-label="Import mode"><option value="append">Append new words</option><option value="replace">Replace all words in this group</option></select><button id="import" class="primary" type="button">Import CSV</button></div><p class="hint">Replacing permanently deletes the selected group's existing list. This operation cannot be undone without a database backup.</p></section>
+<section class="panel"><p class="hint" style="margin:0"><strong>Ranking fairness:</strong> Every actual vocabulary edit increments this group's ruleset revision. In-progress runs keep their original words; if the list changes before a score is submitted, the old run will not enter the new ranking. All Grades edits affect only the shared challenge. Standard grades and the combined B group remain independent.</p></section>
+</main><script type="module">
+await import("./online-spark.js");
+'use strict';
+const $=id=>document.getElementById(id);
+const qs=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const descriptions={1:'Words for standard 1年生 cards.',2:'Words for standard 2年生 cards.',3:'Words for standard 3年生 cards.',b:'One shared vocabulary list for ALL 1B, 2B and 3B students. Each class keeps a separate leaderboard.',all:'Common All Grades Challenge vocabulary for everybody. The 120-second challenge uses this list.'};
+let pool='1',words=[],revision=0,editId=null,pending=false;
+async function api(action,data={}){
+ const r=await fetch('/api/vocab/admin',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({action,pool,...data})});
+ let j;try{j=await r.json()}catch(_){throw Error('Server returned invalid JSON.')}if(!r.ok||!j.ok)throw Error(j.error||'Vocabulary request failed.');return j;
+}
+function status(s,err=false){$('message').textContent=s;$('message').classList.toggle('err',err);}
+function clearEdit(){$('wordForm').reset();editId=null;$('addTitle').textContent='Add word';$('saveWord').textContent='Add Word';$('cancelEdit').hidden=true;}
+function render(){
+ $('summary').textContent=`${words.filter(w=>w.active).length} active / ${words.length} total · revision ${revision}`;
+ const query=$('search').value.trim().toLowerCase(),matched=words.filter(w=>`${w.prompt} ${w.answer}`.toLowerCase().includes(query));
+ $('rows').innerHTML=matched.map(w=>`<tr class="${w.active?'':'inactive'}"><td>${esc(w.prompt)}</td><td>${esc(w.answer)}</td><td>${w.active?'Active':'Disabled'}</td><td class="ops"><button type="button" data-action="edit" data-id="${w.id}">Edit</button> <button type="button" data-action="toggle" data-id="${w.id}">${w.active?'Disable':'Enable'}</button> <button type="button" class="danger" data-action="delete" data-id="${w.id}">Delete</button></td></tr>`).join('')||'<tr><td colspan="4">No matching words.</td></tr>';
+}
+async function reload(){
+ if(pending)return;pending=true;status('Loading…');try{const r=await api('list');words=r.words;revision=r.revision;render();status('');}catch(e){status(e.message,true)}finally{pending=false}
+}
+async function changePool(p){if(!descriptions[p])return;pool=p;clearEdit();$('search').value='';qsAll('[data-pool]').forEach(b=>b.classList.toggle('active',b.dataset.pool===p));$('groupNote').textContent=descriptions[p];await reload();}
+function qsAll(sel){return [...document.querySelectorAll(sel)]}
+$('tabs').addEventListener('click',e=>{const btn=e.target.closest('[data-pool]');if(btn)void changePool(btn.dataset.pool)});
+$('search').addEventListener('input',render);
+$('wordForm').addEventListener('submit',async e=>{e.preventDefault();if(pending)return;
+ pending=true;const operation=editId?'edit':'add';try{const d={prompt:$('jp').value,answer:$('en').value};if(editId)d.id=editId;
+ const j=await api(operation,d);words=j.words;revision=j.revision;clearEdit();render();status(operation==='add'?'Word added.':'Word updated.');}
+ catch(err){status(err.message,true)}finally{pending=false}
+});
+$('cancelEdit').addEventListener('click',clearEdit);
+$('rows').addEventListener('click',async e=>{const btn=e.target.closest('button[data-action]');if(!btn||pending)return;
+ const w=words.find(x=>x.id===Number(btn.dataset.id));if(!w)return;
+ if(btn.dataset.action==='edit'){$('jp').value=w.prompt;$('en').value=w.answer;editId=w.id;$('addTitle').textContent='Edit word';$('saveWord').textContent='Save Changes';$('cancelEdit').hidden=false;$('jp').focus();return;}
+ if(btn.dataset.action==='delete'&&!confirm(`Delete "${w.answer}" from this group?`))return;
+ pending=true;try{const j=await api(btn.dataset.action,btn.dataset.action==='toggle'?{id:w.id,active:!w.active}:{id:w.id});words=j.words;revision=j.revision;render();status('Vocabulary updated.');}
+ catch(err){status(err.message,true)}finally{pending=false}
+});
+function csvParse(src){
+ const rows=[];let row=[],field='',quoted=false;src=src.replace(/^\uFEFF/,'');
+ for(let i=0;i<src.length;i++){
+  const c=src[i];if(quoted){if(c==='"'&&src[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c;}
+  else if(c==='"')quoted=true;else if(c===','){row.push(field);field=''}else if(c==='\n'||c==='\r'){
+   if(c==='\r'&&src[i+1]==='\n')i++;row.push(field);field='';if(row.some(v=>v.trim()))rows.push(row);row=[];
+  }else field+=c;
+ }
+ if(quoted)throw Error('Unclosed quote in CSV.');row.push(field);if(row.some(v=>v.trim()))rows.push(row);
+ return rows;
+}
+function extractCsv(text){const matrix=csvParse(text);if(!matrix.length)throw Error('The CSV is empty.');
+ const head=matrix[0].map(s=>s.trim().toLowerCase());const jp=head.findIndex(x=>['japanese','prompt','jp','日本語'].includes(x));
+ const en=head.findIndex(x=>['english','answer','en','英語'].includes(x));const ac=head.findIndex(x=>['active','enabled'].includes(x));
+ if(jp<0||en<0)throw Error('Header must include japanese,english (or prompt,answer).');
+ const records=matrix.slice(1).filter(r=>r.some(v=>v.trim())).map((r,i)=>{
+  const value=ac>=0?(r[ac]||'').trim().toLowerCase():'true';
+  if(!['true','false','1','0','yes','no',''].includes(value))throw Error('Invalid active in CSV row '+(i+2));
+  return {prompt:(r[jp]||'').trim(),answer:(r[en]||'').trim(),active:!['false','0','no'].includes(value)};
+ });
+ if(!records.length||records.length>1000)throw Error('CSV must contain 1–1000 word rows.');return records;
+}
+$('import').addEventListener('click',async()=>{if(pending)return;const f=$('csv-file').files[0];if(!f){status('Choose a CSV file first.',true);return;}
+ const method=$('importMethod').value;try{if(f.size>200000)throw Error('CSV file is too large.');const incoming=extractCsv(await f.text());
+ if(method==='replace'&&!confirm(`Replace ALL ${words.length} words in ${pool} with ${incoming.length} CSV rows?`))return;
+ pending=true;const j=await api('import',{method,words:incoming});words=j.words;revision=j.revision;clearEdit();render();status(`Imported ${incoming.length} CSV rows. ${words.length} total words.`);$('csv-file').value='';
+ }catch(err){status(err.message,true)}finally{pending=false}
+});
+$('export').addEventListener('click',()=>{const quoted=s=>'"'+String(s).replace(/"/g,'""')+'"';const csv='\ufeffjapanese,english,active\r\n'+words.map(w=>[quoted(w.prompt),quoted(w.answer),w.active?'true':'false'].join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='rpg-vocab-'+pool+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
+void reload();
+</script></body></html>

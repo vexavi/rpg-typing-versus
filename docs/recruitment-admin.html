@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head>
+<script>document.documentElement.dataset.v66Teacher='required';</script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Recruitment Banner Editor — RPG Typing Versus</title>
+<style>
+:root{font:15px system-ui,Arial,sans-serif;color:#1e2d40;background:#e9edf3}*{box-sizing:border-box}
+body{margin:0}.wrap{max-width:1120px;margin:22px auto;padding:0 16px 40px}header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}h1{font-size:27px;margin:0}h2{font-size:18px;margin:0 0 14px}p{line-height:1.5}.muted{color:#5a687a;font-size:13px;margin:4px 0}.nav{display:flex;flex-wrap:wrap;gap:14px;font-size:13px}.nav a{color:#284f84;text-decoration:none}
+.panel{border:1px solid #cbd4df;background:#fff;border-radius:11px;padding:17px;margin-top:14px;box-shadow:0 4px 16px #202f490b}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}button{font:inherit;cursor:pointer;border:1px solid #9ca9ba;background:#f7f9fb;border-radius:6px;padding:10px 13px;font-weight:700;color:#1c2b42}button:disabled{opacity:.5;cursor:not-allowed}button.active,button.primary{background:#213650;border-color:#213650;color:#fff}button:hover:not(:disabled){filter:brightness(.96)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:5px;min-width:0}.field.full{grid-column:1/-1}label{font-weight:700;font-size:12px;color:#44556d}input,textarea,select{width:100%;font:inherit;padding:10px 11px;border:1px solid #adbacb;border-radius:6px;color:#182638;background:#fff}textarea{min-height:85px;resize:vertical}input:focus,textarea:focus,select:focus{outline:2px solid #789cdd}.help{font-size:11px;color:#69778c;text-align:right}.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}.preview{background:linear-gradient(133deg,#292b33,#c50032 65%,#8f0026);color:#fff;border-radius:9px;padding:24px;min-height:285px;overflow-wrap:anywhere}.preview .eyebrow{font-size:11px;letter-spacing:.2em;font-weight:800;border-left:4px solid #fff;padding-left:8px}.preview h3{font-size:clamp(24px,3.1vw,44px);line-height:1;letter-spacing:-.04em;margin:24px 0 12px;text-transform:uppercase}.preview .sub{font-size:12px;font-weight:800;letter-spacing:.08em}.preview .desc{font-size:13px;max-width:380px;line-height:1.5;margin-top:25px}.preview .tab{display:inline-block;font-size:11px;font-weight:800;border:1px solid white;padding:7px 12px;margin-top:14px}.note{border-left:4px solid #c30032;padding:10px 12px;background:#fff1f4;color:#5b2940;font-size:13px}.status{font-size:13px;font-weight:650;min-height:20px}.status.error{color:#b42318}.status.good{color:#176a40}
+#previewOperatorArt[hidden]{display:none!important}
+@media(max-width:780px){.grid,.fields{grid-template-columns:1fr}.field.full{grid-column:auto}}
+</style>
+</head><body>
+<div id="v66Startup" style="position:fixed;inset:0;z-index:2147483646;background:#111225;color:#ffecc0;display:grid;place-items:center;padding:20px;font:800 18px system-ui;text-align:center">CONNECTING TO FIREBASE…</div>
+<main class="wrap">
+<header><div><h1>Recruitment Banner Editor</h1><p class="muted">Teacher only · Banner text & featured 6★ · Firebase Spark</p></div><nav class="nav"><a href="vocabulary-admin.html">Vocabulary Manager</a><a href="game-settings.html">Game Settings</a><a href="guild-grants.html">Grant Guild Coins</a><a href="rankings-admin.html">Ranking Admin</a><a href="recruitment.html" target="_blank" rel="noopener">Open Recruitment</a></nav></header>
+<section class="panel"><h2>Featured Recruitment</h2><p class="muted">One Featured banner only. Edit text and select an existing featured 6★ character without changing image filenames or publishing GitHub files.</p></section>
+<section class="grid">
+<section class="panel"><h2>Banner text</h2><form id="editor">
+<div class="fields">
+<div class="field full"><label for="featured_character_id">Featured 6★ character</label><select id="featured_character_id" required><option value="tavi">Tavi</option></select><span class="help">Select an existing 6★ operator. Artwork and filenames do not change.</span></div>
+<div class="field"><label for="tab">Banner tab label</label><input id="tab" maxlength="22" required><span class="help">Max 22 characters</span></div>
+<div class="field"><label for="kicker">Small category heading</label><input id="kicker" maxlength="50" required><span class="help">Max 50 characters</span></div>
+<div class="field full"><label for="title">Large banner title</label><input id="title" maxlength="70" required><span class="help">Max 70 characters</span></div>
+<div class="field full"><label for="subtitle">Subtitle</label><input id="subtitle" maxlength="110"><span class="help">Max 110 characters</span></div>
+<div class="field full"><label for="description">Description / Scout details</label><textarea id="description" maxlength="260"></textarea><span class="help">Max 260 characters</span></div>
+</div>
+<div class="row" style="margin-top:15px"><button type="submit" class="primary" id="save">Save to Firebase</button><button type="button" id="reload">Reload saved</button><span id="revision" class="muted"></span></div>
+<p role="status" id="status" class="status"></p>
+</form></section>
+<section class="panel"><h2>Live preview</h2><div class="preview"><img id="previewOperatorArt" alt="Featured operator preview" style="display:block;float:right;width:37%;height:265px;object-fit:contain;object-position:center bottom;margin:-10px -8px 0 12px"/><div id="previewOperatorName" style="font-size:12px;color:#ffe2a2;letter-spacing:.1em;font-weight:800"></div><div id="previewKicker" class="eyebrow"></div><h3 id="previewTitle"></h3><div id="previewSubtitle" class="sub"></div><p id="previewDescription" class="desc"></p><div id="previewTab" class="tab"></div></div><p class="muted">Changes appear here while typing. Students see the saved text when they next open or reload Recruitment.</p></section>
+</section>
+<section class="panel"><div class="note"><strong>Character artwork stays in the roster.</strong> Change the featured 6★ using the selector, without renaming artwork. Background pictures are still independent and can be added using <code>recruitment-banners.json</code> and GitHub. Actual random pulls, currency spending, and rewards remain disabled.</div></section>
+</main>
+<script src="recruitment-banner-config.js?v=75"></script>
+<script type="module" src="recruitment-admin.js?v=75"></script>
+</body></html>

@@ -1,0 +1,562 @@
+/* v52 — Profile-inspired student UI: charcoal / silver / paper / signal yellow.
+   Loaded after existing styles. Teacher dashboard, card registry, story editor,
+   and projector pages are intentionally not themed. */
+:root{--signal:#f0f500;--steel:#37393b;--coal:#202225;--paper:#f3f3f0;--ui-ink:#202226;--ui-border:#bcbfbe;--ui-muted:#74777a}
+
+/* ADVENTURE: page, top navigation and battle arena */
+body.adventure-client{
+  --bg:#1c1e20;--ink:#f7f7f5;--muted:#b4b7b7;--gold:var(--signal);
+  --rpg-bg:#252729;--rpg-text:#f3f3f0;--rpg-muted:#b4b6b9;--rpg-gold:#d0d2d2;
+  --rpg-edge:#565a5d;
+  background:#222426;color:#f5f5f1;font-family:system-ui,"Segoe UI","Noto Sans JP",sans-serif;
+}
+body.adventure-client .frame{background:transparent}
+body.adventure-client .adventure-topbar{
+  background:linear-gradient(108deg,#454749,#e8e8e7 35%,#d2d3d1);
+  border:1px solid #9b9d9e;border-bottom:0;box-shadow:none;
+  padding:4px 14px;letter-spacing:0;
+}
+body.adventure-client .adventure-topbar .adventure-brand{
+  color:#232426;font:900 15px ui-monospace,Consolas,monospace;letter-spacing:-.03em
+}
+body.adventure-client .adventure-mode-tag,
+body.adventure-client .adventure-mode-tag *{color:#393c3f;font-size:11px;font-weight:800}
+body.adventure-client .top-stage-separator{color:#919395}
+body.adventure-client .battlefield{
+  border:1px solid #53575a;border-top:0;border-bottom:0;
+  box-shadow:none;background:#25272a
+}
+body.adventure-client .bgFallback{background:linear-gradient(130deg,#303336 0%,#24262a 64%,#1c2023 100%)}
+body.adventure-client .bgFallback::before{opacity:.17;background-size:48px 48px}
+body.adventure-client .wordLane{
+  background:#131517bb;border:1px solid #6e7375;
+  box-shadow:inset 0 0 0 1px #ffffff0c;backdrop-filter:blur(3px)
+}
+body.adventure-client .laneLabel{display:none}
+body.adventure-client .inputBar{
+  background:#181a1ceb;border:1px solid #9ea2a4;box-shadow:none;
+  height:47px;padding:4px 8px
+}
+body.adventure-client .inputBar:focus-within{border-color:var(--signal)}
+body.adventure-client .promptChar{color:var(--signal)}
+body.adventure-client .word{
+  background:#313439ed;border:1px solid #898d92;color:#f9f9f7;
+  box-shadow:0 3px 8px #0006;min-height:30px
+}
+body.adventure-client .word.hint{border-left:3px solid var(--signal)}
+body.adventure-client .bossFallback{background:radial-gradient(ellipse,#454a4e90,#20222522 67%);color:#ededeb}
+body.adventure-client .bossFallback::before{color:#e1e2e533}
+body.adventure-client .uiRow{
+  border:1px solid #b9bbbb;border-top:0;
+  background:var(--paper);box-shadow:none;
+  padding:4px;gap:5px
+}
+body.adventure-client .uiRow>.panel{
+  background:#fff;color:var(--ui-ink);
+  border:1px solid #bdbfbd;box-shadow:none;
+  padding:8px 12px
+}
+body.adventure-client .uiRow .panelHeader{
+  border-bottom:1px solid #dedfdb;color:#343638;
+  font:900 11px ui-monospace,Consolas,monospace;letter-spacing:.045em
+}
+body.adventure-client .uiRow .muted,
+body.adventure-client .uiRow .playerLevel,
+body.adventure-client .uiRow .playerExp{color:#64676a}
+body.adventure-client .uiRow #playerLabel{color:#222325}
+body.adventure-client .uiRow .playerIcon{background:#34373a;border:2px solid var(--signal)}
+body.adventure-client .uiRow .menuItem{color:#2b2d2f;padding:5px 7px;min-height:29px}
+body.adventure-client .uiRow .menuItem:hover{background:#f0f0ec;border-color:#afb1b0}
+body.adventure-client .uiRow .menuItem .arrow{color:#979d02}
+body.adventure-client .uiRow .name,
+body.adventure-client .uiRow .statusList,
+body.adventure-client .uiRow .small{color:#3c3f41}
+body.adventure-client .uiRow .meter{background:#d1d3d1;border-color:#8f9294}
+body.adventure-client .uiRow .hpPips .pip{border-color:#4e5052}
+body.adventure-client .uiRow .statusList>.small{font-size:11px}
+
+/* ADVENTURE: login, start, mode menu, alerts. Retain gameplay messages. */
+body.adventure-client .overlay{background:#0d0f10bb}
+body.adventure-client .overlayBox{
+  background:#f3f3f0;color:#202224;
+  border:0;border-top:6px solid var(--signal);box-shadow:0 18px 65px #000b;
+  padding:17px 19px
+}
+body.adventure-client .overlayBox h2{
+  font:900 20px ui-monospace,Consolas,monospace;color:#242627;letter-spacing:-.03em
+}
+body.adventure-client .overlayBox p,
+body.adventure-client .overlayBox .muted{color:#55595b}
+body.adventure-client .overlayBox .choiceBtn,
+body.adventure-client .overlayBox .uiBtn{
+  background:#fff;color:#222527;border:1px solid #bfc2c0;
+  border-left:4px solid #bfc2c0;box-shadow:none;
+  border-radius:0;min-height:42px
+}
+body.adventure-client .overlayBox .choiceBtn:hover,
+body.adventure-client .overlayBox .uiBtn:hover{
+  background:#e6e7e3;border-left-color:#bec400;border-color:#bbbdbb;border-left-width:4px
+}
+body.adventure-client .overlayBox .choiceBtn .title{color:#1e2021;font-weight:800}
+body.adventure-client .overlayBox .uiBtn.primary{background:var(--signal);color:#16191b;border:1px solid #16191b}
+body.adventure-client #overlayHint{display:none}
+body.adventure-client .overlayBox .countdown{color:#202224}
+body.adventure-client .overlayBox input{background:#fff;color:#151719;border:1px solid #a8abad}
+body.adventure-client #adventureGate{
+  background:linear-gradient(180deg,#36393b 0,#292b2c 55%,#f3f3f0 55%)!important;
+  color:#1e2021!important;font-family:system-ui,"Segoe UI",sans-serif!important
+}
+body.adventure-client #adventureGate .ag-card{
+  width:min(450px,100%);border:0!important;border-top:7px solid var(--signal)!important;
+  background:#f5f5f2!important;box-shadow:0 20px 60px #0007!important;
+  padding:25px!important;gap:11px!important
+}
+body.adventure-client #adventureGate h1{color:#202225!important;font:900 30px ui-monospace,Consolas,monospace!important;text-align:left!important;letter-spacing:-.04em!important}
+body.adventure-client #adventureGate .ag-over{color:#676a6c!important;text-align:left!important;font-size:11px!important}
+body.adventure-client #adventureGate label{color:#494c4e!important}
+body.adventure-client #adventureGate input{background:#fff!important;color:#252729!important;border:1px solid #aaaeac!important;min-height:46px}
+body.adventure-client #adventureGate input:focus{border-color:#5c6265!important;outline:2px solid #9b9e03!important}
+body.adventure-client #adventureGate button{border:1px solid #292b2c!important;background:var(--signal)!important;color:#191b1c!important}
+body.adventure-client #adventureGate #ag-guest{background:#e6e7e4!important;color:#2c3032!important;border-color:#b6b8b7!important}
+body.adventure-client #adventureGate a{color:#42464a!important}
+body.adventure-client #adventureGate p{color:#aa3838!important;min-height:0!important}
+body.adventure-client .introStartBtn{border:1px solid #222426;background:var(--signal);color:#222425;box-shadow:none;font:900 16px ui-monospace,Consolas,monospace}
+body.adventure-client .introBadge,
+body.adventure-client .introNote{letter-spacing:0;color:#e4e4df}
+body.adventure-client .introProfileCard{border-color:#cccfcf;background:#25282ae6;box-shadow:none}
+
+/* STORY: same surfaces and controls as the profile; no filler captions. */
+body.adventure-client #storyRoot{
+  background:linear-gradient(180deg,#303234 0%,#2b2d2f 50%,#efefed 50%);
+  color:#26292b;font-family:system-ui,"Segoe UI","Noto Sans JP",sans-serif
+}
+body.adventure-client #storyRoot .story-modal{
+  background:#f6f6f3;color:#252728;border:1px solid #b7b9b9;
+  border-top:7px solid var(--signal);box-shadow:0 15px 65px #0008;
+  width:min(100%,1160px);padding:20px
+}
+body.adventure-client #storyRoot .story-head{border-bottom:1px solid #d2d3d0;padding-bottom:13px}
+body.adventure-client #storyRoot h1{color:#1f2224;font:900 clamp(23px,4vw,32px) ui-monospace,Consolas,monospace;letter-spacing:-.03em}
+body.adventure-client #storyRoot h2{color:#282a2d;font-size:20px;font-weight:850}
+body.adventure-client #storyRoot .story-eyebrow{color:#606366;letter-spacing:.07em}
+body.adventure-client #storyRoot .story-chapter{border-color:#dedfdb;padding:15px 0}
+body.adventure-client #storyRoot .story-chapter p{color:#777a7d}
+body.adventure-client #storyRoot .story-chapter-count{color:#55585b;font-weight:800}
+body.adventure-client #storyRoot .story-stages{grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:8px}
+body.adventure-client #storyRoot button{background:#fff;color:#252728;border:1px solid #b9bcba;border-radius:0;box-shadow:none;font-family:inherit;font-weight:800}
+body.adventure-client #storyRoot button:hover:not(:disabled){background:#e7e8e4;border-color:#929698}
+body.adventure-client #storyRoot button:focus-visible{outline-color:#c8cf00}
+body.adventure-client #storyRoot .story-secondary{background:#e9eae7;border-color:#aeb1af;color:#373a3b}
+body.adventure-client #storyRoot .story-stage{background:#fff;border:1px solid #c4c7c6;border-left:5px solid #b6b8b8;min-height:88px;padding:15px 10px 10px;color:#252729}
+body.adventure-client #storyRoot .story-stage.done{border-left-color:#979d03}
+body.adventure-client #storyRoot .story-stage:disabled{opacity:.58;background:#edeeec}
+body.adventure-client #storyRoot .story-stage-index{color:#8d9400;font-weight:900}
+body.adventure-client #storyRoot .story-stage-name{font-weight:850}
+body.adventure-client #storyRoot .story-stage-name small{color:#777a7b;font-weight:500}
+body.adventure-client #storyRoot .story-stage-type{color:#5a5d60;font-weight:750}
+body.adventure-client #storyRoot .story-reader{
+  background:#252729;color:#f4f4f0;border:1px solid #adb0af;border-top:7px solid var(--signal);
+  box-shadow:0 16px 60px #0009
+}
+body.adventure-client #storyRoot .story-reader-top{background:linear-gradient(90deg,#56595b,#e2e3e1 45%);color:#2c2e30}
+body.adventure-client #storyRoot .story-visual{background:#2b3034;border-color:#414548}
+body.adventure-client #storyRoot .story-placeholder{background:linear-gradient(135deg,#262b30,#4a4e52);color:#f3f3f1}
+body.adventure-client #storyRoot .story-placeholder span{color:var(--signal)}
+body.adventure-client #storyRoot .story-caption{background:#252729;color:#f3f3ef;border-top:1px solid #525456;min-height:42px}
+body.adventure-client #storyRoot .story-reader-controls{background:#f1f1ef;border-top:1px solid #c6c6c3}
+body.adventure-client #storyRoot .story-reader-controls button{color:#242628;background:#fff;border:1px solid #adafad}
+body.adventure-client #storyRoot .story-reader-controls #story-next{background:var(--signal);border-color:#242628}
+
+/* TOURNAMENT: override only the student client. Teacher & projector remain unchanged. */
+body.tournament-client:not(.teacher-mode):not(.projector-mode){
+  --ink:#27292c;--panel:#f7f7f5;--panel2:#e9eae7;--gold:#b6b8b8;
+  --pale:#202325;--accent:var(--signal);--line:#afb2b0;
+  background:linear-gradient(180deg,#343638 0%,#2a2c2e 52%,#f2f2ef 52%);
+  color:#242629;font-family:system-ui,"Segoe UI","Noto Sans JP",sans-serif
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) button,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .btn{
+  border:1px solid #a9acaa;border-radius:0;background:#f5f5f2;color:#222426;
+  box-shadow:none;font-weight:800
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) button:hover:not(:disabled){background:#e0e2dd}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) button.primary{
+  background:var(--signal);border:1px solid #202223;color:#202223;box-shadow:none
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) input,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) select{
+  background:#fff;color:#242729;border:1px solid #9fa2a0;border-radius:0
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) input:focus{border-color:#9fa600}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-shell{
+  min-height:100dvh;background:transparent
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-card{
+  border:1px solid #aeb1b0;border-top:7px solid var(--signal);
+  background:#f5f5f2;color:#252728;box-shadow:0 20px 55px #0006;
+  border-radius:0
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry[data-theme]{
+  --adventure-gold:var(--signal);background:transparent!important
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .student-card{background:#f7f7f4;border:1px solid #aeb1b0;border-top:7px solid var(--signal)}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .student-card:before,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .student-card:after{display:none}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .student-card h1{
+  font:900 clamp(26px,4vw,36px) ui-monospace,Consolas,monospace;
+  color:#222426;letter-spacing:-.035em
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-field-label,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-room-summary{color:#575b5d}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .entry-only input{background:#fff;color:#252728;border:1px solid #aeb1af;box-shadow:none}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .entry-only button.primary,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .character-start{
+  background:var(--signal);border:1px solid #242628;color:#242628;box-shadow:none
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .entry-back,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-launch{
+  background:#e9eae7;color:#282a2c;border:1px solid #afb2b0;box-shadow:none
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .shared-profile-link{color:#323637}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-character-grid .character-choice{
+  background:#303236;color:#f5f5f3;border:1px solid #808486;box-shadow:none;border-radius:0
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-character-grid .character-choice.selected{border:3px solid var(--signal)}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-character-grid .character-choice span{color:#f4f4f1}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-hint{color:#717474}
+
+/* Lobby / pre-match / results */
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-card{
+  background:#f4f4f1;color:#252729;border:1px solid #b9bbbb;border-top:7px solid var(--signal)
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-wait-title,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .student-round-label{color:#252729;font-family:ui-monospace,Consolas,monospace}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-self,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .versus-side{background:#303235;color:#f5f5f2;border:1px solid #6c7071;box-shadow:none}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-self-name,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .versus-username{color:#f5f5f2}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-roster{background:#fff;color:#2b2d2f;border-color:#c6c8c6;box-shadow:none}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-roster-title{color:#242629}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-roster-person{background:#ebebe8;color:#282a2c;border-color:#c3c4c2}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .versus-middle{color:#343638}
+
+/* Battle / stats: the same grey top + dark stage + white stat cards as Profile. */
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-wrap{
+  background:#292b2d;gap:5px;padding:5px;min-height:0
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene{
+  border:1px solid #7c7e80;background:#292c30;box-shadow:none
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene:after{opacity:.4}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-panel,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-field{background:#17191be6;border:1px solid #777c7e;box-shadow:none}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-title{font:900 13px ui-monospace,Consolas,monospace;color:#fff;border-color:#777}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-token{
+  background:#34373be8;border:1px solid #989d9e;color:#f8f8f6;box-shadow:0 2px 6px #0006
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-input-wrap{
+  background:#242628;border:1px solid #aaaead;box-shadow:none
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-input-wrap input{background:#202225;color:#fff;border:0}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .fighter-label.enemy{background:#36393b;border:1px solid #898c8e;color:#fff}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .arena-timer{color:var(--signal);text-shadow:0 2px 5px #000}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom{background:#f3f3f0;gap:5px;padding:4px;height:auto;min-height:124px}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom>.panel{
+  color:#252829;background:#fff;border:1px solid #bec1bf;box-shadow:none;border-radius:0;
+  padding:9px 12px
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .panel-mini-head{border-color:#c8cbc8;color:#3a3d3e}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .panel-mini-head b{color:#202326}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .score-group strong{color:#222527}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .hp-meter,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .attack-bar{background:#dfe1dd;border-color:#a9adaa}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .auto-caption,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .status-counts{color:#747878}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .label{color:#55595b}
+@media(max-width:740px){
+  body.adventure-client .adventure-topbar .adventure-brand{font-size:12px}
+  body.adventure-client .uiRow{gap:4px;padding:3px}
+  body.adventure-client .uiRow>.panel{padding:6px 8px}
+  body.adventure-client #storyRoot .story-modal{padding:11px}
+  body.adventure-client #storyRoot .story-stages{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom{min-height:105px}
+  body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom>.panel{padding:6px 8px}
+}
+@media(max-width:560px){
+  body.adventure-client .overlayBox{padding:12px}
+  body.adventure-client .uiRow{grid-template-columns:1fr}
+  body.adventure-client .uiRow>.panel{padding:6px 8px}
+  body.adventure-client .wordLane,body.adventure-client .inputBar{left:7px;width:53%}
+  body.adventure-client .bossWrap{width:44%}
+  body.adventure-client #storyRoot .story-reader-top{padding:9px 11px}
+  body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-card{padding:15px}
+}
+
+/* Overrides for older tournament rules with !important declarations. */
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .student-card h1{
+  font:900 clamp(23px,4vw,32px) ui-monospace,Consolas,monospace!important;
+  letter-spacing:-.035em!important;color:#242729!important;margin:4px 0 18px!important
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .adventure-launch{
+  color:#202224!important;border-color:#a9adab!important;background:#e8e9e5!important
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .shared-profile-link{
+  color:#343738!important;text-decoration:none!important
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-wait-title,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .student-round-label{
+  font:900 clamp(21px,3vw,34px) ui-monospace,Consolas,monospace!important;
+  color:#252728!important;letter-spacing:-.025em
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-results .result-versus{
+  color:#222526
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-results .versus-username,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-results .result-middle{font-family:ui-monospace,Consolas,monospace}
+/* Contrast and hierarchy fixes on white student surfaces. */
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-roster-person,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-roster-person span,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-roster-person.is-self span{color:#25282a!important}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .student-wait .lobby-roster-person.is-self{background:#f3f6d1!important;border-color:#aeb600!important}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .metric-head,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .metric-head span,
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .score-group>span{color:#4a4e50!important;font-weight:800}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .metric-head b{color:#2c3031!important}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .score-group>strong{color:#242729!important}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-bottom .status-counts{color:#4c5052!important}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-title{
+ border:none;background:#2a2c2e;color:#f2f2ef!important
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .battle-scene .word-panel{border:1px solid #818587;box-shadow:none}
+/* Keep meaningful status and skill tags: they communicate battle mechanics. */
+
+/* Remove redundant labels and empty placeholder caption regions. */
+body.adventure-client .uiRow .panelHeader>span.muted:last-child{display:none}
+body.adventure-client #storyRoot .story-caption:empty{display:none}
+body.adventure-client .uiRow .playerExp:empty{display:none}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .entry-only{
+  padding:clamp(16px,2.5vw,24px);min-height:0
+}
+body.tournament-client:not(.teacher-mode):not(.projector-mode) .adventure-entry .entry-only form{gap:12px}
+/* Dialog instructions are functional; show them only when gameplay provides text. */
+body.adventure-client #overlayHint{display:block;color:#666b6d;font-size:11px;min-height:0;margin-top:6px}
+body.adventure-client #overlayHint:empty{display:none}
+
+
+/* v53 — Mode Select background placeholder. This full-screen opaque layer
+   hides the battle arena, HP bars and combat HUD until a mode is chosen.
+   To replace the texture later, change the image variable to:
+   --mode-select-background-image: url("assets/mode-select-background.webp");
+   Leave it as 'none' for the current CSS-only placeholder. */
+body.adventure-client {
+  --mode-select-background-image: none;
+}
+body.adventure-client #overlay.mode-select-active {
+  background-color: #292c2e;
+  background-image:
+    linear-gradient(118deg, rgba(16,18,20,.68) 0%, rgba(29,31,33,.46) 56%, rgba(15,17,19,.73) 100%),
+    var(--mode-select-background-image),
+    radial-gradient(ellipse 95% 85% at 82% 22%, #55595b 0%, transparent 72%),
+    repeating-linear-gradient(135deg, #343739 0px, #343739 2px, #303335 2px, #303335 7px);
+  background-position: center, center, center, center;
+  background-size: cover, cover, cover, auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+  z-index: 5000;
+}
+body.adventure-client #overlay.mode-select-active .overlayBox {
+  box-shadow: 0 26px 70px rgba(0,0,0,.54);
+}
+/* The arena is an isolated stacking context. Its overlay cannot cover the
+   sibling HUD/header, so hide those while Mode Select is active. The opaque
+   fixed overlay supplies the background across the entire viewport. */
+body.adventure-client:has(#overlay.mode-select-active) .adventure-topbar,
+body.adventure-client:has(#overlay.mode-select-active) .uiRow {
+  visibility: hidden;
+}
+
+
+/* v58 - minimal defeat/continue interface (student screens only) */
+/* v59: Opaque defeat screen, with battle HUD hidden beneath.
+   #overlay lives inside .battlefield, which creates its own stacking
+   context, so the sibling header/HUD must be hidden explicitly. */
+body.adventure-client #overlay.defeat-active{
+  background:#111316;
+  cursor:default;
+}
+body.adventure-client:has(#overlay.defeat-active) .adventure-topbar,
+body.adventure-client:has(#overlay.defeat-active) .uiRow {
+  visibility:hidden;
+}
+body.adventure-client #overlay.defeat-active .overlayBox.defeat-card{
+  width:min(550px,calc(100vw - 24px));
+  max-height:calc(100dvh - 30px);
+  padding:clamp(25px,4vw,48px) clamp(18px,4vw,36px);
+  overflow:visible;
+  border:0;
+  border-top:6px solid var(--signal);
+  background:#f3f3f0;
+  color:#202225;
+  box-shadow:0 25px 75px #000a;
+  text-align:center;
+  animation:defeatCardEnter .28s ease-out both;
+}
+@keyframes defeatCardEnter {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+body.adventure-client #overlay.defeat-active .defeat-card h2{
+  margin:0;
+  font-size:clamp(36px,7.5vw,66px);
+  line-height:1.1;
+  letter-spacing:.035em;
+  text-align:center;
+  color:#252729;
+  font-weight:1000;
+}
+body.adventure-client #overlay.defeat-active .defeat-card #overlayDesc,
+body.adventure-client #overlay.defeat-active .defeat-card #overlayHint{display:none!important;}
+body.adventure-client #overlay.defeat-active .defeat-card .overlayChoices{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  margin-top:clamp(24px,4.5vw,38px);
+  align-items:center;
+}
+body.adventure-client #overlay.defeat-active .defeat-answer,
+body.adventure-client #overlay.defeat-active .defeat-okay{
+  min-height:65px;
+  cursor:pointer;
+  border:1px solid #9fa4a5;
+  background:#fff;
+  color:#242729;
+  font-size:clamp(20px,4vw,27px);
+  font-weight:900;
+  font-family:inherit;
+  letter-spacing:.07em;
+  text-align:center;
+  transition:background .12s ease,color .12s ease,border-color .12s ease;
+  box-shadow:none;
+  border-radius:0;
+}
+body.adventure-client #overlay.defeat-active .defeat-answer:hover,
+body.adventure-client #overlay.defeat-active .defeat-answer:focus-visible,
+body.adventure-client #overlay.defeat-active .defeat-okay:hover,
+body.adventure-client #overlay.defeat-active .defeat-okay:focus-visible{
+  background:#f0f500;
+  color:#17191b;
+  border-color:#777a7b;
+  outline:2px solid #a4a900;
+  outline-offset:2px;
+}
+body.adventure-client #overlay.defeat-active .defeat-card .countdown{
+  margin:19px 0 0;
+  color:#1e2022;
+  font-size:clamp(45px,7vw,62px);
+  font-weight:900;
+  line-height:1;
+  font-variant-numeric:tabular-nums;
+}
+body.adventure-client #overlay.defeat-active .defeat-card.hearts-phase h2,
+body.adventure-client #overlay.defeat-active .defeat-card.hearts-phase .countdown{display:none!important;}
+body.adventure-client #overlay.defeat-active .defeat-card.hearts-phase .overlayChoices{margin:0;}
+body.adventure-client #overlay.defeat-active .defeat-hearts{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(13px,2.6vw,25px);
+  min-height:90px;
+  margin:0 auto;
+  animation:defeatHeartsIn .46s ease-out both;
+}
+@keyframes defeatHeartsIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+body.adventure-client #overlay.defeat-active .defeat-heart{
+  width:clamp(63px,9vw,91px);
+  height:clamp(63px,9vw,91px);
+  display:grid;
+  place-items:center;
+  transition:opacity .7s ease,transform .7s ease;
+  opacity:1;
+}
+body.adventure-client #overlay.defeat-active .defeat-heart.spent{
+  opacity:0;
+  transform:scale(.78);
+}
+body.adventure-client #overlay.defeat-active .defeat-heart svg{
+  display:block;
+  width:100%;height:100%;
+  fill:#dc4c57;
+  stroke:#9c252f;
+  stroke-width:1.2px;
+  overflow:visible;
+  filter:drop-shadow(0 5px 2px #00000015);
+}
+body.adventure-client #overlay.defeat-active .defeat-heart.hollow svg{
+  fill:none;stroke:#555b5f;stroke-width:1.45px;filter:none;
+}
+body.adventure-client #overlay.defeat-active .defeat-okay{
+  grid-column:1 / -1;
+  width:min(240px,100%);
+  margin:1px auto 0;
+}
+@media(max-width:440px){
+  body.adventure-client #overlay.defeat-active .defeat-card .overlayChoices{gap:10px}
+  body.adventure-client #overlay.defeat-active .defeat-answer,
+  body.adventure-client #overlay.defeat-active .defeat-okay{min-height:56px}
+}
+@media(prefers-reduced-motion:reduce){
+  body.adventure-client #overlay.defeat-active .overlayBox.defeat-card{animation:none}
+  body.adventure-client #overlay.defeat-active .defeat-heart{transition:none}
+  body.adventure-client #overlay.defeat-active .defeat-hearts{animation:none}
+}
+
+/* v63 — Normal / Extra rankings in the shared Profile style. */
+body.adventure-client .overlayBox.rankings-card{
+  width:min(740px,calc(100vw - 28px));max-height:calc(100dvh - 36px);
+  padding:20px 22px;overflow-y:auto;
+}
+body.adventure-client .rankings-card .overlayChoices{gap:12px}
+body.adventure-client .ranking-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+body.adventure-client .ranking-grades{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+body.adventure-client .ranking-grade{min-height:39px;font-size:12px;font-weight:800;font-family:inherit;border:1px solid #aeb3b6;background:#eee;color:#292d2d;cursor:pointer}
+body.adventure-client .ranking-grade.active{background:#dce6b4;border-color:#4b5635;color:#18221b}
+body.adventure-client .ranking-meta{text-align:center;font-size:11px;letter-spacing:.06em;font-weight:800;color:#5b5f63}
+@media(max-width:490px){body.adventure-client .ranking-grade{font-size:10px;min-height:38px}}
+
+body.adventure-client .ranking-tab,
+body.adventure-client .ranking-action{
+  min-height:44px;border:1px solid #acb0b2;background:#e6e8e5;
+  color:#252729;font-weight:900;font-size:13px;letter-spacing:.06em;
+  cursor:pointer;border-radius:0;font-family:inherit;
+}
+body.adventure-client .ranking-tab.active,
+body.adventure-client .ranking-action.primary{
+  border-color:#1f2122;background:var(--signal);color:#17191b;
+}
+body.adventure-client .ranking-list{display:grid;gap:6px;max-height:min(49vh,460px);overflow-y:auto}
+body.adventure-client .ranking-row,
+body.adventure-client .ranking-own{
+  display:grid;grid-template-columns:63px minmax(0,1fr) minmax(75px,max-content);
+  align-items:center;gap:12px;padding:11px 13px;
+  background:#fff;border:1px solid #c5c9c7;color:#242627;
+}
+body.adventure-client .ranking-row.mine,
+body.adventure-client .ranking-own{border-left:5px solid #b8bf00;background:#f7f9e6}
+body.adventure-client .ranking-place{font-size:17px;font-weight:900;color:#3f4344}
+body.adventure-client .ranking-identity{display:flex;align-items:center;gap:11px;min-width:0;overflow:hidden}
+body.adventure-client .ranking-avatar{width:38px;height:38px;flex:0 0 38px;object-fit:cover;border:1px solid #adb5b5;background:#eceeed;border-radius:4px}
+body.adventure-client .ranking-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:800}
+body.adventure-client .ranking-points{text-align:right;font-size:16px;font-variant-numeric:tabular-nums}
+body.adventure-client .ranking-you{display:inline-block;color:#626600;font-size:10px;font-weight:900;margin-left:8px}
+body.adventure-client .ranking-own{font-size:14px}
+body.adventure-client .ranking-own strong:last-child{text-align:right}
+body.adventure-client .ranking-empty,
+body.adventure-client .ranking-notice{padding:22px 12px;text-align:center;font-size:12px;letter-spacing:.07em;font-weight:750;color:#565c5d}
+body.adventure-client .ranking-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+@media(max-width:520px){
+ body.adventure-client .overlayBox.rankings-card{padding:13px 12px}
+ body.adventure-client .ranking-row,body.adventure-client .ranking-own{grid-template-columns:42px minmax(0,1fr) 72px;gap:6px;padding:10px 7px}
+ body.adventure-client .ranking-points{font-size:13px}
+ body.adventure-client .ranking-place{font-size:14px}
+ body.adventure-client .ranking-identity{gap:7px}
+ body.adventure-client .ranking-avatar{width:29px;height:29px;flex-basis:29px}
+ body.adventure-client .ranking-name{font-size:12px}
+}

@@ -1,0 +1,10 @@
+**/player_cards.db
+**/*.sqlite
+**/*.sqlite3
+**/.env
+**/serviceAccount*.json
+**/*service-account*.json
+**/*_PRIVATE.json
+**/__pycache__/
+**/*.pyc
+.vscode/

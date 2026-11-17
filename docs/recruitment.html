@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>RPG Typing Versus — Recruitment</title>
+  <link rel="stylesheet" href="recruitment.css?v=75">
+  <link rel="stylesheet" href="recruitment-reveal.css?v=75">
+</head>
+<body>
+  <div id="v66Startup" class="online-startup" role="status"><div>CONNECTING TO FIREBASE…<p>Internet connection required. If this screen remains, check your connection and reload.</p></div></div>
+  <main class="recruit" aria-label="Recruitment banners" id="recruitmentApp">
+    <div class="art-area" id="bannerArt" aria-hidden="true"><img id="featuredOperatorArt" class="featured-operator-art" alt="" hidden><div class="art-guide"><span>FEATURED ARTWORK</span><small>Background image will be added later</small></div></div>
+    <div class="composition-lines" aria-hidden="true"></div>
+    <div class="red-sail" aria-hidden="true"></div>
+    <header class="top-bar">
+      <div class="masthead"><a href="profile.html?tab=recruitment" class="backlink" aria-label="Back to profile">‹</a><div><strong>RPG TYPING VERSUS</strong><small>RECRUITMENT / SCOUTING</small></div></div>
+      <div class="wallet" aria-label="Recruitment balances">
+        <div class="wallet-item"><span class="gem gem-gold" aria-hidden="true">◆</span><span class="currency-label">PERMITS</span><strong id="walletPermits">—</strong></div>
+        <div class="wallet-item"><span class="gem" aria-hidden="true">◈</span><span class="currency-label">COINS</span><strong id="walletCoins">—</strong></div>
+        <div class="wallet-item"><span class="gem" aria-hidden="true">✦</span><span class="currency-label">6★ PITY</span><strong id="walletPity">—</strong></div>
+      </div>
+      <a class="close" href="profile.html?tab=recruitment" aria-label="Close recruitment">×</a>
+    </header>
+    <div class="hero-type" aria-hidden="true">RECRUITMENT</div>
+    <section class="banner-copy" aria-live="polite">
+      <p class="featured-operator-name" id="featuredOperatorName">FEATURED 6★ OPERATOR</p><p class="banner-kicker" id="bannerKicker">SPECIAL RECRUITMENT</p>
+      <h1 id="bannerTitle">CRIMSON SIGNAL</h1>
+      <div class="banner-subline" id="bannerSubline">FEATURED BANNER · ARTWORK COMING SOON</div>
+      <div class="banner-rule"></div>
+      <div class="banner-desc" id="bannerDesc">View the featured recruitment details.</div>
+      <div class="banner-actions">
+        <button type="button" class="text-action" data-dialog="details">SCOUT DETAILS <span aria-hidden="true">›</span></button>
+        <button type="button" class="text-action" data-dialog="rates">RECRUITMENT RATES <span aria-hidden="true">›</span></button>
+      </div>
+    </section>
+    <div class="hero-band" aria-hidden="true"><span>R</span><span>E</span><span>C</span><span>R</span><span>U</span><span>I</span><span>T</span></div>
+    <div class="lower-ui">
+      <div><div class="banner-nav" aria-label="Featured recruitment banner" id="bannerNav"></div><a class="workshop-link" href="auras.html">✦ AURA WORKSHOP</a></div>
+      <div class="bottom-right">
+        <p class="pity-note">COMPLETE A RUN TODAY TO UNLOCK FREE ×10</p>
+        <div class="pull-buttons">
+          <button type="button" class="pull pull-one" data-pull="1"><span class="pull-small">RECRUIT ×1</span><strong>1</strong><span>100 COINS</span></button>
+          <button type="button" class="pull pull-ten" data-pull="10"><span class="pull-small">RECRUIT ×10</span><strong>10</strong><span>1,000 COINS</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="bottom-rule" aria-hidden="true"></div>
+    <p class="version-tag">CLASSROOM RECRUITMENT · v83</p>
+  </main>
+  <div id="modalRoot"></div>
+  <script src="recruitment-banner-config.js?v=75"></script>
+  <script src="recruitment-reveal.js?v=83"></script>
+  <script type="module">
+    await import('./online-spark.js');
+    const s=document.createElement('script');s.src='recruitment.js?v=83';document.body.appendChild(s);
+  </script>
+</body>
+</html>

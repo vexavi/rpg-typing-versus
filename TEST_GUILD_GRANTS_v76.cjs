@@ -1,0 +1,37 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const root=__dirname,docs=path.join(root,'docs');
+const core=require('./docs/guild-grants-core.js');
+let total=0;
+function check(fn){fn();total++}
+for(const a of [1,20,100,1000,123456,1000000])check(()=>assert.equal(core.amount(String(a)),a));
+for(const value of ['0','-1','1.5','1000001','100000000000','1e3','NaN','Infinity','','  ','+100','0001'])check(()=>assert.throws(()=>core.amount(value)));
+for(const [before,add,after] of [[0,1,1],[500,100,600],[999000000,1000000,1000000000],[999999999,1,1000000000]])check(()=>assert.equal(core.balance(before,add),after));
+for(const [before,add] of [[-1,1],[0,0],[0,1000001],[999999999,2],[1000000001,1],[1.5,10]])check(()=>assert.throws(()=>core.balance(before,add)));
+for(const id of ['P000001','P123456','P987654321'])check(()=>assert.equal(core.playerId(id.toLowerCase()),id));
+for(const id of ['','P1','B000001','P00000a','P000000','P00000','P-000001']){ if(id==='P000000')continue;check(()=>assert.throws(()=>core.playerId(id))); }
+check(()=>assert.equal(core.note('  class    event \n  prize  '),'class event prize'));
+check(()=>assert.equal(core.note('a'.repeat(100)).length,100));
+check(()=>assert.throws(()=>core.note('a'.repeat(101))));
+const h=fs.readFileSync(path.join(docs,'guild-grants.html'),'utf8');
+const js=fs.readFileSync(path.join(docs,'guild-grants.js'),'utf8');
+const rules=fs.readFileSync(path.join(root,'firestore.rules'),'utf8');
+for(const id of ['grantForm','playerSearch','player','amount','grant','history','identity','grantStatus','previewPlayer','before','adding','after'])check(()=>assert.ok(h.includes(`id="${id}"`),`missing ${id}`));
+for(const ref of ['guild-grants-core.js','guild-grants.js'])check(()=>assert.ok(h.includes(ref)));
+for(const page of ['recruitment-admin.html','game-settings.html','aura-admin.html'])check(()=>assert.ok(fs.readFileSync(path.join(docs,page),'utf8').includes('guild-grants.html')));
+check(()=>assert.ok(/match \/guildCoinGrants\/\{grantId\}/.test(rules)));
+check(()=>assert.ok(/match \/guildCoinGrants\/\{grantId\}\{\s*allow get,list:if teacher\(\);\s*allow update,delete:if false;/s.test(rules)));
+check(()=>assert.ok(/getAfter\(guildPlayerPath\(request.resource.data.playerId\)\)/.test(rules)));
+check(()=>assert.ok(/lastTeacherGrantId==grantId/.test(rules)));
+check(()=>assert.ok(/request.resource.data.createdAt==request.time/.test(rules)));
+check(()=>assert.ok(/request.resource.data.balanceAfter==request.resource.data.balanceBefore\+request.resource.data.amount/.test(rules)));
+check(()=>assert.ok(/await runTransaction\(db,async tx=>\{/.test(js)));
+check(()=>assert.ok(/tx\.update\(playerRef,/.test(js)&&/tx\.set\(receiptRef,/.test(js)));
+check(()=>assert.ok(/if\(existing.exists\(\)\)/.test(js)));
+check(()=>assert.ok(/if\(player.disabled\)/.test(js)));
+check(()=>assert.ok(/serverTimestamp\(\)/.test(js)));
+check(()=>assert.ok(/window\.confirm\(/.test(js)));
+check(()=>assert.ok(!/onSnapshot\(|setInterval\(/.test(js)));
+check(()=>assert.ok(/range|Guild Coin/i.test(fs.readFileSync(path.join(root,'README_V76_GUILD_COIN_GRANTS.md'),'utf8'))));
+console.log(`PASS: ${total} Guild Coin grant validation and integration checks`);

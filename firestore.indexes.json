@@ -1,0 +1,1 @@
+{"indexes":[{"collectionGroup":"rankEntries","queryScope":"COLLECTION","fields":[{"fieldPath":"mode","order":"ASCENDING"},{"fieldPath":"grade","order":"ASCENDING"},{"fieldPath":"vocabRevision","order":"ASCENDING"},{"fieldPath":"configRevision","order":"ASCENDING"},{"fieldPath":"score","order":"DESCENDING"}]}],"fieldOverrides":[]}

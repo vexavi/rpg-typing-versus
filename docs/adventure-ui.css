@@ -1,0 +1,246 @@
+/* Adventure now shares Tournament's full-screen arena and gold-framed HUD. */
+html{min-height:100%;background:var(--rpg-bg)}
+body{
+  display:flex;align-items:stretch;justify-content:center;
+  width:100%;min-height:100dvh;margin:0;
+  padding:9px 12px;
+  font-family:ui-monospace,"MS Gothic","Osaka","Noto Sans JP",monospace;
+  background:radial-gradient(900px 520px at 50% 0%,rgba(100,120,255,.16),transparent 60%),
+             radial-gradient(1000px 600px at 10% 100%,rgba(255,140,100,.10),transparent 55%),var(--rpg-bg);
+  color:var(--rpg-text);
+}
+.frame{
+  display:flex;flex-direction:column;
+  width:min(1150px,100%);height:calc(100dvh - 18px);min-height:590px;
+  border:0;background:transparent;box-shadow:none;
+}
+.adventure-topbar{
+  flex:0 0 46px;height:46px;min-height:46px;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border:6px solid var(--rpg-gold);border-bottom:0;
+  background:#19162e;box-shadow:inset 0 0 0 2px #0009;
+  padding:5px 13px;letter-spacing:.06em;white-space:nowrap;
+}
+.adventure-topbar .adventure-brand{font-size:17px;font-weight:1000;color:var(--rpg-text)}
+.adventure-topbar .adventure-mode-tag{font-size:11px;font-weight:800;color:var(--rpg-gold)}
+.battlefield{
+  flex:1 1 auto;min-height:315px;height:auto;
+  border:6px solid var(--rpg-gold);border-top:0;border-bottom:0;
+  background:#171b2d;box-shadow:inset 0 0 0 2px #0009;
+}
+.bgFallback{background:linear-gradient(135deg,#22243a 0%,#111522 68%,#25223a 100%)}
+.bgFallback::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.3;
+  background:linear-gradient(transparent 94%,#40446365 95%),linear-gradient(90deg,transparent 94%,#40446365 95%);
+  background-size:40px 40px;
+}
+.wordLane{
+  left:26px;top:22px;bottom:80px;width:min(360px,45%);
+  border:4px solid #05050cb8;background:#0b0916aa;
+  box-shadow:inset 0 0 0 2px #ffffff12;backdrop-filter:blur(3px);
+}
+.laneLabel{top:30px;left:34px;padding:5px 10px;background:#05050cdd;border:2px solid #353349;color:var(--rpg-gold);font-size:12px}
+.inputBar{
+  left:26px;bottom:20px;width:min(360px,45%);height:52px;padding:6px 10px;
+  background:#05050cba;border:4px solid #05050cb8;
+  box-shadow:inset 0 0 0 2px #ffffff12;
+}
+.inputBar input[type="text"]{font-family:inherit;color:white;font-size:15px}
+.word{background:#1a1630e8;border:4px solid #050509e0;box-shadow:inset 0 0 0 2px #ffffff0d,0 6px 10px #0006}
+.bossWrap{width:49%;right:2%;top:6%;bottom:2%;max-width:none;overflow:hidden}
+.bossImg{object-position:center bottom;filter:drop-shadow(0 12px 8px #0009)}
+.bossFallback{
+  display:grid;align-content:center;justify-items:center;gap:18px;
+  background:radial-gradient(ellipse at 55% 40%,#3b324c99,#15192877 63%);
+  border:0;box-shadow:none;
+  font-size:clamp(18px,2.4vw,31px);font-weight:1000;
+  letter-spacing:.08em;color:#efe2bd;text-shadow:0 3px 10px #000;
+}
+.bossFallback::before{content:"⚔";display:block;font-size:clamp(85px,12vw,175px);font-weight:400;color:#d9c27a33;line-height:1}
+.bossFallback span{display:none}
+.uiRow{
+  flex:0 0 235px;height:235px;min-height:0;
+  display:grid;grid-template-columns:1fr 1.2fr 1.1fr;gap:0;padding:10px 4px;
+  border:6px solid var(--rpg-gold);border-top:0;background:#0b0b15;
+  box-shadow:inset 0 0 0 2px #0009;
+}
+.uiRow>.panel{
+  min-width:0;min-height:0;margin:0 5px;padding:10px;
+  overflow:auto;background:linear-gradient(180deg,#1a1630f5,#121022f5);
+  border:6px solid var(--rpg-gold);border-radius:0;box-shadow:inset 0 0 0 2px #0009;
+}
+.panelHeader{color:var(--rpg-muted);font-size:12px;border-bottom:2px solid #ffffff20;gap:6px}
+.playerIcon{width:48px;height:48px;object-fit:contain;object-position:center;border:3px solid var(--rpg-gold);background:#06050a}
+.playerNameRow b{font-size:16px}
+.playerMeta{min-width:0}
+.menuList{gap:2px;font-size:13px}
+.menuItem{padding:6px 4px;border:2px solid transparent;color:var(--rpg-text);min-height:31px}
+.menuItem:hover{background:#28243e;border-color:var(--rpg-edge)}
+.menuItem .arrow{color:var(--rpg-gold)}
+#runCmd{margin-top:5px}
+.msg{min-height:103px;max-height:132px;background:#0606108a;border:2px solid #ffffff20;font-size:12px;line-height:1.45}
+.small{font-size:11px}
+.statRow{grid-template-columns:60px 1fr;gap:6px}
+.statRow .name{width:60px;font-size:12px}
+.statusList{gap:5px}
+.hpPips{gap:5px;margin-top:4px;padding-top:5px}
+.bgmRow{display:none!important} /* There are no background music tracks in this build. */
+.overlay{background:#070810d9}
+.overlayBox{
+  width:min(620px,calc(100% - 20px));max-height:calc(100dvh - 26px);
+  padding:17px;border:6px solid var(--rpg-gold);border-radius:0;
+  background:linear-gradient(180deg,#211b39,#121122);
+  box-shadow:inset 0 0 0 2px #000a,0 20px 45px #0009;
+}
+.overlayBox h2{font-size:19px;font-weight:1000;letter-spacing:.055em;color:var(--rpg-text)}
+.overlayBox.modeSelectMenu{width:min(600px,calc(100% - 20px))}
+.overlayBox.modeSelectMenu .overlayChoices{gap:7px;margin-top:10px}
+.overlayBox.modeSelectMenu .choiceBtn{padding:11px 13px}
+.choiceBtn,.uiBtn{background:#111023;border:3px solid #48405f;border-radius:0;box-shadow:inset 0 0 0 2px #0009;color:var(--rpg-text)}
+.choiceBtn:hover,.uiBtn:hover{background:#312a47;border-color:var(--rpg-gold);outline:0}
+.choiceBtn .title{color:var(--rpg-gold)}
+.uiBtn.primary{color:var(--rpg-gold);border-color:var(--rpg-gold)}
+#overlayHint{color:var(--rpg-muted);font-size:11px}
+.introStartBtn{font-family:inherit;border:4px solid var(--rpg-gold);border-radius:0;background:#201b38;color:#fff3be;box-shadow:inset 0 0 0 2px #0009}
+.achRow,.leaderboardRow,.leaderboardEmpty,.leaderboardTab{border-radius:0}
+@media(min-width:800px){.uiRow>.panel:nth-child(2){flex:1}}
+@media(max-width:900px){
+ body{padding:5px}
+ .frame{height:auto;min-height:calc(100dvh - 10px)}
+ .battlefield{height:clamp(335px,52dvh,520px);flex:0 0 auto}
+ .uiRow{height:auto;min-height:200px;flex:0 0 auto;grid-template-columns:1fr 1fr;row-gap:7px}
+ .uiRow>.panel:last-child{grid-column:1/-1}
+ .uiRow>.panel{min-height:130px}
+ .bossWrap{right:1%;top:6%;bottom:3%;width:47%}
+ .wordLane,.inputBar{left:15px;width:48%}
+ .laneLabel{left:22px}
+}
+@media(max-width:560px){
+ body{padding:0}
+ .frame{min-height:100dvh}
+ .adventure-topbar{flex-basis:41px;height:41px;padding:4px 7px}
+ .adventure-topbar .adventure-brand{font-size:12px}
+ .adventure-topbar .adventure-mode-tag{font-size:10px}
+ .battlefield{height:54dvh;min-height:310px}
+ .uiRow{padding:6px 3px;grid-template-columns:1fr;gap:6px}
+ .uiRow>.panel:last-child{grid-column:auto}
+ .uiRow>.panel{padding:8px;min-height:unset;margin:0 3px}
+ .wordLane,.inputBar{left:8px;width:53%}
+ .laneLabel{left:14px}
+ .bossWrap{right:0;width:44%}
+ .overlayBox.modeSelectMenu .choiceBtn{padding:9px}
+}
+
+
+/* v48 — TWO-PANEL COMPACT HUD: remove old Stage card, use the arena space. */
+body{padding:4px 5px}
+.frame{width:min(1600px,100%);height:calc(100dvh - 8px);min-height:480px}
+.adventure-topbar{flex-basis:43px;height:43px;min-height:43px;border-width:5px;padding:4px 12px}
+.adventure-mode-tag{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:11px;letter-spacing:.025em}
+.top-stage-name{color:#fff5d2;white-space:nowrap}
+.top-stage-separator{color:#9a8d7c}
+.battlefield{flex:1 1 auto;min-height:275px;border-width:5px}
+.uiRow{
+ flex:0 0 auto;height:auto;min-height:0;
+ display:grid;grid-template-columns:minmax(220px,0.87fr) minmax(0,1.48fr);
+ gap:6px;padding:5px;border-width:5px;border-top:0;
+}
+.uiRow>.panel{min-width:0;min-height:0;margin:0;padding:8px 11px;border-width:4px;overflow:hidden}
+.uiRow>.panel:nth-child(2){flex:initial}
+.uiRow .panelHeader{margin-bottom:5px;padding-bottom:5px;font-size:11px}
+.uiRow .playerIcon{width:42px;height:42px;border-width:2px}
+.uiRow .playerHeaderWrap{gap:9px}
+.uiRow .playerHeaderWrap #playerLabel{font-size:17px}
+.uiRow .playerMeta{gap:2px}
+.uiRow .playerExp{padding:0 5px;font-size:11px}
+.uiRow .playerLevel{font-size:12px}
+.uiRow .menuList{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px}
+.uiRow .menuItem{padding:5px 6px;min-height:30px;white-space:nowrap}
+.uiRow #runCmd{margin-top:0}
+.uiRow .statusList{
+ display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);
+ gap:4px 11px;align-items:start;font-size:12px;
+}
+.uiRow .statusList>.statRow:first-child{grid-column:1;grid-row:1/3}
+.uiRow .statusList>.statRow:nth-child(2){grid-column:2;grid-row:1}
+.uiRow .statusList>.hpPips{grid-column:2;grid-row:2;margin:0;padding:0;border:0;gap:4px;align-self:center}
+.uiRow .statusList>.small:nth-child(4){grid-column:1;grid-row:3}
+.uiRow .statusList>.small:nth-child(5){grid-column:2;grid-row:3}
+.uiRow .statusList>.small{margin:0;font-size:10px;line-height:1.3}
+.uiRow .statRow{grid-template-columns:43px minmax(0,1fr);gap:3px}
+.uiRow .statRow .name{width:43px;font-size:11px}
+.uiRow .bars{min-width:0;gap:4px}
+.uiRow .barLine{grid-template-columns:26px minmax(0,1fr) auto;gap:4px;font-size:10px}
+.uiRow .hpPips .pip{width:10px;height:10px}
+/* Gameplay messages are still stored for the engine and accessibility, not shown as a third card. */
+.adventure-hidden-log{
+ position:absolute!important;width:1px!important;height:1px!important;
+ padding:0!important;margin:-1px!important;overflow:hidden!important;
+ clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;
+}
+@media(max-width:900px){
+ body{padding:3px}
+ .frame{height:auto;min-height:calc(100dvh - 6px)}
+ .battlefield{height:clamp(300px,53dvh,580px);min-height:300px;flex:0 0 auto}
+ .uiRow{grid-template-columns:minmax(185px,0.84fr) minmax(0,1.36fr);height:auto;min-height:0;gap:5px;padding:4px}
+ .uiRow>.panel{min-height:0;margin:0;padding:7px 8px;grid-column:auto!important}
+ .uiRow .statusList{grid-template-columns:1fr;gap:4px}
+ .uiRow .statusList>.statRow:first-child,.uiRow .statusList>.statRow:nth-child(2),
+ .uiRow .statusList>.hpPips,.uiRow .statusList>.small:nth-child(4),
+ .uiRow .statusList>.small:nth-child(5){grid-column:1;grid-row:auto}
+ .uiRow .statusList>.hpPips{margin:0;padding:0}
+ .uiRow .statRow{grid-template-columns:47px minmax(0,1fr)}
+ .uiRow .statRow .name{width:47px}
+}
+@media(max-width:560px){
+ body{padding:0}
+ .frame{min-height:100dvh}
+ .adventure-topbar{height:40px;min-height:40px;flex-basis:40px;padding:4px 6px}
+ .adventure-topbar .adventure-brand{font-size:11px}
+ .adventure-mode-tag{font-size:9px;gap:4px}
+ .battlefield{height:55dvh;min-height:285px}
+ .uiRow{grid-template-columns:1fr;gap:4px;padding:4px}
+ .uiRow>.panel{grid-column:1!important;padding:6px 8px;margin:0;min-height:0}
+ .uiRow .statusList{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:4px 8px}
+ .uiRow .statusList>.statRow:first-child{grid-column:1;grid-row:1/3}
+ .uiRow .statusList>.statRow:nth-child(2){grid-column:2;grid-row:1}
+ .uiRow .statusList>.hpPips{grid-column:2;grid-row:2}
+ .uiRow .statusList>.small:nth-child(4){grid-column:1;grid-row:3}
+ .uiRow .statusList>.small:nth-child(5){grid-column:2;grid-row:3}
+ .uiRow .statRow{grid-template-columns:40px minmax(0,1fr)}
+ .uiRow .statRow .name{width:40px}
+ .uiRow .menuList{gap:8px}
+}
+
+/* Avoid unused blank space below the HUD on smaller landscape Chromebook screens. */
+.uiRow .statusList{column-gap:21px}
+@media(max-width:900px){
+ .frame{height:calc(100dvh - 6px);min-height:0}
+ .battlefield{flex:1 1 auto;height:auto;min-height:300px}
+}
+@media(max-width:560px){
+ .frame{height:100dvh;min-height:0}
+ .battlefield{flex:1 1 auto;height:auto;min-height:285px}
+}
+
+/* v56: both Adventure HP gauges are 36px tall; damage gauge and HP pips remain removed. */
+body.adventure-client .uiRow .statusList{
+  display:grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  column-gap:18px;row-gap:8px;align-items:center;
+}
+body.adventure-client .uiRow .statusList>.statRow:first-child{grid-column:1;grid-row:1}
+body.adventure-client .uiRow .statusList>.statRow:nth-child(2){grid-column:2;grid-row:1}
+body.adventure-client .uiRow .statusList>.small:nth-child(3){grid-column:1;grid-row:2}
+body.adventure-client .uiRow .statusList>.small:nth-child(4){grid-column:2;grid-row:2}
+body.adventure-client .uiRow #bossMeter,
+body.adventure-client .uiRow #playerMeter{
+  height:36px;min-height:36px;box-sizing:border-box;
+  border-width:2px;
+}
+@media(max-width:900px){
+  body.adventure-client .uiRow .statusList{grid-template-columns:minmax(0,1fr);row-gap:7px}
+  body.adventure-client .uiRow .statusList>.statRow:first-child{grid-column:1;grid-row:1}
+  body.adventure-client .uiRow .statusList>.statRow:nth-child(2){grid-column:1;grid-row:2}
+  body.adventure-client .uiRow .statusList>.small:nth-child(3){grid-column:1;grid-row:3}
+  body.adventure-client .uiRow .statusList>.small:nth-child(4){grid-column:1;grid-row:4}
+}

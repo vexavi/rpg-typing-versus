@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
+<title>Guild Coin Grants — Teacher Dashboard</title>
+<style>
+:root{font:15px system-ui,Arial,sans-serif;color:#e8e9ee;background:#101017;--panel:#20222d;--muted:#abb1c0;--edge:#393d50;--accent:#f1c867;--success:#91e2ac}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}main{width:min(1000px,100%);padding:22px 18px 60px;margin:auto}h1{font-size:clamp(25px,3.5vw,34px);margin:6px 0}h2{font-size:17px;margin:0 0 12px}p{line-height:1.55}.muted{color:var(--muted);font-size:13px}.eyebrow{font-weight:850;letter-spacing:.17em;color:var(--accent);font-size:11px}nav{display:flex;flex-wrap:wrap;gap:15px;margin:20px 0}nav a{color:#e6ecff;text-decoration:none;font-weight:650;font-size:13px}nav a:hover{text-decoration:underline}
+.card{background:var(--panel);border:1px solid var(--edge);padding:20px;border-radius:12px;margin:16px 0}.columns{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}.identity{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+label{display:block;font-weight:780;font-size:12px;color:#e3e3ef;margin:16px 0 7px}input,select,textarea{font:inherit;color:#f5f6fa;background:#12141e;border:1px solid #686e84;width:100%;padding:12px;border-radius:7px}textarea{min-height:75px;resize:vertical}input:focus,select:focus,textarea:focus{outline:2px solid #f1c867;outline-offset:1px}button{font:inherit;font-weight:850;cursor:pointer;border:1px solid #9ba2b5;border-radius:7px;padding:11px 15px;background:#323649;color:#fff}button.primary{background:#f1c867;color:#161825;border:1px solid #f1c867}button:disabled{opacity:.46;cursor:not-allowed}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.balance{font-weight:850;font-size:28px;color:var(--accent)}.info{margin-top:15px;display:flex;gap:10px;align-items:baseline;justify-content:space-between;border-top:1px solid var(--edge);padding-top:12px}.note{background:#282633;border-left:3px solid var(--accent);padding:11px;font-size:13px;line-height:1.5}.history{width:100%;border-collapse:collapse;font-size:13px}.history th,.history td{text-align:left;border-bottom:1px solid var(--edge);padding:10px 7px}.history th{color:#b8c1d1;font-size:11px;text-transform:uppercase}.scroll{max-width:100%;overflow-x:auto}.status{min-height:24px;white-space:pre-wrap;font-weight:700}.status.error{color:#ffaaaa}.status.good{color:var(--success)}.hidden{display:none!important}small{color:var(--muted)}
+@media(max-width:720px){.columns{grid-template-columns:1fr}.card{padding:15px}}
+</style></head><body><main>
+<div class="eyebrow">RPG TYPING VERSUS / TEACHER DASHBOARD</div>
+<header><h1>Grant Guild Coins</h1><p class="muted">Add coins to one registered player. The transaction is saved to Firebase and logged.</p></header>
+<nav aria-label="Teacher navigation"><a href="recruitment-admin.html">Featured Banner Editor</a><a href="game-settings.html">Game Settings</a><a href="vocabulary-admin.html">Vocabulary</a><a href="aura-admin.html">Test Shard Grants</a><a href="index.html">Game</a></nav>
+<section class="card"><div class="identity"><span id="identity">Checking teacher sign-in…</span><button id="login" type="button">Sign in with Google</button><button id="reload" type="button" disabled>Refresh players &amp; history</button></div><p id="authStatus" class="status" role="status"></p></section>
+<div class="columns">
+<section class="card"><h2>Player &amp; amount</h2><form id="grantForm">
+<label for="playerSearch">Find a player by name or ID</label><input id="playerSearch" placeholder="Search registered players" autocomplete="off" disabled>
+<label for="player">Select player</label><select id="player" required disabled><option value="">Sign in to load players</option></select>
+<p id="playerDetails" class="muted">Choose a registered player to see their current balance.</p>
+<label for="amount">Guild Coins to add</label><input id="amount" type="number" min="1" max="1000000" step="1" value="100" required disabled>
+<label for="note">Reason (optional)</label><input id="note" maxlength="100" placeholder="Class event, prize, correction…" disabled>
+<p class="note">The coins are <strong>added</strong> to the player's current balance, not replacing it. Grants cannot be negative, and a confirmation is required.</p>
+<div class="row"><button class="primary" id="grant" type="submit" disabled>GRANT COINS</button></div>
+<p id="grantStatus" class="status" role="status" aria-live="polite"></p>
+</form></section>
+<section class="card"><h2>Grant preview</h2><p class="muted">Target</p><div id="previewPlayer" style="font-size:19px;font-weight:850">No player selected</div>
+<div class="info"><span class="muted">Current balance</span><strong id="before">—</strong></div>
+<div class="info"><span class="muted">Grant</span><strong id="adding">—</strong></div>
+<div class="info"><span class="muted">New balance</span><strong id="after" class="balance">—</strong></div>
+<p class="muted" style="margin-top:20px">A Firestore transaction calculates the final balance again when you confirm. If the player earns coins in the meantime, their new balance is used.</p>
+</section></div>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>Recent grants</h2><small>20 most recent · teacher only · no automatic polling</small></div>
+<div class="scroll"><table class="history"><thead><tr><th>When</th><th>Player</th><th>Added</th><th>Balance after</th><th>Reason</th></tr></thead><tbody id="history"><tr><td colspan="5" class="muted">Sign in to view grants.</td></tr></tbody></table></div>
+</section>
+<p class="muted">Players will see the updated balance when they next open or reload Recruitment or their profile. Actual paid pulls are not enabled yet.</p>
+<script src="guild-grants-core.js?v=76"></script><script type="module" src="guild-grants.js?v=76"></script>
+</main></body></html>
