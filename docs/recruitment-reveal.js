@@ -1,4 +1,4 @@
-/* v86.14 — cinematic scouting reveal. Results are committed by recruitment.js BEFORE openResults. */
+/* v86.15 — one full-width scan per rarity, persistent silhouettes. Real results saved before openResults. */
 (() => {
  'use strict';
  const tiers = {
@@ -56,35 +56,58 @@
  function setWords(eyebrow,headline,status){if(!root)return;const a=root.querySelector('#scoutEyebrow'),b=root.querySelector('#scoutHeadline'),c=root.querySelector('#scoutStatus');if(a)a.textContent=eyebrow;if(b)b.textContent=headline;if(c)c.textContent=status;}
  function card(i){return root?.querySelector(`.scout-card[data-slot="${i}"]`);}
  function phase(name){const box=root?.querySelector('#scoutShowcase');if(box)box.dataset.phase=name;session.stage=name;}
- function reveal(i){const el=card(i);if(!el)return;el.dataset.state='revealed';el.setAttribute('aria-label',`Recruitment slot ${i+1}: ${session.operators[i].name}, ${session.operators[i].rarity} stars`);el.classList.remove('is-scanning');}
- function trace(i){const beam=root?.querySelector('#scoutBeam');if(!beam)return;beam.style.left=`${((i+.5)/session.count)*100}%`;beam.classList.add('active');}
+ function reveal(i){const el=card(i);if(!el)return;el.dataset.state='revealed';el.setAttribute('aria-label',`Recruitment slot ${i+1}: ${session.operators[i].name}, ${session.operators[i].rarity} stars`);}
+ /** One continuous screen-wide pass for each rarity. The beam does not hop between slots. */
+ function sweep(rarity,duration){
+  const stage=root?.querySelector('#scoutShowcase');
+  const beam=root?.querySelector('#scoutBeam');
+  if(!stage||!beam)return;
+  phase('scanning');stage.dataset.scanRarity=String(rarity);
+  beam.classList.remove('active','is-sweeping');
+  beam.style.setProperty('--sweep-ms',`${duration}ms`);
+  beam.style.setProperty('--beam-color',tiers[rarity].color);
+  // Force a fresh CSS animation so consecutive rarity passes each cross the whole strip once.
+  void beam.offsetWidth;
+  beam.classList.add('active','is-sweeping');
+  const label=rarity===6?'FINAL SCAN':rarity===5?'SECOND SCAN':'FIRST SCAN';
+  setWords(label,`${rarity}★ RECRUITMENT`,rarity===6?'Rare signals detected — revealing last':`Identifying ${rarity}★ operators`);
+ }
+ function revealInPass(i,rarity){
+  const el=card(i);if(!el)return;
+  el.classList.add('is-scanning');
+  if(rarity===5)el.classList.add('scout-gold-pulse');
+  if(rarity===6)el.classList.add('scout-rare-burst');
+  reveal(i);
+  // Remain in original result slots; the silhouette remains visible underneath the portrait.
+  if(rarity===6)setWords('FINAL SCAN', '6★ OPERATOR CONFIRMED',session.operators[i].name.toUpperCase());
+ }
  function animate(){
   clearTimers();const gen=generation;
   const fast=reducedMotion(),speed=v=>fast?Math.max(45,Math.round(v*.12)):v;
   let time=0;
   const at=(delay,fn)=>{time+=speed(delay);later(fn,time,gen);};
   phase('intro');setWords('RECRUITMENT SIGNAL','INCOMING OPERATORS',`Receiving ${session.count} ${session.count===1?'operator':'operators'}…`);
-  at(500,()=>{phase('silhouettes');setWords('SIGNAL LOCKED','IDENTITIES CONCEALED',`${session.count} signal${session.count===1?'':'s'} acquired`);});
-  at(650,()=>{phase('scanning');setWords('IDENTIFYING OPERATORS','SCANNING…','Revealing standard signals');});
-  const regular=session.operators.map((op,i)=>op.rarity<6?i:null).filter(i=>i!==null);
-  const rare=session.operators.map((op,i)=>op.rarity===6?i:null).filter(i=>i!==null);
-  for(const i of regular){
-   const isFive=session.operators[i].rarity===5;
-   at(isFive?170:110,()=>{trace(i);const el=card(i);if(el)el.classList.add('is-scanning');});
-   at(isFive?400:220,()=>{reveal(i);setWords('OPERATOR IDENTIFIED',isFive?'5★ SIGNAL CONFIRMED':'SCANNING…',`${regular.indexOf(i)+1} / ${session.count} scanned`);});
-   if(isFive)at(170,()=>{const el=card(i);el?.classList.add('scout-gold-pulse');});
+  at(480,()=>{phase('silhouettes');setWords('SIGNAL LOCKED','IDENTITIES CONCEALED',`${session.count} signal${session.count===1?'':'s'} acquired`);});
+  at(620,()=>{phase('silhouettes');setWords('SIGNAL READY','SCANNING BY RARITY','4★ → 5★ → 6★');});
+  // One full left-to-right sweep per rarity present. Six-star results are always last.
+  // All slots retain their original pull order; only the reveal order is tiered.
+  for(const rarity of [4,5,6]){
+   const indices=session.operators.map((op,i)=>op.rarity===rarity?i:-1).filter(i=>i>=0);
+   if(!indices.length)continue;
+   const duration=speed(rarity===6?1500:rarity===5?1280:1050);
+   at(230,()=>sweep(rarity,duration));
+   const startedAt=time;
+   for(const i of indices){
+    // Match the moment the beam reaches this original physical slot.
+    const offset=Math.round(duration*(i+.5)/session.count);
+    later(()=>revealInPass(i,rarity),startedAt+offset,gen);
+   }
+   at(rarity===6?1500:rarity===5?1280:1050,()=>{const beam=root?.querySelector('#scoutBeam');beam?.classList.remove('active','is-sweeping');});
+   at(rarity===6?270:200,()=>{root?.querySelector('#scoutShowcase')?.removeAttribute('data-scan-rarity');});
   }
-  if(rare.length){
-   at(370,()=>{phase('rare-wait');root.querySelector('#scoutBeam')?.classList.remove('active');setWords('UNKNOWN SIGNAL','IDENTIFICATION PENDING',`${rare.length} exceptional ${rare.length===1?'signal remains':'signals remain'}`);});
-   rare.forEach((i,number)=>{
-    at(300,()=>{phase('rare-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('EXCEPTIONAL SIGNAL', 'SIGNAL STRENGTH RISING…',`Final reveal ${number+1} / ${rare.length}`);});
-    at(650,()=>{const el=card(i);el?.classList.add('scout-rare-burst');reveal(i);setWords('6★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
-    at(800,()=>{card(i)?.classList.remove('scout-rare-burst');});
-   });
-  }
-  at(350,()=>results());
+  at(390,()=>results());
  }
- function results(){if(!session||!root)return;clearTimers();phase('results');root.querySelector('#scoutBeam')?.classList.remove('active');root.querySelectorAll('.scout-card').forEach(c=>{c.classList.remove('scout-focus','scout-rare-burst','is-scanning');});session.operators.forEach((_,i)=>reveal(i));
+ function results(){if(!session||!root)return;clearTimers();phase('results');root.querySelector('#scoutBeam')?.classList.remove('active','is-sweeping');root.querySelector('#scoutShowcase')?.removeAttribute('data-scan-rarity');root.querySelectorAll('.scout-card').forEach(c=>{c.classList.remove('scout-focus','scout-rare-burst','scout-gold-pulse','is-scanning');});session.operators.forEach((_,i)=>reveal(i));
   setWords('RECRUITMENT COMPLETE',session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS',session.real?'All rewards saved':'Preview — no rewards awarded');
   const button=root.querySelector('#scoutAction');if(button){button.dataset.reveal='close';button.textContent='BACK TO RECRUITMENT';button.focus({preventScroll:true});}
   const exit=root.querySelector('.reveal-exit');if(exit)exit.disabled=false;
