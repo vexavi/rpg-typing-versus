@@ -1,4 +1,4 @@
-/* v86.14 — Cinematic recruitment panels. Appearance only; reward logic lives in the existing Firebase flow. */
+/* v86.19 — Recruitment panels, 4-star border pulses, and independent 5/6-star cinematic reveals. */
 .reveal-overlay{position:fixed;inset:0;z-index:11000;overflow:auto;background:#07090f;color:#f6f5f2;font:14px/1.35 Arial,Helvetica,sans-serif;isolation:isolate}
 .reveal-frame{position:relative;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;align-items:stretch;box-sizing:border-box;padding:76px clamp(12px,2.5vw,36px) 84px;overflow:hidden;background:radial-gradient(ellipse at 50% 48%,#292633 0%,transparent 67%),linear-gradient(170deg,#171921,#07080d 73%)}
 .reveal-frame:before{content:'';position:absolute;inset:0;z-index:0;background:linear-gradient(90deg,#fff1 1px,transparent 1px),linear-gradient(#fff1 1px,transparent 1px);background-size:54px 54px;opacity:.15;pointer-events:none}
@@ -35,12 +35,14 @@
 .scout-showcase[data-phase='silhouettes'] .scout-card{opacity:1;transform:translateY(0);transition-delay:calc(var(--slot-index,0) * 35ms)}
 .scout-showcase[data-phase='scanning'] .scout-card{opacity:1}
 .scout-card:not([data-state='revealed']) .panel-portrait-stage{opacity:0}
-/* A luminous scanning line travels from panel to panel. */
-.scout-scan-beam{pointer-events:none;position:absolute;z-index:9;top:0;bottom:0;left:0;opacity:0;width:3px;background:#ffffffed;box-shadow:0 0 15px 5px #aaf1ff80,0 0 38px 13px #8a72ea4f;transform:translateX(-50%);transition:left .25s ease-out,opacity .22s}
-.scout-scan-beam.active{opacity:1}
-.scout-card-scan{position:absolute;z-index:7;top:0;left:-24%;width:20%;height:100%;background:linear-gradient(90deg,transparent,#ffffff85,transparent);pointer-events:none;opacity:0}
-.scout-card.is-scanning .scout-card-scan{opacity:1;animation:scout-sweep .35s ease-out forwards}
 .scout-card.scout-gold-pulse{animation:scout-gold-cinematic .68s ease-out both;box-shadow:inset 0 0 45px #ffcd6280,0 0 18px #ffd04e77}
+/* 4★: sequential purple edge pulse; artwork stays unobstructed. */
+.scout-card.scout-purple-pulse{animation:scout-four-border .56s ease-out both}
+@keyframes scout-four-border{
+  0%{border-color:#8e73bd;box-shadow:inset 0 0 0 1px #b896ff22,0 0 0 #b896ff00}
+  35%{border-color:#eee0ff;box-shadow:inset 0 0 0 2px #d3b1ffb0,0 0 24px 4px #a77de78c}
+  100%{border-color:#b896ff9e;box-shadow:inset 0 0 0 1px #d3b1ff4d,0 0 10px 1px #a77de735}
+}
 /* 5★ gets a premium gold-focus sequence, but remains less dramatic than 6★. */
 .scout-showcase[data-phase='five-wait'] .scout-card.scout-five{border-color:#ffeb99a8;box-shadow:inset 0 0 18px #ffd76d33}
 .scout-showcase[data-phase='five-wait'] .scout-card:not(.scout-five){opacity:.5;filter:grayscale(.18) brightness(.78)}
@@ -61,11 +63,10 @@
 .reveal-primary{background:#ffe329;color:#17151b;border:0;padding:12px 26px;min-height:47px;min-width:215px;font:950 12px Arial,sans-serif;letter-spacing:.08em;cursor:pointer;clip-path:polygon(0 0,100% 0,100% 100%,6% 100%,0 74%)}.reveal-primary:hover{filter:brightness(1.09)}
 .reveal-demo-stamp{position:absolute;z-index:4;bottom:30px;left:clamp(12px,2.5vw,36px);font-size:10px;letter-spacing:.11em;color:#c6c5cb}
 .reveal-overlay button:focus-visible{outline:3px solid #ffe329;outline-offset:3px}
-@keyframes scout-sweep{0%{left:-25%}100%{left:115%}}
 @keyframes scout-rare-glow{0%{filter:brightness(1);box-shadow:0 0 10px #ffb66b}35%{filter:brightness(1.9);box-shadow:0 0 70px #ffb66be8,inset 0 0 55px #fff6}100%{filter:brightness(1);box-shadow:0 0 24px #fa9f5db8}}
 @keyframes scout-gold-cinematic{0%{filter:brightness(1);transform:translateY(-2px) scale(1.01);box-shadow:0 0 10px #ffd86a66}40%{filter:brightness(1.45);transform:translateY(-5px) scale(1.03);box-shadow:0 0 42px #ffd86ac4,inset 0 0 34px #fff4}100%{filter:brightness(1);transform:translateY(0) scale(1);box-shadow:0 0 18px #ffd86a88}}
 /* Normal school Chromebook landscape shows all ten side by side. */
-@media(max-width:1023px){.scout-showcase-ten{grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(2,minmax(225px,1fr));height:auto}.scout-showcase-ten .panel-recruit-card{height:clamp(225px,36vh,355px)}.reveal-frame{min-height:100vh;overflow:visible}.reveal-main{margin-bottom:0}.reveal-footer{position:relative;right:auto;left:auto;bottom:auto;justify-content:center;margin-top:14px}.reveal-demo-stamp{display:none}.scout-scan-beam{display:none}}
+@media(max-width:1023px){.scout-showcase-ten{grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(2,minmax(225px,1fr));height:auto}.scout-showcase-ten .panel-recruit-card{height:clamp(225px,36vh,355px)}.reveal-frame{min-height:100vh;overflow:visible}.reveal-main{margin-bottom:0}.reveal-footer{position:relative;right:auto;left:auto;bottom:auto;justify-content:center;margin-top:14px}.reveal-demo-stamp{display:none}}
 @media(max-width:600px){.reveal-frame{padding:74px 10px 25px}.reveal-top{left:10px;right:10px}.reveal-meta{font-size:8px}.scout-main{gap:10px}.scout-heading{min-height:65px}.scout-heading h1{font-size:28px}.scout-showcase-ten{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto}.scout-showcase-ten .panel-recruit-card{height:320px}.scout-showcase-single{grid-template-columns:minmax(240px,360px);width:100%}.scout-showcase-single .panel-recruit-card{height:clamp(370px,60vh,550px)}.panel-name-block strong{font-size:14px}.panel-rarity-label{font-size:12px}.panel-portrait-stage{bottom:100px}.reveal-footer{margin-top:18px}.reveal-primary{width:min(100%,310px)}}
 @media(prefers-reduced-motion:reduce){.reveal-overlay *, .reveal-overlay *::before,.reveal-overlay *::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
@@ -75,15 +76,6 @@
 .scout-card[data-state='revealed'] .panel-silhouette-stage::before{opacity:.72}
 .scout-card[data-state='revealed'] .panel-silhouette{opacity:1;filter:brightness(0) drop-shadow(0 0 1.1px #e8e4efb0) drop-shadow(0 0 9px var(--rarity-accent));}
 .scout-showcase[data-phase='results'] .scout-card[data-state='revealed'] .panel-silhouette-stage{opacity:1!important;visibility:visible!important}
-/* Full-width beam crosses each column once per rarity; no hopping between matching slots. */
-.scout-scan-beam{left:0;width:4px;transform:translateX(-50%);background:#fff;box-shadow:0 0 13px 4px var(--beam-color,#a98dff),0 0 35px 10px var(--beam-color,#a98dff);transition:none;}
-.scout-scan-beam.is-sweeping{animation:scout-full-sweep var(--sweep-ms,1100ms) linear both;}
-@keyframes scout-full-sweep{0%{left:0;opacity:0}4%{opacity:1}94%{opacity:1}100%{left:100%;opacity:0}}
-.scout-showcase[data-phase='scanning'][data-scan-rarity='6'] .scout-card:not(.scout-six){opacity:.42;filter:grayscale(.3) brightness(.72)}
-.scout-showcase[data-phase='scanning'][data-scan-rarity='6'] .scout-card.scout-six[data-state='revealed']{z-index:8;box-shadow:0 0 26px #ffb567a1,inset 0 0 34px #ffb56755}
-.scout-showcase[data-phase='results'] .scout-card{filter:none!important;opacity:1!important}
-@media(prefers-reduced-motion:reduce){.scout-scan-beam.is-sweeping{animation:none;opacity:0}}
-
 /* v86.18: No character-shaped spoilers before the slot itself is revealed.
    Hidden cards display only a neutral, anonymous panel.
    On reveal, both full-color portrait and its persistent black silhouette appear. */

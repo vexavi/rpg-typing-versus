@@ -1,4 +1,4 @@
-/* v86.15 — one full-width scan per rarity, persistent silhouettes. Real results saved before openResults. */
+/* v86.19 — sequential 4★ border pulses, 5★ gold cinematic without scanning bars, 6★ unchanged. */
 (() => {
  'use strict';
  const tiers = {
@@ -29,7 +29,6 @@
     <div class="panel-portrait-stage">${figure(operator,'panel-portrait')}</div>
     <div class="panel-floor-glow"></div>
     <div class="panel-silhouette-stage">${figure(operator,'panel-silhouette')}</div>
-    <div class="scout-card-scan"></div>
     <div class="panel-bottom-ui">
       <div class="panel-name-block"><strong>${esc(operator.name)}</strong><small>${tiers[rarity].label}</small></div>
       <div class="panel-reward-block">${reward(operator)}</div>
@@ -43,7 +42,6 @@
    <main class="reveal-main scout-main" id="revealContent">
     <div class="scout-heading"><p id="scoutEyebrow">RECRUITMENT SIGNAL</p><h1 id="scoutHeadline">INCOMING OPERATORS</h1><div id="scoutStatus" role="status" aria-live="polite">Establishing signal…</div></div>
     <div class="scout-showcase ${n===1?'scout-showcase-single':'scout-showcase-ten'}" id="scoutShowcase" data-phase="intro" style="--slot-count:${n}">
-     <div class="scout-scan-beam" id="scoutBeam" aria-hidden="true"></div>
      ${session.operators.map(panel).join('')}
      <div class="scout-rare-flare" aria-hidden="true"></div>
     </div>
@@ -57,31 +55,6 @@
  function card(i){return root?.querySelector(`.scout-card[data-slot="${i}"]`);}
  function phase(name){const box=root?.querySelector('#scoutShowcase');if(box)box.dataset.phase=name;session.stage=name;}
  function reveal(i){const el=card(i);if(!el)return;el.dataset.state='revealed';el.setAttribute('aria-label',`Recruitment slot ${i+1}: ${session.operators[i].name}, ${session.operators[i].rarity} stars`);el.classList.remove('is-scanning');}
- function trace(i){const beam=root?.querySelector('#scoutBeam');if(!beam)return;beam.classList.remove('is-sweeping');beam.style.removeProperty('--sweep-ms');beam.style.removeProperty('--beam-color');beam.style.left=`${((i+.5)/session.count)*100}%`;beam.classList.add('active');}
-/** One continuous screen-wide pass for each rarity. The beam does not hop between slots. */
- function sweep(rarity,duration){
-  const stage=root?.querySelector('#scoutShowcase');
-  const beam=root?.querySelector('#scoutBeam');
-  if(!stage||!beam)return;
-  phase('scanning');stage.dataset.scanRarity=String(rarity);
-  beam.classList.remove('active','is-sweeping');
-  beam.style.setProperty('--sweep-ms',`${duration}ms`);
-  beam.style.setProperty('--beam-color',tiers[rarity].color);
-  // Force a fresh CSS animation so consecutive rarity passes each cross the whole strip once.
-  void beam.offsetWidth;
-  beam.classList.add('active','is-sweeping');
-  const label=rarity===6?'FINAL SCAN':rarity===5?'SECOND SCAN':'FIRST SCAN';
-  setWords(label,`${rarity}★ RECRUITMENT`,rarity===6?'Rare signals detected — revealing last':`Identifying ${rarity}★ operators`);
- }
- function revealInPass(i,rarity){
-  const el=card(i);if(!el)return;
-  el.classList.add('is-scanning');
-  if(rarity===5)el.classList.add('scout-gold-pulse');
-  if(rarity===6)el.classList.add('scout-rare-burst');
-  reveal(i);
-  // Remain in original result slots; the silhouette remains visible underneath the portrait.
-  if(rarity===6)setWords('FINAL SCAN', '6★ OPERATOR CONFIRMED',session.operators[i].name.toUpperCase());
- }
  function animate(){
   clearTimers();const gen=generation;
   const fast=reducedMotion(),speed=v=>fast?Math.max(45,Math.round(v*.12)):v;
@@ -92,29 +65,35 @@
   const sixStar=session.operators.map((op,i)=>op.rarity===6?i:-1).filter(i=>i>=0);
   phase('intro');setWords('RECRUITMENT SIGNAL','INCOMING OPERATORS',`Receiving ${session.count} ${session.count===1?'operator':'operators'}…`);
   at(500,()=>{phase('silhouettes');setWords('SIGNAL LOCKED','IDENTITIES CONCEALED',`${session.count} signal${session.count===1?'':'s'} acquired`);});
-  at(650,()=>{phase('scanning');setWords('IDENTIFYING OPERATORS','SCANNING…','Standard 4★ signals first');});
+  at(650,()=>{phase('scanning');setWords('IDENTIFYING OPERATORS','4★ SIGNALS','Standard 4★ reveals first');});
 
-  // 4★ — quick purple scan and immediate reveal.
+  // 4★ — each panel pulses purple along its border, then reveals in slot order.
+  // No moving line or sweep crosses the display or artwork.
   for(const i of fourStar){
-   at(110,()=>{trace(i);const el=card(i);if(el)el.classList.add('is-scanning');});
-   at(220,()=>{reveal(i);setWords('4★ SIGNAL','STANDARD RECRUIT IDENTIFIED',`${fourStar.indexOf(i)+1} / ${fourStar.length} standard signal${fourStar.length===1?'':'s'}`);});
+   at(90,()=>{
+    const el=card(i);
+    if(el){
+     el.classList.add('scout-purple-pulse');
+     later(()=>el.classList.remove('scout-purple-pulse'),speed(620),gen);
+    }
+   });
+   at(185,()=>{reveal(i);setWords('4★ SIGNAL','STANDARD RECRUIT IDENTIFIED',`${fourStar.indexOf(i)+1} / ${fourStar.length} standard signal${fourStar.length===1?'':'s'}`);});
   }
 
   // 5★ — cinematic gold reveal after all 4★ cards, but always before any 6★.
   if(fiveStar.length){
-   at(280,()=>{phase('five-wait');root.querySelector('#scoutBeam')?.classList.remove('active');setWords('ENHANCED SIGNAL','5★ IDENTIFICATION PENDING',`${fiveStar.length} advanced ${fiveStar.length===1?'signal remains':'signals remain'}`);});
+   at(280,()=>{phase('five-wait');setWords('ENHANCED SIGNAL','5★ IDENTIFICATION PENDING',`${fiveStar.length} advanced ${fiveStar.length===1?'signal remains':'signals remain'}`);});
    fiveStar.forEach((i,number)=>{
-    at(260,()=>{phase('five-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));trace(i);const beam=root?.querySelector('#scoutBeam');beam?.style.setProperty('--beam-color','#ffd86a');setWords('ENHANCED SIGNAL','GOLD WAVE RISING…',`Priority reveal ${number+1} / ${fiveStar.length}`);});
+    at(260,()=>{phase('five-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('ENHANCED SIGNAL','GOLD WAVE RISING…',`Priority reveal ${number+1} / ${fiveStar.length}`);});
     at(280,()=>{card(i)?.classList.add('scout-gold-pulse');});
     at(420,()=>{reveal(i);setWords('5★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
-    at(240,()=>{root?.querySelector('#scoutBeam')?.classList.remove('active');});
     at(340,()=>{card(i)?.classList.remove('scout-gold-pulse');});
    });
   }
 
   // 6★ — hidden until the end, then full cinematic reveal.
   if(sixStar.length){
-   at(320,()=>{phase('rare-wait');root.querySelector('#scoutBeam')?.classList.remove('active');setWords('UNKNOWN SIGNAL','IDENTIFICATION PENDING',`${sixStar.length} exceptional ${sixStar.length===1?'signal remains':'signals remain'}`);});
+   at(320,()=>{phase('rare-wait');setWords('UNKNOWN SIGNAL','IDENTIFICATION PENDING',`${sixStar.length} exceptional ${sixStar.length===1?'signal remains':'signals remain'}`);});
    sixStar.forEach((i,number)=>{
     at(300,()=>{phase('rare-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('EXCEPTIONAL SIGNAL', 'SIGNAL STRENGTH RISING…',`Final reveal ${number+1} / ${sixStar.length}`);});
     at(650,()=>{const el=card(i);el?.classList.add('scout-rare-burst');reveal(i);setWords('6★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
@@ -123,7 +102,7 @@
   }
   at(350,()=>results());
  }
- function results(){if(!session||!root)return;clearTimers();phase('results');root.querySelector('#scoutBeam')?.classList.remove('active','is-sweeping');root.querySelector('#scoutShowcase')?.removeAttribute('data-scan-rarity');root.querySelectorAll('.scout-card').forEach(c=>{c.classList.remove('scout-focus','scout-rare-burst','scout-gold-pulse','is-scanning');});session.operators.forEach((_,i)=>reveal(i));
+ function results(){if(!session||!root)return;clearTimers();phase('results');root.querySelector('#scoutShowcase')?.removeAttribute('data-scan-rarity');root.querySelectorAll('.scout-card').forEach(c=>{c.classList.remove('scout-focus','scout-rare-burst','scout-gold-pulse','scout-purple-pulse','is-scanning');});session.operators.forEach((_,i)=>reveal(i));
   setWords('RECRUITMENT COMPLETE',session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS',session.real?'All rewards saved':'Preview — no rewards awarded');
   const button=root.querySelector('#scoutAction');if(button){button.dataset.reveal='close';button.textContent='BACK TO RECRUITMENT';button.focus({preventScroll:true});}
   const exit=root.querySelector('.reveal-exit');if(exit)exit.disabled=false;
