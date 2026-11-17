@@ -1,76 +1,144 @@
-/* v83 first-time tutorial. State lives in Firestore, not browser storage.
- * A free tutorial ten-pull is the daily free ten-pull; never grant on replay.
- */
+/* v84 guided tutorial: uses the actual Adventure battlefield/HUD presentation.
+   Training never awards HP, XP, Guild Coins, rankings, or free pulls.
+   Lesson 4 sends the player to the REAL Recruitment screen for the saved draw.
+*/
 const $=id=>document.getElementById(id);
-const context=(()=>{try{return JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')}catch{return {}}})();
-const code=context.card_code;
+const query=new URLSearchParams(location.search);
+// A preview must never change the live student's sessionStorage card credentials.
+const demo=query.has('demo')||/tutorial-preview\.html$/.test(location.pathname);
+const replay=query.has('replay')||demo;
+const context=demo?(window.RPG_TUTORIAL_DEMO_CONTEXT||{}):(()=>{try{return JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')}catch{return {}}})();
 const cloud=window.RPG_V66;
-const replay=new URLSearchParams(location.search).has('replay');
-let stage=1,stepCount=0,missCount=0,loopTimer=null,busy=false,canClaim=false,replayMode=replay,drawResults=[];
-let roster=[],featuredId='tavi';
-const prompts={1:['apple'],2:['cat','sun','book'],3:['green','water','happy']};
-const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function status(s){$('status').textContent=s||'';}
-function heading(i,title,sub){$('stepCounter').textContent=`LESSON ${String(i).padStart(2,'0')} / 04`;$('lesson').innerHTML=`<span class="chip">LESSON ${i}</span><h1>${title}</h1><p class="hint">${sub}</p><div id="activity"></div>`;}
-function stop(){if(loopTimer){clearInterval(loopTimer);loopTimer=null;}}
-async function progress(next){if(replayMode)return;await cloud.call('/api/tutorial/progress',{card_code:code,step:next});}
-function routeMenu(){sessionStorage.setItem('rpgReturnToAdventureModeSelect','1');location.replace('adventure.html?card='+encodeURIComponent(code));}
-function fail(e){status(e?.message||String(e)||'Please try again.');busy=false;}
-function nextWord(){const list=prompts[stage]||[],w=list[stepCount];if(!w)return void completedLesson();
- const word=$('tutorialWord');word.textContent=w;word.style.setProperty('--top','3%');$('answer').value='';$('answer').focus();
- let position=3;stop();if(stage>=2)loopTimer=setInterval(()=>{position+=.40;if(position>=72){position=3;missCount++;status('Try again. Type the word before it reaches the bottom!');}word.style.setProperty('--top',position+'%');},100);
+const code=context.card_code;
+const samples={
+  1:[{prompt:'りんご',answer:'apple'}],
+  2:[{prompt:'ねこ',answer:'cat'},{prompt:'たいよう',answer:'sun'},{prompt:'ほん',answer:'book'}],
+  3:[{prompt:'みどり',answer:'green'},{prompt:'みず',answer:'water'},{prompt:'うれしい',answer:'happy'}]
+};
+const titles={1:'Type a word',2:'Falling words',3:'Defeat the boss',4:'Recruitment'};
+const hints={1:'The Japanese word is shown. Type its English answer and press Enter.',2:'Type the English answers before the words reach the bottom.',3:'Each correct answer damages the enemy. Clear all three words!',4:'Open Recruitment to obtain your first ten characters.'};
+let stage=1,stepCount=0,playerHP=10,frameId=null,startMs=0,busy=false;
+const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function log(message){$('messageLog').textContent=message;}
+function status(message){$('status').textContent=message||'';}
+function stop(){if(frameId!==null){cancelAnimationFrame(frameId);frameId=null;}}
+function routeMenu(){
+ if(demo){location.replace('tutorial-preview.html?demo=1');return;}
+ sessionStorage.setItem('rpgReturnToAdventureModeSelect','1');
+ location.replace('adventure.html?card='+encodeURIComponent(code||''));
 }
-function lesson(i){stop();stage=i;stepCount=0;missCount=0;status('');const labels={1:['Type a word','Type the English word, then press Enter.'],2:['Falling words','Type each word before it reaches the bottom.'],3:['Defeat the boss','Clear three words to defeat the boss.']};
- if(i===4)return recruitmentLesson();const [title,sub]=labels[i];heading(i,title,sub);
- $('activity').innerHTML=`<div class="arena"><div class="lane"><div class="word falling" id="tutorialWord"></div></div><div class="boss">${i===3?`<strong>BOSS HP</strong><div class="bossbar"><div id="bossHP"></div></div><img src="assets/characters/mc.webp" alt="Main character" loading="lazy"><span>Clear the words to attack!</span>`:`<span style="font-size:64px;color:#dace21">⌨</span><span>Correct words disappear.</span>`}</div></div><form class="inputrow" id="answerForm"><input id="answer" type="text" aria-label="Type the word" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Type here…" required><button type="submit">ENTER ↵</button></form>`;
- $('answerForm').addEventListener('submit',e=>{e.preventDefault();if(busy)return;const w=prompts[i][stepCount];if($('answer').value.trim().toLowerCase()===w){stepCount++;status('Good job!');if(i===3)$('bossHP').style.width=`${Math.max(0,100-stepCount/3*100)}%`;nextWord();}else{status('Try again.');$('answer').select();}});nextWord();
+function nextWord(){
+ stop();const record=samples[stage]?.[stepCount];if(!record){if(stage<=3)void advance();return;}
+ const lane=$('wordLane');lane.replaceChildren();
+ const word=document.createElement('div');word.className='word';word.id='trainingWord';word.style.setProperty('--y','18px');
+ word.innerHTML=`<span class="prompt">${escapeHtml(record.prompt)}</span><span class="right"><span class="tag">${stage===1?'TRAINING':'FALLING'}</span></span>`;
+ lane.appendChild(word);
+ $('answerInput').value='';$('answerInput').disabled=false;$('answerInput').focus({preventScroll:true});
+ $('progressText').textContent=`${stepCount} / ${samples[stage].length} words cleared`;
+ if(stage===1)return;
+ startMs=performance.now();
+ const travel=stage===2?18000:14500;
+ function tick(ts){
+  if(stage===1||busy||!word.isConnected)return;
+  const distance=Math.max(10,lane.clientHeight-word.getBoundingClientRect().height-20);
+  const y=18+Math.min(1,(ts-startMs)/travel)*Math.max(0,distance-18);
+  word.style.setProperty('--y',`${y}px`);
+  if(ts-startMs>=travel){
+   if(stage===3){playerHP=Math.max(1,playerHP-1);updateBars();log('A word reached the bottom! You lost 1 HP. Try again.');}
+   else log('A word reached the bottom. Try again!');
+   startMs=ts;
+  }
+  frameId=requestAnimationFrame(tick);
+ }
+ frameId=requestAnimationFrame(tick);
 }
-async function completedLesson(){stop();if(busy)return;busy=true;
- try{await progress(stage+1);if(stage<3)lesson(stage+1);else lesson(4);}catch(e){fail(e);}finally{busy=false;}
+function updateBars(){
+ $('playerHP').style.width=`${playerHP*10}%`;$('playerHpText').textContent=`${playerHP}/10`;
+ const remaining=stage===3?Math.max(0,3-stepCount):3;
+ $('bossHP').style.width=`${remaining/3*100}%`;$('bossHpText').textContent=`${remaining}/3`;
 }
-function recruitmentLesson(){stage=4;heading(4,'Recruitment','Open Recruitment to get your first characters!');status('');
- $('activity').innerHTML=`<div class="choicegrid"><div class="choice">NORMAL MODE</div><div class="choice">EXTRA MODE</div><button class="choice active" id="tutorialRecruit">RECRUITMENT ✦</button><div class="choice">STORY MODE</div><div class="choice">PRACTICE</div><div class="choice">PROFILE</div></div>`;
- $('tutorialRecruit').addEventListener('click',()=>recruitPanel());
+function lesson(i){
+ stop();stage=i;stepCount=0;playerHP=10;busy=false;
+ $('retryTutorialSave').hidden=true;
+ $('tutorialModeOverlay').classList.remove('show');$('tutorialModeOverlay').setAttribute('aria-hidden','true');
+ $('tutorialFinishOverlay').classList.remove('show');$('tutorialFinishOverlay').setAttribute('aria-hidden','true');
+ $('lessonNumber').textContent=i;$('stepCounter').textContent=`LESSON ${String(i).padStart(2,'0')} / 04`;
+ $('lessonTitle').textContent=titles[i];$('lessonObjective').textContent=hints[i];
+ $('trainingCoach').textContent=hints[i];
+ $('answerInput').disabled=i===4;
+ $('progressText').textContent=`0 / ${(samples[i]||[]).length} words cleared`;
+ $('bossImg').style.opacity=i===3?'1':'.38';
+ $('bossHP').closest('.statRow').style.opacity=i===3?'1':'.45';
+ $('wordLane').replaceChildren();status('');
+ updateBars();
+ if(i===4){showModeSelect();return;}
+ log(i===1?'Look at the Japanese word. Type apple, then press Enter.':i===2?'Words fall, just like Normal Mode. Type their English meanings.':'Defeat the training opponent by clearing the words.');
+ nextWord();
 }
-function recruitPanel(){heading(4,'Featured Recruitment','Use your free first 10-pull. It counts as today’s free pull.');
- const featured=roster.find(x=>x.id===featuredId),art=featured?.art||'assets/recruitment/tavi.webp';
- $('activity').innerHTML=`<div class="recruitbox"><img src="${safe(art)}" alt="Featured operator"><div><span class="chip">FEATURED BANNER</span><h2>10 CHARACTERS</h2><p>See the stars first, then meet each character.</p><p class="price">FREE ×10</p><button class="primary" id="claimTen">RECRUIT ×10</button><p class="subtle">Your first 10-pull also uses today’s free claim.</p></div></div>`;
- $('claimTen').addEventListener('click',()=>claim());
- if(replayMode){$('claimTen').textContent='SHOW EXAMPLE ×10';}
-}
-function resultOverlay(results){drawResults=results;const records=results.map(r=>({...r,...(roster.find(c=>c.id===r.id)||{})}));
- window.RPG_RECRUITMENT_REVEAL.configure({characters:roster,featured_character_id:featuredId});
- window.RPG_RECRUITMENT_REVEAL.openResults(records,'FEATURED',{lockUntilResults:true,onComplete:()=>void finish()});
-}
-async function claim(){if(busy)return;busy=true;$('claimTen').disabled=true;status('Recruiting characters…');
+async function advance(){
+ if(busy||stage>3)return;
+ busy=true;stop();$('answerInput').disabled=true;
+ $('retryTutorialSave').hidden=true;status('Saving lesson progress…');
  try{
-  if(replayMode){const mock=Array.from({length:10},(_,i)=>({...roster[i%roster.length],duplicate:false,shards:0}));resultOverlay(mock);return;}
-  const response=await cloud.call('/api/recruitment/pull',{card_code:code,mode:'tutorial',count:10});
-  resultOverlay(response.results);
- }catch(e){fail(e);$('claimTen').disabled=false;}finally{busy=false;}
+  if(!replay)await cloud.call('/api/tutorial/progress',{card_code:code,step:stage+1});
+  status('');log('Lesson complete!');lesson(stage+1);
+ }catch(e){
+  busy=false;
+  log('Lesson cleared. Progress could not be confirmed: '+String(e?.message||e));
+  status('Press RETRY SAVING to continue. Your cleared words will not be lost.');
+  // Do not re-enable the input when the last word has already been cleared.
+  $('retryTutorialSave').hidden=false;
+  $('retryTutorialSave').focus({preventScroll:true});
+ }
 }
-async function finish(){if(busy)return;busy=true;status('Saving tutorial completion…');
- try{if(!replayMode)await progress(5);
- $('stepCounter').textContent='COMPLETE';$('lesson').innerHTML=`<div style="text-align:center;padding:70px 12px"><span class="chip">COMPLETE</span><h1>TUTORIAL COMPLETE!</h1><p class="hint">You're ready to play.</p><button class="primary" id="finishBtn">START ADVENTURE ▶</button></div>`;$('finishBtn').addEventListener('click',routeMenu);status('');
- }catch(e){fail(e);}finally{busy=false;}
+$('retryTutorialSave').addEventListener('click',()=>void advance());
+function showModeSelect(){
+ $('trainingCoach').textContent='Select Recruitment from Mode Select.';
+ $('wordLane').replaceChildren();$('answerInput').disabled=true;
+ $('tutorialModeChoices').innerHTML='';
+ const entries=['Story Mode','Practice Mode','Normal Mode','Extra Mode','Challenge Mode','All Grades Challenge','Recruitment','How to Play','Profile','Tournament'];
+ for(const title of entries){
+  const button=document.createElement('button');button.type='button';button.className='choiceBtn'+(title==='Recruitment'?' tutorial-target':' disabled');
+  button.disabled=title!=='Recruitment';button.innerHTML=`<span class="title">${escapeHtml(title)}</span>`;
+  if(title==='Recruitment')button.addEventListener('click',()=>{
+   location.assign((demo?'recruitment-preview-v84.html':'recruitment.html')+'?tutorial='+(replay?'demo':'1'));
+  });
+  $('tutorialModeChoices').appendChild(button);
+ }
+ $('tutorialModeOverlay').classList.add('show');$('tutorialModeOverlay').setAttribute('aria-hidden','false');
+ $('tutorialModeChoices').querySelector('.tutorial-target')?.focus({preventScroll:true});
 }
+function completed(){
+ stop();$('tutorialFinishOverlay').classList.add('show');$('tutorialFinishOverlay').setAttribute('aria-hidden','false');
+ $('lessonNumber').textContent='4';$('stepCounter').textContent='COMPLETE';
+ $('trainingCoach').textContent='Tutorial complete!';
+ $('wordLane').replaceChildren();$('answerInput').disabled=true;
+ $('finishBtn').onclick=routeMenu;$('finishBtn').focus({preventScroll:true});
+}
+$('answerForm').addEventListener('submit',e=>{
+ e.preventDefault();if(busy||stage>3)return;
+ const current=samples[stage]?.[stepCount];if(!current)return;
+ if($('answerInput').value.trim().toLowerCase()!==current.answer){
+  log('Not quite! Try again.');$('answerInput').select();return;
+ }
+ stop();stepCount++;$('progressText').textContent=`${stepCount} / ${samples[stage].length} words cleared`;
+ if(stage===3){updateBars();$('bossImg').classList.remove('bossFlash');void $('bossImg').offsetWidth;$('bossImg').classList.add('bossFlash');}
+ log('Correct!');$('wordLane').replaceChildren();
+ if(stepCount>=samples[stage].length)void advance();else nextWord();
+});
 async function start(){
  try{
-  if(!code)throw Error('Scan your Adventure Card QR to start the tutorial.');
-  if(!await cloud.ready)throw Error('Firebase connection required.');
+  if(!code)throw Error('Scan your Adventure Card QR before starting the tutorial.');
+  if(!cloud||!await cloud.ready)throw Error('Firebase connection required.');
   const data=await cloud.call('/api/tutorial/state',{card_code:code});
-  const raw=await fetch('gacha_catalog.json');if(!raw.ok)throw Error('Character roster missing.');roster=(await raw.json()).characters||[];
-  try{const banners=await cloud.call('/api/recruitment/banners');const candidate=banners?.banners?.[0]?.featured_character_id;if(roster.some(c=>c.id===candidate&&c.rarity===6))featuredId=candidate;}catch(_){ /* Use the packaged Featured banner if offline demo or config absent. */ }
   $('loading').hidden=true;$('tutorialApp').hidden=false;
-  replayMode=replay||data.complete;
+  if(query.has('complete')&&(data.complete||demo)){completed();return;}
   if(data.complete&&!replay){routeMenu();return;}
-  if(!replayMode&&data.step>=4&&data.tutorialClaimed&&Array.isArray(data.lastDraw)&&data.lastDraw.length){
-   stage=4;heading(4,'Recruitment Results','Your first 10-pull was saved. View the characters to finish.');
-   $('activity').innerHTML='<button class="primary" id="resumeResults">VIEW 10-PULL RESULTS ▶</button>';
-   $('resumeResults').addEventListener('click',()=>resultOverlay(data.lastDraw));
-   return;
+  if(!replay&&data.step>=4&&data.tutorialClaimed){
+   // The previous pull was saved but its reveal was interrupted. Resume in real Recruitment.
+   location.replace('recruitment.html?tutorial=1&resume=1');return;
   }
-  if(replayMode)lesson(1);else lesson(Math.max(1,Math.min(4,data.step)));
+  lesson(replay?1:Math.max(1,Math.min(4,Number(data.step)||1)));
  }catch(e){$('loading').textContent=e?.message||String(e);}
 }
 void start();

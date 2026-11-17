@@ -1,0 +1,41 @@
+/* v84 tutorial uses the same frame and battlefield CSS as Normal Mode. */
+body.tutorial-client{overflow-x:hidden}
+#loading{position:fixed;inset:0;z-index:2147483647;background:#17191b;display:grid;place-items:center;color:#f5f4e8;text-align:center;font:800 19px system-ui;padding:18px}
+#loading[hidden],#tutorialApp[hidden]{display:none!important}
+.tutorial-client .frame{min-height:min(590px,calc(100dvh - 18px))}
+.tutorial-client #wordLane{overflow:hidden}
+.tutorial-client .word .prompt{font-size:clamp(18px,2vw,25px)}
+.tutorial-client .word .tag{font-size:12px}
+.tutorial-client #bossImg{display:block;opacity:.9;max-height:95%;max-width:100%;width:100%;height:100%}
+.tutorial-client #bossFallback{display:none}
+.tutorial-client .training-coach{position:absolute;z-index:8;top:17px;right:clamp(14px,3%,35px);padding:10px 14px;max-width:min(44%,400px);background:#f1f2ed;color:#252729;border-left:5px solid var(--signal);font:800 13px/1.4 system-ui;box-shadow:0 8px 24px #0005}
+.tutorial-client .uiRow .menuItem{cursor:default}
+.tutorial-client .uiRow .msg{white-space:pre-line}
+.tutorial-client .uiRow .panel{overflow:hidden}
+.tutorial-client #tutorialModeOverlay .overlayChoices{gap:7px}
+.tutorial-client #tutorialModeOverlay .choiceBtn.disabled{opacity:.45;pointer-events:none}
+.tutorial-client #tutorialModeOverlay .choiceBtn.tutorial-target{border-left:7px solid #e7ef00;background:#f9ffce;cursor:pointer;animation:tutorial-pulse 1.3s ease-in-out infinite alternate}
+.tutorial-client #tutorialModeOverlay .choiceBtn.tutorial-target .title{font-weight:1000}
+.tutorial-client .tutorial-overlay-instruction{margin:0 0 12px!important;font-weight:900!important}
+.tutorial-client .tutorial-finish-btn{margin-top:24px;display:block;width:100%;text-align:center;cursor:pointer}
+@keyframes tutorial-pulse{from{box-shadow:0 0 0 0 #e6ed0063}to{box-shadow:0 0 0 5px #e6ed0066}}
+.tutorial-client #bossHP{background:linear-gradient(90deg,#ff745b,#ffc07c);transition:width .2s}
+@media(max-width:680px){.tutorial-client .training-coach{top:9px;right:8px;font-size:11px;padding:7px 9px;max-width:52%}.tutorial-client .uiRow{min-height:190px}.tutorial-client .uiRow .panel{font-size:12px}.tutorial-client .frame{min-height:100dvh}.tutorial-client .wordLane{width:50%;left:12px}.tutorial-client .inputBar{width:50%;left:12px}.tutorial-client .bossWrap{width:45%;right:1%}.tutorial-client .word .prompt{font-size:16px}.tutorial-client #tutorialModeOverlay .overlayBox{max-height:94dvh}}
+@media(prefers-reduced-motion:reduce){.tutorial-client #tutorialModeOverlay .choiceBtn.tutorial-target{animation:none}}
+
+/* The actual game uses a two-panel compact HUD; match that layout. */
+body.tutorial-client .uiRow{grid-template-columns:minmax(245px,.87fr) minmax(0,1.48fr);gap:6px;min-height:140px}
+body.tutorial-client .uiRow>.panel{min-width:0;grid-column:auto!important;overflow:hidden}
+body.tutorial-client .uiRow .msg{color:#27292a;background:#f2f2ef;border:1px solid #d6d6d3;font-size:14px;max-height:80px;min-height:58px;line-height:1.5;padding:8px 10px;overflow:auto}
+body.tutorial-client .uiRow .panelHeader b{color:#292b2d}
+body.tutorial-client .uiRow .statusList>.statRow{min-width:0}
+body.tutorial-client .uiRow .small,body.tutorial-client .uiRow .statusList{color:#333537}
+body.tutorial-client #answerForm button.sr-only{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
+@media(max-width:650px){body.tutorial-client .uiRow{grid-template-columns:1fr;min-height:0}body.tutorial-client .uiRow>.panel{grid-column:1!important;padding:7px}body.tutorial-client .uiRow .msg{min-height:35px;max-height:65px;font-size:12px}body.tutorial-client .uiRow .panelHeader{margin-bottom:3px}}
+
+body.tutorial-client .uiRow .statRow .name,body.tutorial-client .uiRow .barLine,body.tutorial-client .uiRow .barLine span{color:#383a3c!important;opacity:1!important}
+body.tutorial-client .uiRow .barLine .meter{background:#e0e2e1;opacity:1!important}
+@media(max-width:560px){body.tutorial-client .training-coach{max-width:43%;font-size:10px;right:7px;padding:6px 8px}}
+
+.tutorial-client .tutorial-retry-save{display:block;margin:8px 0 0;padding:10px 14px;font:900 13px system-ui;border:2px solid #242424;background:#e7df20;color:#161616;cursor:pointer}
+.tutorial-client .tutorial-retry-save[hidden]{display:none!important}

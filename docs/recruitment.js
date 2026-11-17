@@ -4,6 +4,13 @@
  const validArt=p=>typeof p==='string' && /^assets\/recruitment\/[\w-]+\.(?:webp|png|jpe?g|avif)$/.test(p);
  const fallback=[{id:'featured',tab:'FEATURED',title:'CRIMSON SIGNAL',kicker:'SPECIAL RECRUITMENT',subtitle:'FEATURED 6★ OPERATOR',description:'Featured recruitment operator preview.',featured_character_id:'tavi',art:null}];
  let banners=fallback,displayName='',catalog=[],playerState=null,playerCode='',pullBusy=false;
+ const tutorialParam=new URLSearchParams(location.search).get('tutorial');
+ const previewPage=/recruitment-preview-v84\.html$/.test(location.pathname);
+ const guided=tutorialParam==='1'||tutorialParam==='demo'||previewPage;
+ const tutorialDemo=tutorialParam==='demo'||previewPage;
+ // Lock secondary links before asynchronous Firebase initialization, avoiding a brief bypass.
+ if(guided)document.body.classList.add('tutorial-recruitment');
+ let tutorialState=null;
  const safeRosterArt=p=>typeof p==='string' && /^assets\/recruitment\/[a-z0-9_-]+\.webp$/.test(p);
  function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
  function paint(){
@@ -30,10 +37,41 @@
   const free=playerState.dailyEligible&&!playerState.dailyClaimed;
   const ten=document.querySelector('[data-pull="10"]');
   if(ten)ten.querySelector('span:last-child').textContent=free?'FREE DAILY ×10':'1,000 COINS';
-  const note=document.querySelector('.pity-note');if(note)note.textContent=free?'FREE DAILY 10-PULL AVAILABLE':playerState.dailyClaimed?'DAILY FREE 10-PULL CLAIMED':'COMPLETE A RUN TODAY TO UNLOCK FREE ×10';
+  const note=document.querySelector('.pity-note');if(note)note.textContent=guided?'YOUR FIRST RECRUITMENT · FREE ×10':free?'FREE DAILY 10-PULL AVAILABLE':playerState.dailyClaimed?'DAILY FREE 10-PULL CLAIMED':'COMPLETE A RUN TODAY TO UNLOCK FREE ×10';
+  if(guided&&ten)ten.querySelector('span:last-child').textContent='FREE ×10';
  }
  async function showPull(n){
   if(pullBusy)return;
+  if(guided){
+   if(n!==10)return;
+   if(tutorialDemo){
+    window.RPG_RECRUITMENT_REVEAL.open(10,banners[0]?.title||'FEATURED');
+    tutorialGuide('PREVIEW ONLY · No characters are awarded.','FINISH DEMO',()=>location.assign('tutorial.html?complete=1&demo=1'));
+    return;
+   }
+   if(!tutorialState||Number(tutorialState.step)!==4){tutorialGuide('Finish Lessons 1–3 first.');return;}
+   if(tutorialState.tutorialClaimed){await showSavedTutorialDraw();return;}
+   pullBusy=true;
+   try{
+    tutorialGuide('Recruiting ten characters…');
+    const result=await window.RPG_V66.call('/api/recruitment/pull',{card_code:playerCode,mode:'tutorial',count:10});
+    tutorialState={...tutorialState,tutorialClaimed:true,lastDraw:result.results};
+    // The draw has already been committed. A follow-up balance read must never
+    // prevent the saved characters from being revealed or trigger another draw.
+    try{playerState=await window.RPG_V66.call('/api/recruitment/state',{card_code:playerCode});updateWallet();}catch(e){console.warn('Wallet refresh after saved tutorial draw:',e);}
+    await showSavedTutorialDraw(result.results);
+   }catch(e){
+    // A timeout could happen AFTER the receipt was committed. Re-check state first.
+    try{
+     const fresh=await window.RPG_V66.call('/api/tutorial/state',{card_code:playerCode});
+     tutorialState=fresh;
+     if(fresh.tutorialClaimed){await showSavedTutorialDraw();return;}
+    }catch(_){/* keep retry option */}
+    tutorialGuide(String(e?.message||e),'TRY AGAIN',()=>showPull(10));
+   }
+   finally{pullBusy=false;}
+   return;
+  }
   dismiss();
   if(!playerCode){modal({eyebrow:'ADVENTURE CARD',title:'SIGN IN FIRST',body:'<p>Scan your Adventure Card QR code before using Recruitment.</p>'});return;}
   const free=n===10&&playerState?.dailyEligible&&!playerState?.dailyClaimed;
@@ -42,18 +80,76 @@
   pullBusy=true;
   try{
    let requestId='';
+   // Keep pending IDs isolated by student AND pull count. A network timeout must
+   // replay the same paid draw, never charge a new one or show the wrong count.
+   const pendingKey=`rpgPaidPullPending:${playerCode}:${n}`;
    if(mode==='paid'){
-    requestId=sessionStorage.getItem('rpgPaidPullPending')||('p'+(crypto?.randomUUID?.()||`${Date.now()}${Math.random().toString(36).slice(2)}`).replaceAll('-',''));
-    sessionStorage.setItem('rpgPaidPullPending',requestId);
+    const existing=sessionStorage.getItem(pendingKey);
+    requestId=existing&&/^p[a-z0-9-]{10,55}$/.test(existing)?existing:('p'+(globalThis.crypto?.randomUUID?.()||`${Date.now()}${Math.random().toString(36).slice(2)}`).replaceAll('-',''));
+    sessionStorage.setItem(pendingKey,requestId);
    }
    const result=await window.RPG_V66.call('/api/recruitment/pull',{card_code:playerCode,mode,count:n,request_id:requestId});
-   if(mode==='paid')sessionStorage.removeItem('rpgPaidPullPending');
-   playerState=await window.RPG_V66.call('/api/recruitment/state',{card_code:playerCode});updateWallet();
+   // A wallet refresh failure should not hide a successfully committed draw.
+   try{playerState=await window.RPG_V66.call('/api/recruitment/state',{card_code:playerCode});updateWallet();}catch(e){
+    console.warn('Wallet refresh after saved draw:',e);
+    if(playerState&&Number.isFinite(Number(result.coins)))playerState.coins=Number(result.coins);
+    updateWallet();
+   }
    window.RPG_RECRUITMENT_REVEAL.openResults(result.results,banners[0]?.title||'RECRUITMENT');
+   if(mode==='paid')sessionStorage.removeItem(pendingKey);
   }catch(e){modal({eyebrow:'RECRUITMENT',title:'PULL UNAVAILABLE',body:`<p>${esc(e.message||'Recruitment failed. Please retry.')}</p>`});}
   finally{pullBusy=false;}
  }
 
+
+ function tutorialGuide(message='Select RECRUIT ×10 to get your first characters.',action='',callback=null){
+  let coach=$('recruitmentTutorialGuide');
+  if(!coach){coach=document.createElement('section');coach.id='recruitmentTutorialGuide';coach.className='recruitment-tutorial-guide';coach.setAttribute('aria-live','polite');
+   document.body.append(coach);}
+  coach.replaceChildren();
+  const tag=document.createElement('strong');tag.textContent='LESSON 4 / 4 · RECRUITMENT';coach.append(tag);
+  const desc=document.createElement('p');desc.textContent=message;coach.append(desc);
+  if(action&&callback){const button=document.createElement('button');button.textContent=action;button.type='button';button.addEventListener('click',callback);coach.append(button);}
+ }
+ async function tutorialFinish(){
+  try{
+   tutorialGuide('Saving tutorial completion…');
+   await window.RPG_V66.call('/api/tutorial/progress',{card_code:playerCode,step:5});
+   location.replace('tutorial.html?complete=1');
+  }catch(e){tutorialGuide(String(e?.message||e),'RETRY COMPLETION',()=>tutorialFinish());}
+ }
+ async function showSavedTutorialDraw(rows=null){
+  let saved=rows||tutorialState?.lastDraw||playerState?.lastDrawResults;
+  if(!Array.isArray(saved)||saved.length!==10){
+   try{
+    const recovered=await window.RPG_V66.call('/api/recruitment/tutorial-draw',{card_code:playerCode});
+    saved=recovered.results;
+    tutorialState={...tutorialState,lastDraw:saved,tutorialClaimed:true};
+   }catch(e){tutorialGuide('Draw saved, but results could not be retrieved: '+String(e?.message||e),'RETRY VIEWING',()=>void showSavedTutorialDraw());return;}
+  }
+  tutorialGuide('Your ten characters are saved. View all results to finish.');
+  try{window.RPG_RECRUITMENT_REVEAL.openResults(saved,banners[0]?.title||'FEATURED',{lockUntilResults:true,onComplete:()=>void tutorialFinish()});}
+  catch(e){tutorialGuide('Results unavailable: '+String(e?.message||e),'RETRY VIEWING',()=>void showSavedTutorialDraw());}
+ }
+ async function initGuided(){
+  document.body.classList.add('tutorial-recruitment');
+  document.querySelectorAll('[data-pull="1"]').forEach(el=>{el.disabled=true;el.setAttribute('aria-disabled','true')});
+  if(tutorialDemo){
+   tutorialGuide('Press RECRUIT ×10 to preview the real reveal. No rewards on replay.');
+   const note=document.querySelector('.pity-note');if(note)note.textContent='TUTORIAL PREVIEW · FREE ×10';
+   const ten=document.querySelector('[data-pull="10"]');if(ten)ten.querySelector('span:last-child').textContent='PREVIEW ×10';
+   return;
+  }
+  if(!playerCode){tutorialGuide('Scan your Adventure Card QR code before starting Recruitment.');return;}
+  try{
+   tutorialState=await window.RPG_V66.call('/api/tutorial/state',{card_code:playerCode});
+   if(tutorialState.complete){location.replace('adventure.html');return;}
+   if(Number(tutorialState.step)!==4){location.replace('tutorial.html');return;}
+   if(tutorialState.tutorialClaimed){
+    tutorialGuide('Your first pull was already saved. View the results to continue.','VIEW SAVED RESULTS',()=>void showSavedTutorialDraw());
+   }else tutorialGuide('Select RECRUIT ×10 below. Your first pull costs 0 Guild Coins.');
+  }catch(e){tutorialGuide('Could not load tutorial status: '+String(e?.message||e));}
+ }
  async function loadBannerConfig(){
   try{
    const r=await fetch('recruitment-banners.json',{cache:'default'});if(!r.ok)throw Error('No config');
@@ -76,8 +172,8 @@
  async function init(){
   paint();await Promise.all([loadBannerConfig(),loadRoster()]);paint();
   window.RPG_RECRUITMENT_REVEAL?.setFeatured?.(banners[0]?.featured_character_id);
-  const cloud=window.RPG_V66;if(!cloud){console.error('Firebase bridge unavailable.');return}
-  const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected)return;
+  const cloud=window.RPG_V66;if(!cloud){console.error('Firebase bridge unavailable.');tutorialGuide('Firebase did not load. Reload this page.');return;}
+  const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected){tutorialGuide('Firebase connection unavailable. Reload after reconnecting.');return;}
   // Text-only cloud overrides. A missing config doc means use the versioned JSON defaults.
   try{
    const result=await cloud.call('/api/recruitment/banners');
@@ -98,6 +194,7 @@
     updateWallet();
    }
   }catch(e){console.warn('Recruitment balance unavailable:',e);}
+  if(guided)await initGuided();
  }
  document.getElementById('recruitmentApp').addEventListener('click',e=>{
   const dlg=e.target.closest('[data-dialog]');if(dlg){if(dlg.dataset.dialog==='rates')showRates();else showDetails();return;}

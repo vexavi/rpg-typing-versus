@@ -34,8 +34,10 @@
   close(true);priorFocus=document.activeElement;
   const operators=rows.map(item=>{
    const meta=catalog.find(c=>c.id===item.id);
-   if(!meta||meta.rarity!==item.rarity)throw Error('Unknown recruited character.');
-   return {...meta,duplicate:!!item.duplicate,shards:Number(item.shards)||0};
+   if(![4,5,6].includes(item.rarity)||typeof item.id!=='string'||!/^[a-z][a-z0-9_]{0,39}$/.test(item.id))throw Error('Invalid saved recruitment result.');
+   // A rotated or updated roster must not make an already-saved tutorial impossible to finish.
+   const display=meta&&meta.rarity===item.rarity?meta:{id:item.id,name:item.id.replace(/_/g,' ').toUpperCase(),art:null,rarity:item.rarity};
+   return {...display,duplicate:!!item.duplicate,shards:Number(item.shards)||0};
   });
   session={count:rows.length,banner:String(banner||'FEATURED').slice(0,60),index:0,
    rarities:rows.map(x=>x.rarity),operators,stage:'stars',real:true,

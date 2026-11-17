@@ -1,0 +1,11 @@
+/* v84: guided tutorial is rendered inside the real Recruitment page. */
+body.tutorial-recruitment .backlink,body.tutorial-recruitment .close,body.tutorial-recruitment .workshop-link{visibility:hidden;pointer-events:none}
+body.tutorial-recruitment [data-pull="1"]{opacity:.36;cursor:not-allowed;pointer-events:none}
+body.tutorial-recruitment [data-pull="10"]{outline:4px solid #fff;outline-offset:2px;box-shadow:0 0 0 7px #edff005c;animation:tutorial-pull-pulse 1.5s ease-in-out infinite alternate}
+.recruitment-tutorial-guide{position:fixed;z-index:7;left:clamp(14px,3vw,45px);bottom:clamp(178px,25vh,245px);width:min(375px,42vw);padding:15px 18px;background:#f5f5ee;color:#202123;border-left:7px solid #eeeb00;box-shadow:0 14px 38px #0008;font-family:Arial,Helvetica,sans-serif}
+.recruitment-tutorial-guide strong{font-size:11px;letter-spacing:.12em}
+.recruitment-tutorial-guide p{font-size:15px;font-weight:800;line-height:1.4;margin:6px 0 0}
+.recruitment-tutorial-guide button{font-size:12px;font-weight:900;margin-top:12px;border:0;background:#eff000;color:#151515;padding:10px}
+@keyframes tutorial-pull-pulse{from{box-shadow:0 0 0 3px #efff0044}to{box-shadow:0 0 0 11px #efff0022}}
+@media(max-width:650px){.recruitment-tutorial-guide{width:auto;left:12px;right:12px;bottom:190px;padding:10px 13px}.recruitment-tutorial-guide p{font-size:12px}body.tutorial-recruitment .banner-copy{margin-top:2vh}}
+@media(prefers-reduced-motion:reduce){body.tutorial-recruitment [data-pull="10"]{animation:none}}

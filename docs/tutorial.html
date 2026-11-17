@@ -1,22 +1,35 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>RPG Typing Versus · How to Play</title>
-<link rel="stylesheet" href="recruitment-reveal.css?v=83"><style>
-:root{--yellow:#e8da22;--ink:#f3f4f7;--dark:#12151c}*{box-sizing:border-box}
-body{margin:0;min-height:100dvh;background:#f1f3f4;color:#111;font:16px Arial,Helvetica,sans-serif}
-body::before{content:"";pointer-events:none;position:fixed;inset:0;background:repeating-linear-gradient(0deg,rgba(20,28,32,.035) 0 1px,transparent 1px 4px)}
-main{position:relative;width:min(1080px,calc(100vw - 26px));margin:clamp(15px,4vh,50px) auto;min-height:610px;background:#151a24;color:var(--ink);box-shadow:0 20px 55px #0003;display:grid;grid-template-rows:auto 1fr auto;overflow:hidden}
-header{padding:22px 28px;border-bottom:1px solid #ffffff36;display:flex;justify-content:space-between;align-items:center;gap:10px;z-index:1}
-.logo{font-weight:900;letter-spacing:.16em;font-size:12px}.counter{font-size:13px;color:#cfd3d8;letter-spacing:.1em}
-#lesson{padding:28px;position:relative;z-index:1}h1{margin:0 0 10px;font-size:clamp(24px,4.4vw,43px);letter-spacing:.02em}p{line-height:1.45}
-.hint{color:#c3c9d0;font-size:15px;margin:7px 0 16px}.arena{position:relative;display:grid;grid-template-columns:1.1fr .9fr;min-height:360px;background:linear-gradient(135deg,#202c41,#10151c);border:1px solid #60718a4d;overflow:hidden}
-.lane{position:relative;min-height:300px;border-right:1px solid #60718a5c;overflow:hidden;padding:16px}.boss{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:20px;text-align:center}.boss img{max-width:70%;max-height:210px;object-fit:contain}.bossbar{width:80%;height:15px;border:1px solid #eee8;background:#1d2431}.bossbar div{height:100%;width:100%;background:#dba236;transition:width .2s}
-.word{position:absolute;left:10%;top:30%;width:80%;background:#f0f1f5;color:#13151b;padding:18px;text-align:center;font-weight:900;font-size:30px;box-shadow:7px 8px 0 #0008;transition:top .12s linear}.word.falling{top:var(--top,4%)}
-.inputrow{display:flex;gap:10px;margin-top:18px;align-items:center}.inputrow input{flex:1;min-width:0;background:#f6f6f6;border:2px solid #91a1b7;color:#12151c;padding:14px;font-size:20px}.inputrow button,button.primary{padding:15px 22px;border:none;background:var(--yellow);color:#111;font-weight:900;cursor:pointer;font-size:16px}.inputrow button:disabled,button.primary:disabled{opacity:.5;cursor:default}
-footer{border-top:1px solid #ffffff30;padding:18px 28px;color:#cdd1d8;font-size:13px;min-height:59px}.chip{display:inline-block;background:#e5d51f;color:#111;padding:6px 12px;font-weight:900;letter-spacing:.08em;font-size:12px}.choicegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:34px}.choice{padding:30px 12px;text-align:center;background:#2c3440;border:1px solid #5b6372;font-weight:900;font-size:19px;color:#c7cbd3}.choice.active{outline:4px solid var(--yellow);background:#414027;color:white;cursor:pointer}.recruitbox{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:20px;padding:18px 26px;background:linear-gradient(120deg,#20222a,#4f202d);min-height:370px}.recruitbox img{width:100%;max-height:320px;object-fit:contain;object-position:center}.price{font-size:28px;color:#e7d721;font-weight:1000}.subtle{font-size:12px;color:#aeb8c7}
-#status{min-height:18px;color:#e8da22;font-weight:700}#loading{position:fixed;inset:0;z-index:1200;background:#131827;display:grid;place-items:center;color:#fff;text-align:center;padding:30px}#loading[hidden]{display:none}
-@media(max-width:600px){main{min-height:calc(100dvh - 20px);margin:10px auto}header,#lesson,footer{padding:15px}.arena{grid-template-columns:1fr}.lane{min-height:260px;border-right:0;border-bottom:1px solid #60718a5c}.boss{min-height:140px}.boss img{max-height:110px}.choicegrid{grid-template-columns:1fr 1fr;gap:10px}.choice{font-size:15px;padding:18px 4px}.recruitbox{grid-template-columns:1fr}.recruitbox img{max-height:180px}.inputrow input{font-size:17px}}
-</style></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>RPG Typing Versus — Tutorial</title>
+<link rel="stylesheet" href="tutorial-gameplay.css?v=84"><link rel="stylesheet" href="rpg-theme.css"><link rel="stylesheet" href="adventure-ui.css"><link rel="stylesheet" href="student-ui.css?v=64"><link rel="stylesheet" href="tutorial-v84.css?v=84.1"></head>
+<body class="adventure-client tutorial-client">
 <div id="loading">CONNECTING TO FIREBASE…</div>
-<main id="tutorialApp" hidden><header><span class="logo">RPG TYPING VERSUS / TUTORIAL</span><span id="stepCounter" class="counter">LESSON 01 / 04</span></header><section id="lesson"></section><footer><div id="status" role="status" aria-live="polite"></div></footer></main>
-<script src="recruitment-reveal.js?v=83"></script><script type="module">await import('./online-spark.js');await import('./tutorial.js?v=83');</script>
+<div class="frame pixel" id="tutorialApp" hidden>
+  <header class="adventure-topbar"><span class="adventure-brand">RPG TYPING VERSUS</span><span class="adventure-mode-tag">TUTORIAL · <span id="stepCounter">LESSON 01 / 04</span></span></header>
+  <div class="battlefield" id="battlefield">
+    <div class="bgFallback"></div>
+    <div class="laneLabel">Words</div>
+    <div class="wordLane" id="wordLane"></div>
+    <div class="inputBar" id="inputBar"><form id="answerForm" autocomplete="off"><div class="promptChar">&gt;</div><input id="answerInput" type="text" placeholder="TYPE ENGLISH" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done"><button type="submit" class="sr-only">Enter</button></form></div>
+    <div class="bossWrap"><div class="bossInner"><img class="bossImg pixel" id="bossImg" alt="Training opponent" src="assets/characters/crimson_knight.webp"><div class="bossFallback" id="bossFallback">TRAINING</div></div></div>
+    <div class="training-coach" id="trainingCoach" aria-live="polite"></div>
+  </div>
+  <div class="uiRow">
+    <div class="panel">
+      <div class="panelHeader"><b>LESSON <span id="lessonNumber">1</span> — <span id="lessonTitle">Type a word</span></b><span>TUTORIAL</span></div>
+      <div class="msg" id="messageLog" role="status" aria-live="polite">Type the English answer and press Enter.</div>
+      <div class="small" id="lessonObjective">Type the answer and press Enter.</div>
+      <div class="small" id="status"></div><button class="tutorial-retry-save" type="button" id="retryTutorialSave" hidden>RETRY SAVING</button>
+    </div>
+    <div class="panel">
+      <div class="panelHeader"><b>STATUS</b><span id="progressText">0 / 1 words cleared</span></div>
+      <div class="statusList">
+        <div class="statRow"><div class="name">Boss</div><div class="bars"><div class="barLine"><span>HP</span><div class="meter"><div class="fillBoss" id="bossHP" style="width:100%"></div></div><span id="bossHpText">3/3</span></div></div></div>
+        <div class="statRow"><div class="name">Player</div><div class="bars"><div class="barLine"><span>HP</span><div class="meter"><div class="fillHP" id="playerHP" style="width:100%"></div></div><span id="playerHpText">10/10</span></div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="overlay" id="tutorialModeOverlay" aria-hidden="true"><div class="overlayBox modeSelectMenu" role="dialog" aria-modal="true" aria-label="Mode Select"><h2>MODE SELECT</h2><p class="tutorial-overlay-instruction">LESSON 4 — Open Recruitment.</p><div class="overlayChoices show" id="tutorialModeChoices"></div></div></div>
+  <div class="overlay" id="tutorialFinishOverlay" aria-hidden="true"><div class="overlayBox" role="dialog" aria-modal="true"><h2>TUTORIAL COMPLETE!</h2><p>You are ready to play.</p><button type="button" class="choiceBtn tutorial-finish-btn" id="finishBtn"><span class="title">START ADVENTURE ▶</span></button></div></div>
+</div>
+<script type="module">await import('./online-spark.js?v=84.1');await import('./tutorial.js?v=84.1');</script>
 </body></html>

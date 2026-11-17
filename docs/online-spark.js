@@ -261,7 +261,7 @@ async function tutorialProgress(b={}){
  if(!Number.isInteger(step)||step<1||step>5)err('Invalid tutorial stage.');
  if(step>Number(now.step)+1)err('Complete the previous lesson first.');
  if(step===5&&!p.player.recruitment?.tutorialClaimed)err('Complete the free first 10-pull before finishing the tutorial.');
- if(step<Number(now.step))return {ok:true,step:now.step,complete:false};
+ if(step<=Number(now.step))return {ok:true,step:now.step,complete:false,alreadySaved:true};
  const next=step===5?{version:1,step:5,updatedAt:serverTimestamp()}:{version:0,step,updatedAt:serverTimestamp()};
  await updateDoc(p.playerRef,{tutorial:next});return {ok:true,step,complete:step===5};
 }
@@ -298,6 +298,8 @@ async function recruitmentPull(b={}){
   const d=snapshot.data(),r=d.recruitment||{},t=d.tutorial||{version:1,step:5};
   if(prior.exists()){
    const saved=prior.data();
+   // A reused request ID must never silently return a different pull or another player's receipt.
+   if(saved.publicId!==p.id||saved.mode!==mode||saved.count!==count)err('This request belongs to another recruitment. Please retry the original pull.');
    return {ok:true,replayed:true,results:saved.results||[],coins:r.coins,pity_six:r.pity_six,shards:r.shards,drawId:receiptId};
   }
   let guildClaim=null;
@@ -324,6 +326,17 @@ async function recruitmentPull(b={}){
  // Merge display metadata from versioned roster, never from user content.
  return {...out,results:(out.results||[]).map(x=>({...x,...(pool.find(c=>c.id===x.id)||{})}))};
 }
+// Read only this player's most recent saved tutorial receipt if a legacy or interrupted
+// profile no longer has the ten display results cached. No new write permissions needed.
+async function recruitmentTutorialDraw(b={}){
+ const p=await currentPlayer(b),r=p.player.recruitment||{};
+ if(!r.tutorialClaimed)err('The tutorial recruitment has not been claimed yet.');
+ const id=String(r.lastDrawId||'');
+ if(!/^P\d{6,}__daily-\d{4}-\d{2}-\d{2}$/.test(id)||!id.startsWith(p.id+'__'))err('No recoverable tutorial receipt found.');
+ const receipt=await read('recruitmentDraws',id);
+ if(!receipt||receipt.publicId!==p.id||receipt.mode!=='tutorial'||receipt.count!==10||!Array.isArray(receipt.results)||receipt.results.length!==10)err('Tutorial receipt is not available.');
+ return {ok:true,results:receipt.results,drawId:id};
+}
 async function profileCustom(b){const p=await currentPlayer(b),c={...p.player.cosmetics};if(typeof b.nickname==='string')c.nickname=name(b.nickname);
  if(typeof b.motto==='string')c.motto=String(b.motto).trim().slice(0,80);if(['signal','steel','amber','frost'].includes(b.theme))c.theme=b.theme;
  if(['mc','crimson_knight','silver_knight'].includes(b.character)||Object.prototype.hasOwnProperty.call(p.player.recruitment?.owned||{},b.character))c.featured=b.character;
@@ -347,6 +360,7 @@ async function call(path,body={}){
  if(path==='/api/tutorial/state')return tutorialState(body);
  if(path==='/api/tutorial/progress')return tutorialProgress(body);
  if(path==='/api/recruitment/state')return recruitmentState(body);
+ if(path==='/api/recruitment/tutorial-draw')return recruitmentTutorialDraw(body);
  if(path==='/api/recruitment/pull')return recruitmentPull(body);
  if(path==='/api/profile/customize')return profileCustom(body);
  if(path==='/api/story/progress')return storyProgress(body);
