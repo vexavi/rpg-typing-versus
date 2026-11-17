@@ -1,0 +1,68 @@
+/* v86 shared student-page system. Recruitment intentionally remains independent. */
+:root{--student-accent:#f0f500;--student-ink:#242729;--student-paper:#f3f3f0;--student-line:#bcbfbe}
+body.profile-client .top,body.workshop-client .workshop-top{
+  background:linear-gradient(108deg,#444648,#e8e8e6 40%,#d5d6d3);
+  color:#252729;border-bottom:1px solid #bfc1bf;gap:12px;
+}
+body.profile-client .topnav,body.workshop-client .student-workshop-nav{
+  display:flex;align-items:stretch;justify-content:flex-end;flex-wrap:wrap;gap:4px;
+}
+body.profile-client .topnav a,body.workshop-client .student-workshop-nav a{
+  display:grid;place-items:center;min-height:42px;padding:10px 13px;
+  border:1px solid #afb3b0;background:#f5f5f2;color:#252729;
+  font:850 11px ui-monospace,Consolas,monospace;white-space:nowrap;
+  text-decoration:none;letter-spacing:0;
+}
+body.profile-client .topnav a:hover,body.workshop-client .student-workshop-nav a:hover,
+body.profile-client .topnav a.current,body.workshop-client .student-workshop-nav a.current{
+  background:var(--student-accent);border-color:#555954;
+}
+body.profile-client button:focus-visible,body.profile-client a:focus-visible,
+body.workshop-client button:focus-visible,body.workshop-client a:focus-visible{
+  outline:3px solid #7c8200;outline-offset:2px;
+}
+body.profile-client .quickbtn.active,body.profile-client .pick.active{
+  border-left-color:#a7af00;background:#f0f1e9;outline:1px solid #9a9e88;
+}
+body.workshop-client{background:#26282a;color:#242729;font-family:system-ui,"Segoe UI","Noto Sans JP",sans-serif}
+body.workshop-client .workshop{background:linear-gradient(180deg,#303234 0%,#292c2f 52%,#f3f3f0 52%)}
+body.workshop-client .brand strong{font:900 15px ui-monospace,Consolas,monospace;letter-spacing:-.03em;color:#252729}
+body.workshop-client .brand span{color:#55595a;letter-spacing:0}
+body.workshop-client .bank{background:#333639;border-left:4px solid var(--student-accent)}
+body.workshop-client .bank strong{color:var(--student-accent)}
+body.workshop-client .workshop-intro{color:#f3f3f0}
+body.workshop-client .eyebrow,body.workshop-client .section-label{color:var(--student-accent)}
+body.workshop-client .workshop-intro h1 em{color:var(--student-accent)}
+body.workshop-client .workshop-intro p{color:#d3d5d3}
+body.workshop-client .workshop-intro .back-recruit{background:#f3f3f0;color:#252729;border:1px solid #979b98}
+body.workshop-client .workshop-main .roster,body.workshop-client .workshop-main .upgrade-panel{
+  background:var(--student-paper);border:1px solid #babdba;color:var(--student-ink);
+}
+body.workshop-client .workshop-main .section-label{color:#414547}
+body.workshop-client .roster-item,body.workshop-client .tier{
+  background:#fff;color:#282a2c;border:1px solid #b6b9b6;min-height:44px;
+}
+body.workshop-client .roster-item.selected,body.workshop-client .tier.selected{
+  border:2px solid #929b00;background:#eef0e6;
+}
+body.workshop-client .roster-item small,body.workshop-client .tier small{color:#616568}
+body.workshop-client .tier .tier-state{color:#464b4d}
+body.workshop-client .upgrade-hint,body.workshop-client .tier-progress,
+body.workshop-client .cost-box span,body.workshop-client .policy{color:#565b5d}
+body.workshop-client .cost-box{background:#e4e6e0;border-left:4px solid #9ba400}
+body.workshop-client .cost-box strong{color:#313637}
+body.workshop-client .aura-action{background:var(--student-accent);border:1px solid #242629;color:#1a1d1e}
+body.workshop-client #message{color:#313637}
+body.workshop-client .operator-stage{background:#24272b;border:1px solid #6c7071}
+body.workshop-client .nameplate{background:#303437;border-left:5px solid var(--student-accent)}
+body.workshop-client .stage-top span:last-child{color:var(--student-accent)}
+@media(max-width:850px){
+ body.profile-client .top,body.workshop-client .workshop-top{flex-wrap:wrap;padding:12px 14px}
+ body.profile-client .topnav,body.workshop-client .student-workshop-nav{width:100%;justify-content:flex-start;gap:5px}
+ body.profile-client .topnav a,body.workshop-client .student-workshop-nav a{min-height:40px;padding:9px 11px}
+ body.workshop-client .bank{margin-left:auto}
+}
+@media(max-width:480px){
+ body.profile-client .topnav a,body.workshop-client .student-workshop-nav a{font-size:10px;padding:9px 8px}
+ body.profile-client .brand,body.workshop-client .brand strong{white-space:normal}
+}

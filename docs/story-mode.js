@@ -45,7 +45,7 @@ function show(html){box.hidden=false;view='active';box.innerHTML=`<div class="st
 function hide(){clearTimeout(autoTimer);autoTimer=0;box.hidden=true;box.innerHTML='';view='closed'}
 function errorScreen(msg){show(`<div class="story-modal"><h1>STORY MODE</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=hide}
 const starMarkup=(n=0)=>`<span class="story-stars" aria-label="${n} of 4 stars">${Array.from({length:4},(_,i)=>`<span class="${i<n?'earned':'empty'}" aria-hidden="true">★</span>`).join('')}</span>`;
-function openChapter(chIndex,preferred=null){
+function openChapter(chIndex,preferred=null,focusTarget=''){
  const eligible=chapters.map((ch,i)=>({ch,i})).filter(x=>isUnlocked(x.ch.stages[0].id));
  activeChapter=eligible.some(x=>x.i===chIndex)?chIndex:(eligible.at(-1)?.i??0);
  const ch=chapters[activeChapter];const visible=ch.stages.filter(s=>isUnlocked(s.id));
@@ -65,15 +65,23 @@ function openChapter(chIndex,preferred=null){
  const done=completed.has(st.id),rating=bestStars[st.id];
  const stats=st.type==='story-only'?'<span class="story-status-tag">STORY</span>':(done?`<div class="story-panel-stars">${starMarkup(rating??0)}</div>`:`<div class="story-panel-stars">${starMarkup(0)}</div>`);
  const stageDesc=esc(st.description||'');
- const allowedCh=eligible.map(x=>`<button type="button" data-chapter="${x.i}" class="story-chapter-tab ${x.i===activeChapter?'active':''}" aria-pressed="${x.i===activeChapter}">${esc(x.ch.title)}</button>`).join('');
- show(`<div class="story-world"><div class="story-world-top"><button id="story-close" type="button" class="story-map-back" aria-label="Back to Mode Select">‹ <span>BACK</span></button><div class="story-map-title">STORY MODE</div><nav class="story-chapter-tabs" aria-label="Chapters">${allowedCh}</nav></div><div class="story-world-main"><section class="story-landscape" aria-label="Story stages"><div class="story-map-scroll" id="story-map-scroll"><div class="story-map-canvas" style="width:${w}px"><svg class="story-lines" viewBox="0 0 ${w} ${mapHeight}" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>${nodes}</div></div><div class="story-map-corner">CHAPTER ${esc(ch.id)} <strong>${visible.length} / ${ch.stages.length}</strong></div></section><aside class="story-side" aria-label="Selected stage"><div class="story-side-eyebrow">CHAPTER ${esc(ch.id)}</div><h2>${esc(ch.title)}</h2>${ch.subtitle?`<div class="story-side-subtitle">${esc(ch.subtitle)}</div>`:''}<div class="story-side-rule"></div><span class="story-selected-id">OPERATION ${esc(st.id)}</span><h3>${esc(st.title)}</h3><div class="story-stage-kind">${st.type==='story-only'?'STORY':st.type==='battle-only'?'BATTLE':'STORY / BATTLE'}</div><div class="story-side-stars">${stats}</div><div class="story-stars-note">${st.type==='story-only'?'No combat rating':done?'BEST RESULT':'CLEAR RATING'}</div>${stageDesc?`<p class="story-stage-description">${stageDesc}</p>`:''}<div class="story-side-spacer"></div><button type="button" id="story-start" class="story-start">${done?'REPLAY':'START'} <span>▶</span></button></aside></div></div>`);
+ const allowedCh=eligible.map(x=>`<button type="button" data-chapter="${x.i}" class="story-chapter-tab ${x.i===activeChapter?'active':''}" aria-pressed="${x.i===activeChapter}" aria-label="${esc(x.ch.title)} chapter">${esc(x.ch.title)}</button>`).join('');
+ show(`<div class="story-world"><div class="story-world-top"><button id="story-close" type="button" class="story-map-back" aria-label="Back to Mode Select">‹ <span>MODE SELECT</span></button><div class="story-map-title">STORY MODE</div><nav class="story-chapter-tabs" aria-label="Chapters">${allowedCh}</nav></div><div class="story-world-main"><section class="story-landscape" aria-label="Story stages"><div class="story-map-scroll" id="story-map-scroll"><div class="story-map-canvas" style="width:${w}px"><svg class="story-lines" viewBox="0 0 ${w} ${mapHeight}" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>${nodes}</div></div><div class="story-map-corner">CHAPTER ${esc(ch.id)} <strong>${visible.length} / ${ch.stages.length}</strong></div></section><aside class="story-side" aria-label="Selected stage"><div class="story-side-eyebrow">CHAPTER ${esc(ch.id)}</div><h2>${esc(ch.title)}</h2>${ch.subtitle?`<div class="story-side-subtitle">${esc(ch.subtitle)}</div>`:''}<div class="story-side-rule"></div><span class="story-selected-id">OPERATION ${esc(st.id)}</span><h3>${esc(st.title)}</h3><div class="story-stage-kind">${st.type==='story-only'?'STORY':st.type==='battle-only'?'BATTLE':'STORY / BATTLE'}</div><div class="story-side-stars">${stats}</div><div class="story-stars-note">${st.type==='story-only'?'No combat rating':done?'BEST RESULT':'CLEAR RATING'}</div>${stageDesc?`<p class="story-stage-description">${stageDesc}</p>`:''}<div class="story-side-spacer"></div><button type="button" id="story-start" class="story-start">${done?'REPLAY':'START'} <span>▶</span></button></aside></div></div>`);
+ view='map';
  box.querySelector('#story-close').onclick=hide;
- box.querySelectorAll('[data-chapter]').forEach(b=>b.onclick=()=>openChapter(Number(b.dataset.chapter)));
- box.querySelectorAll('[data-stage]').forEach(b=>b.onclick=()=>{selectedId=b.dataset.stage;openChapter(activeChapter,selectedId)});
+ box.querySelectorAll('[data-chapter]').forEach(b=>b.onclick=()=>openChapter(Number(b.dataset.chapter),null,'chapter'));
+ box.querySelectorAll('[data-stage]').forEach(b=>b.onclick=()=>{selectedId=b.dataset.stage;openChapter(activeChapter,selectedId,'stage')});
  box.querySelector('#story-start').onclick=()=>{if(!isUnlocked(st.id))return;hide();startFn?.(st)};
  const scroller=box.querySelector('#story-map-scroll');const target=box.querySelector('.story-map-node.selected');if(scroller&&target){const x=target.offsetLeft-scroller.clientWidth/2+target.offsetWidth/2;scroller.scrollLeft=Math.max(0,x)}
+ if(focusTarget==='stage')target?.focus({preventScroll:true});
+ else if(focusTarget==='chapter')box.querySelector('.story-chapter-tab.active')?.focus({preventScroll:true});
 }
 async function openMap(fn,preferred){if(typeof fn==='function')startFn=fn;try{await loadManifest();await loadProgress();openChapter(activeChapter,preferred)}catch(e){errorScreen(e.message||'Story unavailable')}}
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape' && !box.hidden && view==='map'){
+  e.preventDefault();hide();
+ }
+});
 function safeImage(src){return /^story\/images\/[\w.-]+\.(png|webp|jpg|jpeg|svg)$/i.test(src||'')?src:null}
 function showSlides(scenes,stageId,phase){
  clearTimeout(autoTimer);autoTimer=0;

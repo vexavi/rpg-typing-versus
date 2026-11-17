@@ -560,3 +560,60 @@ body.adventure-client .ranking-actions{display:grid;grid-template-columns:repeat
  body.adventure-client .ranking-avatar{width:29px;height:29px;flex-basis:29px}
  body.adventure-client .ranking-name{font-size:12px}
 }
+
+/* v86: unified student menu and controls. Recruitment retains its own special UI. */
+body.adventure-client .overlayBox.modeSelectMenu{
+  width:min(970px,calc(100vw - 24px));
+  max-height:min(88dvh,850px); overflow-y:auto; padding:20px 24px;
+}
+body.adventure-client .overlayBox.modeSelectMenu #overlayTitle{
+  position:sticky;top:-20px;z-index:1;margin:-20px -24px 15px;
+  padding:19px 24px 12px;background:#f3f3f0;border-bottom:1px solid #d0d2cf;
+  font-size:clamp(21px,3vw,29px)
+}
+body.adventure-client .overlayBox.modeSelectMenu .overlayChoices{
+  display:grid;grid-template-columns:1fr;gap:19px;margin-top:0;
+}
+body.adventure-client .student-mode-group{min-width:0}
+body.adventure-client .student-mode-heading{
+  font:900 14px ui-monospace,Consolas,monospace;letter-spacing:.08em;
+  color:#303336;margin:0 0 3px;
+}
+body.adventure-client .student-mode-subtitle{
+  color:#666a6d;font-size:12px;margin:0 0 9px;line-height:1.35
+}
+body.adventure-client .student-mode-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+body.adventure-client .overlayBox .student-mode-card{
+  min-width:0;min-height:72px;display:flex;flex-direction:column;gap:5px;
+  justify-content:center;align-items:flex-start;text-align:left;
+  padding:11px 13px;cursor:pointer;font:inherit;
+}
+body.adventure-client .overlayBox .student-mode-card .title{display:block;margin:0;font-size:15px}
+body.adventure-client .student-mode-desc{display:block;font-size:12px;line-height:1.3;color:#626669}
+body.adventure-client .student-mode-note{font-size:10px;font-weight:850;color:#777b7d;line-height:1.3}
+body.adventure-client .overlayBox .student-mode-card:disabled{
+  cursor:not-allowed;opacity:.6;background:#e9eae7;border-left-color:#b5b7b4
+}
+body.adventure-client .overlayBox .student-mode-card:focus-visible,
+body.adventure-client .overlayBox button:focus-visible,
+body.adventure-client .uiRow button:focus-visible{
+  outline:3px solid #767d00;outline-offset:2px
+}
+body.adventure-client .uiRow .menuList>li{list-style:none;display:block;min-width:0}
+body.adventure-client .uiRow .menuItem{
+  width:100%;background:transparent;border:1px solid transparent;text-align:left;
+  display:flex;gap:9px;align-items:center;font:inherit;cursor:pointer;
+  min-height:37px;padding:8px 10px;color:#242628
+}
+body.adventure-client .uiRow #runCmd{margin-top:0}
+body.adventure-client .uiRow .menuList{gap:4px 12px}
+body.adventure-client .overlayBox .choiceBtn:disabled{cursor:not-allowed}
+@media(max-width:700px){
+  body.adventure-client .overlayBox.modeSelectMenu{width:calc(100vw - 18px);padding:14px 13px;max-height:92dvh}
+  body.adventure-client .overlayBox.modeSelectMenu #overlayTitle{top:-14px;margin:-14px -13px 13px;padding:13px}
+  body.adventure-client .student-mode-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  body.adventure-client .overlayBox .student-mode-card{min-height:70px;padding:9px}
+  body.adventure-client .overlayBox .student-mode-card .title{font-size:14px}
+  body.adventure-client .student-mode-desc{font-size:11px}
+}
+@media(max-width:370px){body.adventure-client .student-mode-grid{grid-template-columns:1fr}}

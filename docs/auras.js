@@ -17,9 +17,12 @@
  }
  function current(){return core.state(player?.recruitment?.auras?.[selected]);}
  function shards(){return Number(player?.recruitment?.shards)||0;}
+ function restoreSelectedFocus(list,field,value){
+  for(const b of document.querySelectorAll(list))if(b.dataset[field]===String(value)){b.focus({preventScroll:true});break;}
+ }
  function render(){if(!player)return;characters=collection();if(!characters.some(x=>x.id===selected))selected=characters[0]?.id||'crimson_knight';
   const ch=characters.find(x=>x.id===selected),state=current();$('shards').textContent=shards().toLocaleString();
-  $('characterList').innerHTML=characters.map(c=>`<button type="button" class="roster-item ${c.id===selected?'selected':''}" data-char="${esc(c.id)}"><span>${c.img?`<img class="roster-icon" loading="lazy" src="${esc(c.img)}" alt="">`:'<span class="roster-placeholder">◇</span>'}</span>${esc(c.name)}<small>${esc(core.names[core.state(player.recruitment.auras?.[c.id]).equipped])} AURA</small></button>`).join('');
+  $('characterList').innerHTML=characters.map(c=>`<button type="button" class="roster-item ${c.id===selected?'selected':''}" aria-pressed="${c.id===selected}" data-char="${esc(c.id)}"><span>${c.img?`<img class="roster-icon" loading="lazy" src="${esc(c.img)}" alt="">`:'<span class="roster-placeholder">◇</span>'}</span>${esc(c.name)}<small>${esc(core.names[core.state(player.recruitment.auras?.[c.id]).equipped])} AURA</small></button>`).join('');
   $('characterName').textContent=ch.name;$('rarity').textContent=ch.rarity;$('equippedName').textContent=`EQUIPPED · ${state.equipped===0?'NO AURA':core.names[state.equipped]+' AURA'}`;
   $('previewTag').textContent=preview===state.equipped?'EQUIPPED LOOK':'AURA PREVIEW';
   $('characterArt').hidden=!ch.img;$('noArt').hidden=!!ch.img;if(ch.img){$('characterArt').src=ch.img;$('characterArt').alt=`${ch.name} — ${core.names[preview]} Aura preview`;}
@@ -50,8 +53,8 @@
   try{await loadCatalog();await refresh();notice('Auras are cosmetic. Your shared shard balance is saved in Firebase.');}
   catch(e){notice(e?.message||'Could not load your operator collection.');}
  }
- document.getElementById('characterList').addEventListener('click',e=>{const target=e.target.closest('[data-char]');if(!target||working)return;selected=target.dataset.char;preview=core.state(player?.recruitment?.auras?.[selected]).equipped;notice('');render()});
- document.getElementById('tierList').addEventListener('click',e=>{const target=e.target.closest('[data-tier]');if(!target||working)return;preview=Number(target.dataset.tier);notice(preview>current().level?'Preview only — unlock tiers in order.':'');render()});
+ document.getElementById('characterList').addEventListener('click',e=>{const target=e.target.closest('[data-char]');if(!target||working)return;selected=target.dataset.char;preview=core.state(player?.recruitment?.auras?.[selected]).equipped;notice('');render();restoreSelectedFocus('#characterList [data-char]','char',selected)});
+ document.getElementById('tierList').addEventListener('click',e=>{const target=e.target.closest('[data-tier]');if(!target||working)return;preview=Number(target.dataset.tier);notice(preview>current().level?'Preview only — unlock tiers in order.':'');render();restoreSelectedFocus('#tierList [data-tier]','tier',preview)});
  $('auraAction').addEventListener('click',async()=>{
   if(!player||working)return;const state=current(),action=preview>state.level?'upgrade':'equip';const target=preview;
   let proposal;try{proposal=core.change(action,state,shards(),target);}catch(e){notice(e.message);return;}

@@ -96,15 +96,26 @@ function showModeSelect(){
  $('trainingCoach').textContent='Select Recruitment from Mode Select.';
  $('wordLane').replaceChildren();$('answerInput').disabled=true;
  $('tutorialModeChoices').innerHTML='';
- const entries=['Story Mode','Practice Mode','Normal Mode','Extra Mode','Challenge Mode','All Grades Challenge','Recruitment','How to Play','Profile','Tournament'];
- for(const title of entries){
-  const button=document.createElement('button');button.type='button';button.className='choiceBtn'+(title==='Recruitment'?' tutorial-target':' disabled');
-  button.disabled=title!=='Recruitment';button.innerHTML=`<span class="title">${escapeHtml(title)}</span>`;
-  if(title==='Recruitment')button.addEventListener('click',()=>{
-   location.assign((demo?'recruitment-preview-v84.html':'recruitment.html')+'?tutorial='+(replay?'demo':'1'));
-  });
-  $('tutorialModeChoices').appendChild(button);
- }
+ const section=(heading,items)=>{
+  const group=document.createElement('section');group.className='student-mode-group';
+  const h=document.createElement('h3');h.className='student-mode-heading';h.textContent=heading;group.appendChild(h);
+  const grid=document.createElement('div');grid.className='student-mode-grid';group.appendChild(grid);
+  for(const [title,description] of items){
+   const button=document.createElement('button');button.type='button';
+   button.className='choiceBtn student-mode-card'+(title==='Recruitment'?' tutorial-target':' disabled');
+   button.disabled=title!=='Recruitment';
+   const label=document.createElement('span');label.className='title';label.textContent=title;button.appendChild(label);
+   const desc=document.createElement('span');desc.className='student-mode-desc';desc.textContent=description;button.appendChild(desc);
+   if(title==='Recruitment')button.addEventListener('click',()=>{
+    location.assign((demo?'recruitment-preview-v84.html':'recruitment.html')+'?tutorial='+(replay?'demo':'1'));
+   });
+   grid.appendChild(button);
+  }
+  $('tutorialModeChoices').appendChild(group);
+ };
+ section('PLAY', [['Story','Chapters and battles'],['Practice','Practice typing'],['Normal','Main campaign'],['Extra','Harder stages'],['Challenge','Special stage'],['All Grades Challenge','Shared leaderboard run']]);
+ section('PLAYER', [['Profile','Account and collection'],['Recruitment','Recruit characters'],['Rankings','Compare scores']]);
+ section('MORE', [['How to Play','Replay the tutorial'],['Tournament','Join with your teacher’s QR code']]);
  $('tutorialModeOverlay').classList.add('show');$('tutorialModeOverlay').setAttribute('aria-hidden','false');
  $('tutorialModeChoices').querySelector('.tutorial-target')?.focus({preventScroll:true});
 }

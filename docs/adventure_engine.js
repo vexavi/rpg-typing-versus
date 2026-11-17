@@ -1686,14 +1686,14 @@ const achOverlay = document.getElementById("achOverlay");
     const empty=!entries.length&&!message?'<div class="ranking-empty">NO COMPLETED RUNS YET</div>':'';
     const description=rankingGrade==='all'?'ALL GRADES · IDENTICAL VOCAB & SETTINGS':(rankingGrade.endsWith('b')?'CLASS '+rankingGrade.toUpperCase():'GRADE '+rankingGrade)+' · COMPLETED RUNS ONLY';
     overlayChoices.innerHTML=`<div class="ranking-tabs">
-       <button class="ranking-tab${rankingMode==='normal'?' active':''}" data-mode="normal" type="button">NORMAL</button>
-       <button class="ranking-tab${rankingMode==='extra'?' active':''}" data-mode="extra" type="button">EXTRA</button>
+       <button class="ranking-tab${rankingMode==='normal'?' active':''}" aria-pressed="${rankingMode==='normal'}" data-mode="normal" type="button">NORMAL</button>
+       <button class="ranking-tab${rankingMode==='extra'?' active':''}" aria-pressed="${rankingMode==='extra'}" data-mode="extra" type="button">EXTRA</button>
       </div>
-      <div class="ranking-grades">${PUBLIC_RANKING_GRADES.map(y=>`<button type="button" class="ranking-grade${rankingGrade===y?' active':''}" data-grade="${y}">${y==='all'?'ALL GRADES':y+'年生'}</button>`).join('')}</div>
+      <div class="ranking-grades">${PUBLIC_RANKING_GRADES.map(y=>`<button type="button" class="ranking-grade${rankingGrade===y?' active':''}" aria-pressed="${rankingGrade===y}" data-grade="${y}">${y==='all'?'ALL GRADES':y+'年生'}</button>`).join('')}</div>
       <div class="ranking-meta">${description}${data?.ruleset?' · RULESET '+escapeHtml(data.ruleset.slice(-8)):''}</div>
       <div class="ranking-list">${top}${empty}</div>${own}${notice}
       ${rankingGrade==='all'?'<button class="ranking-action primary" type="button" data-play-shared>PLAY SHARED CHALLENGE</button>':''}
-      <div class="ranking-actions"><button class="ranking-action" type="button" data-refresh>REFRESH</button><button class="ranking-action primary" type="button" data-back>BACK</button></div>`;
+      <div class="ranking-actions"><button class="ranking-action" type="button" data-refresh>REFRESH</button><button class="ranking-action primary" type="button" data-back>← MODE SELECT</button></div>`;
     overlayChoices.querySelectorAll('[data-rank-icon]').forEach(img=>{
       img.addEventListener('error',()=>{img.src='icon01.webp';},{once:true});
     });
@@ -2828,133 +2828,97 @@ function showModeSelectScreen(){
   overlayChoices.classList.add("show");
   overlayChoices.innerHTML = "";
 
-  const addBtn = ({title, desc, note, disabled, onClick}) => {
-    const b = document.createElement("div");
-    b.className = "choiceBtn" + (disabled ? " disabled" : "");
-    if(disabled){
-      b.style.opacity = "0.45";
-      b.style.pointerEvents = "none";
-      b.style.filter = "grayscale(.12)";
+  // v86: Keep every student destination on a single screen, grouped by purpose.
+  // Native buttons support Enter/Space, disabled state and screen readers.
+  const makeGroup = (name, sub) => {
+    const section = document.createElement('section');
+    section.className = 'student-mode-group';
+    const heading = document.createElement('h3');
+    heading.className = 'student-mode-heading';
+    heading.textContent = name;
+    section.appendChild(heading);
+    if(sub){
+      const description = document.createElement('p');
+      description.className = 'student-mode-subtitle';
+      description.textContent = sub;
+      section.appendChild(description);
     }
-    b.innerHTML = `
-      <div class="title">${escapeHtml(title)}</div>
-    `;
-    if(!disabled){
-      b.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
-    }
-    overlayChoices.appendChild(b);
+    const grid = document.createElement('div');
+    grid.className = 'student-mode-grid';
+    section.appendChild(grid);
+    overlayChoices.appendChild(section);
+    return grid;
   };
-
-
-  addBtn({
-    title: "Story Mode",
-    desc: "Chapters · picture scenes · battles",
-    disabled: false,
-    onClick: () => {
-      if(!window.RPG_STORY){ pushMsg("Story files missing.",true); return; }
-      window.RPG_STORY.openMap(launchStoryStage);
+  const addBtn = (grid, {title, desc='', note='', disabled=false, onClick}) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'choiceBtn student-mode-card';
+    button.disabled = !!disabled;
+    const heading = document.createElement('span');
+    heading.className = 'title';
+    heading.textContent = title;
+    button.appendChild(heading);
+    if(desc){
+      const detail = document.createElement('span');
+      detail.className = 'student-mode-desc';
+      detail.textContent = desc;
+      button.appendChild(detail);
     }
-  });
-
-  addBtn({
-    title: "Practice Mode",
-    desc: "",
-    note: "いつでもOK",
-    disabled: false,
-    onClick: () => {
-      setMode("practice");
-      showOverlay(false);
-      startGame();
+    if(note){
+      const state = document.createElement('span');
+      state.className = 'student-mode-note';
+      state.textContent = note;
+      button.appendChild(state);
     }
-  });
+    if(!disabled && typeof onClick === 'function') button.addEventListener('click', e => {
+      e.stopPropagation();
+      onClick();
+    });
+    grid.appendChild(button);
+    return button;
+  };
+  const play = makeGroup('PLAY', 'Choose a game mode');
+  addBtn(play, {title:'Story', desc:'Chapters and battles', onClick:()=>{
+    if(!window.RPG_STORY){pushMsg('Story unavailable.',true);return;}
+    window.RPG_STORY.openMap(launchStoryStage);
+  }});
+  addBtn(play, {title:'Practice', desc:'Practice typing', onClick:()=>{
+    setMode('practice');showOverlay(false);startGame();
+  }});
+  addBtn(play, {title:'Normal', desc:'Main campaign', onClick:()=>{
+    setMode('normal');showOverlay(false);startGame();
+  }});
+  addBtn(play, {title:'Extra', desc:'Harder stages', disabled:!normalCleared,
+    note:normalCleared?'UNLOCKED':'CLEAR NORMAL TO UNLOCK',onClick:()=>{
+      setMode('extra');showOverlay(false);startGame();
+    }});
+  addBtn(play, {title:'Challenge', desc:'Special stage', disabled:!extraCleared,
+    note:extraCleared?'UNLOCKED':'CLEAR EXTRA TO UNLOCK',onClick:()=>{
+      setMode('challenge');showOverlay(false);startGame();
+    }});
+  addBtn(play, {title:'All Grades Challenge', desc:'Shared leaderboard run', onClick:()=>{
+    setMode('shared');showOverlay(false);startGame();
+  }});
 
-  addBtn({
-    title: "Normal Mode",
-    desc: "",
-    note: normalCleared ? "Cleared ✓（Extra が選べます）" : "Clear すると Extra 解放",
-    disabled: false,
-    onClick: () => {
-      setMode("normal");
-      showOverlay(false);
-      startGame();
-    }
-  });
+  const player = makeGroup('PLAYER', 'Your account and progress');
+  addBtn(player, {title:'Profile', desc:'Account and collection', onClick:()=>{
+    window.location.assign('profile.html');
+  }});
+  addBtn(player, {title:'Recruitment', desc:'Recruit characters', onClick:()=>{
+    window.location.assign('recruitment.html');
+  }});
+  addBtn(player, {title:'Rankings', desc:'Compare scores', onClick:()=>{
+    void openRankings('normal');
+  }});
 
-  addBtn({
-    title: "Extra Mode",
-    desc: "",
-    note: normalCleared ? "Unlocked ✓" : "LOCKED: Normal をクリアしてね",
-    disabled: !normalCleared,
-    onClick: () => {
-      setMode("extra");
-      showOverlay(false);
-      startGame();
-    }
-  });
-
-  addBtn({
-    title: "Challenge Mode",
-    desc: "",
-    note: extraCleared ? "Unlocked ✓ / 1 Stage" : "LOCKED: Extra をクリアしてね",
-    disabled: !extraCleared,
-    onClick: () => {
-      setMode("challenge");
-      showOverlay(false);
-      startGame();
-    }
-  });
-
-  addBtn({
-    title: "All Grades Challenge",
-    disabled: false,
-    onClick: () => {
-      setMode("shared");
-      showOverlay(false);
-      startGame();
-    }
-  });
-
-  addBtn({
-    title: "Recruitment",
-    desc: "Featured characters and daily 10-pull",
-    disabled: false,
-    onClick: () => { window.location.href = 'recruitment.html'; }
-  });
-
-  addBtn({
-    title: "How to Play",
-    desc: "Replay the tutorial without rewards",
-    disabled: false,
-    onClick: () => { window.location.href = 'tutorial.html?replay=1'; }
-  });
-
-  // Shared Profile already includes achievements under its Adventure section.
-  addBtn({
-    title: "Profile",
-    desc: "Player details and achievements",
-    disabled: false,
-    onClick: () => {
-      window.location.href = 'profile.html';
-    }
-  });
-
-  addBtn({
-    title: "Tournament",
-    desc: "",
-    disabled: false,
-    onClick: () => {
-      // Preserve the Adventure Card for the tournament entry screen without placing its code in the URL.
-      try{sessionStorage.setItem('rpgReturnToTournament', '1');}catch(_){}
-      window.alert('Join a classroom tournament by scanning your teacher’s tournament QR code.');
-    }
-  });
-
-  addBtn({
-    title: "Rankings",
-    desc: "",
-    disabled: false,
-    onClick: () => { void openRankings("normal"); }
-  });
+  const other = makeGroup('MORE', 'Help and classroom play');
+  addBtn(other, {title:'How to Play', desc:'Replay the tutorial', onClick:()=>{
+    window.location.assign('tutorial.html?replay=1');
+  }});
+  addBtn(other, {title:'Tournament', desc:'Join with your teacher’s QR code',
+    note:'SCAN CLASSROOM QR TO JOIN', disabled:true});
+  const box = overlayChoices.closest('.overlayBox');
+  if(box) box.scrollTop = 0;
 
 }
 // ---- Game state ----
@@ -3348,7 +3312,8 @@ function updatePauseCmdUI(){
   }
 
   pauseCmd.classList.toggle("disabled", disabled);
-    pauseCmd.classList.toggle("crossedOut", isExtraStage2());
+  pauseCmd.disabled = disabled;
+  pauseCmd.classList.toggle("crossedOut", isExtraStage2());
   pauseCmdText.textContent = label;
 }
 
@@ -3361,6 +3326,10 @@ function updatePauseCmdUI(){
 
 function updateUI(){
     const stage = STAGES[stageIndex] || null;
+    // Menu destinations are safe only outside an active run.
+    const accountBlocked=['playing','paused','countdown','dialogue','stageclear','continuePrompt'].includes(gameState);
+    if(profileCmd)profileCmd.disabled=accountBlocked;
+    if(achievementsCmd)achievementsCmd.disabled=accountBlocked;
 
 
     // Practice Mode: hide the confusing "Start（モード選択）" command (it doesn't work during play anyway)
@@ -5295,10 +5264,8 @@ if(state === "landed"){
 
     overlayChoices.classList.add("show");
     overlayChoices.innerHTML = `
-      <div class="choiceBtn" data-act="resume">
-        <div class="title">Resume</div>
-
-      </div>
+      <button type="button" class="choiceBtn" data-act="resume"><span class="title">RESUME</span></button>
+      <button type="button" class="choiceBtn" data-act="modes"><span class="title">← MODE SELECT</span></button>
     `;
 
     const onChoiceClick = (e) => {
@@ -5306,6 +5273,10 @@ if(state === "landed"){
       if(!btn) return;
       const act = btn.getAttribute("data-act");
       if(act === "resume") resumeGame(true);
+      if(act === "modes"){
+        // Leave from pause deliberately; cancel must keep the current battle paused.
+        if(window.confirm('Leave this run and return to Mode Select?')) resetGame(false);
+      }
     };
 
     cleanupPauseListeners();
@@ -6518,16 +6489,13 @@ if(gameState === "paused"){
 
   });
 
-profileCmd && profileCmd.addEventListener("click", () => {
-  // Allow profile viewing/editing from safe states only
-  if(["playing","paused","countdown","dialogue","stageclear","continuePrompt"].includes(gameState)) return;
-  try{ tryPlayBgmFromGesture(); }catch(_){/* ignore */}
-  openProfileModal(false);
+profileCmd && profileCmd.addEventListener('click', () => {
+  if(['playing','paused','countdown','dialogue','stageclear','continuePrompt'].includes(gameState)) return;
+  window.location.assign('profile.html');
 });
-achievementsCmd && achievementsCmd.addEventListener("click", () => {
-  if(["playing","paused","countdown","dialogue","stageclear","continuePrompt"].includes(gameState)) return;
-  try{ tryPlayBgmFromGesture(); }catch(_){/* ignore */}
-  openAchievementsModal();
+achievementsCmd && achievementsCmd.addEventListener('click', () => {
+  if(['playing','paused','countdown','dialogue','stageclear','continuePrompt'].includes(gameState)) return;
+  window.location.assign('profile.html?tab=adventure');
 });
 
 pauseCmd && pauseCmd.addEventListener("click", (e) => {
@@ -6573,6 +6541,7 @@ runCmd.addEventListener("click", () => {
       ex4PlayResetScare();
       return;
     }
+    if(gameState === 'playing' && !window.confirm('Leave this run and return to Mode Select?')) return;
     resetGame();
   });
 
