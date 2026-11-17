@@ -26,7 +26,7 @@
 .scout-card[data-state='hidden'] .panel-slice-bg,.scout-card[data-state='hidden'] .panel-floor-glow{opacity:0}
 .scout-card[data-state='hidden'] .panel-rarity-label,.scout-card[data-state='hidden'] .panel-bottom-ui{opacity:0;visibility:hidden}
 .scout-card[data-state='hidden'] .panel-portrait{filter:brightness(0) contrast(1.4);opacity:0}
-.scout-card[data-state='hidden'] .panel-silhouette-stage{opacity:1}
+.scout-card[data-state='hidden'] .panel-silhouette-stage{opacity:0;visibility:hidden}
 .scout-card[data-state='revealed'] .panel-silhouette-stage{opacity:1;visibility:visible}.scout-card[data-state='revealed'] .panel-portrait-stage{opacity:1}
 .scout-card[data-state='revealed'] .panel-portrait{opacity:1;transform:scale(1)}
 /* Panel entrance, then simultaneous black silhouettes. */
@@ -74,7 +74,7 @@
 .panel-silhouette-stage::before{content:"";position:absolute;z-index:-1;left:7%;right:7%;bottom:0;height:80%;background:radial-gradient(ellipse at center bottom,color-mix(in srgb,var(--rarity-accent) 72%,transparent),transparent 74%);opacity:0;transition:opacity .35s;pointer-events:none}
 .scout-card[data-state='revealed'] .panel-silhouette-stage::before{opacity:.72}
 .scout-card[data-state='revealed'] .panel-silhouette{opacity:1;filter:brightness(0) drop-shadow(0 0 1.1px #e8e4efb0) drop-shadow(0 0 9px var(--rarity-accent));}
-.scout-showcase[data-phase='results'] .panel-silhouette-stage{opacity:1!important;visibility:visible!important}
+.scout-showcase[data-phase='results'] .scout-card[data-state='revealed'] .panel-silhouette-stage{opacity:1!important;visibility:visible!important}
 /* Full-width beam crosses each column once per rarity; no hopping between matching slots. */
 .scout-scan-beam{left:0;width:4px;transform:translateX(-50%);background:#fff;box-shadow:0 0 13px 4px var(--beam-color,#a98dff),0 0 35px 10px var(--beam-color,#a98dff);transition:none;}
 .scout-scan-beam.is-sweeping{animation:scout-full-sweep var(--sweep-ms,1100ms) linear both;}
@@ -83,3 +83,11 @@
 .scout-showcase[data-phase='scanning'][data-scan-rarity='6'] .scout-card.scout-six[data-state='revealed']{z-index:8;box-shadow:0 0 26px #ffb567a1,inset 0 0 34px #ffb56755}
 .scout-showcase[data-phase='results'] .scout-card{filter:none!important;opacity:1!important}
 @media(prefers-reduced-motion:reduce){.scout-scan-beam.is-sweeping{animation:none;opacity:0}}
+
+/* v86.18: No character-shaped spoilers before the slot itself is revealed.
+   Hidden cards display only a neutral, anonymous panel.
+   On reveal, both full-color portrait and its persistent black silhouette appear. */
+.scout-card[data-state='hidden'] .panel-silhouette-stage,
+.scout-card[data-state='hidden'] .panel-portrait-stage{opacity:0;visibility:hidden}
+.scout-card[data-state='revealed'] .panel-silhouette-stage,
+.scout-card[data-state='revealed'] .panel-portrait-stage{opacity:1;visibility:visible}
