@@ -150,6 +150,8 @@ function lesson(i){
  $('lessonNumber').textContent=i;$('stepCounter').textContent=`LESSON ${String(i).padStart(2,'0')} / 04`;
  $('lessonTitle').textContent=titles[i];$('lessonObjective').textContent=hints[i];
  $('trainingCoach').textContent=hints[i];
+ // Lesson 4 uses its own separate instruction window next to Mode Select.
+ $('trainingCoach').hidden=i===4;
  $('answerInput').disabled=i===4;
  $('progressText').textContent=`0 / ${(samples[i]||[]).length} words cleared`;
  $('bossImg').style.opacity=i===3?'1':'.38';

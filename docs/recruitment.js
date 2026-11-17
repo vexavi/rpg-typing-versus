@@ -11,6 +11,46 @@
  // Lock secondary links before asynchronous Firebase initialization, avoiding a brief bypass.
  if(guided)document.body.classList.add('tutorial-recruitment');
  let tutorialState=null;
+
+ // The main Recruitment artwork stays visible but subdued; the free 10-pull
+ // and coach are cut out of a dark canvas veil. This does NOT change page
+ // geometry or intercept any clicks, including clicks on the free pull.
+ const spotlight=$('recruitmentTutorialSpotlight');
+ const spotlightCtx=spotlight?.getContext('2d');
+ let spotFrame=null,spotLast=0;
+ function drawRecruitmentSpotlight(timestamp=0){
+  if(!guided || !spotlightCtx){return;}
+  if(timestamp-spotLast<130){spotFrame=requestAnimationFrame(drawRecruitmentSpotlight);return;}
+  spotLast=timestamp;
+  const vw=innerWidth,vh=innerHeight;
+  if(spotlight.width!==vw || spotlight.height!==vh){spotlight.width=vw;spotlight.height=vh;}
+  spotlightCtx.clearRect(0,0,vw,vh);
+  // Results and dialogs have their own modal treatment. Do not darken them.
+  const resultOpen=!!document.querySelector('.reveal-overlay:not([hidden])');
+  const dialogOpen=!!document.querySelector('#modalRoot .dialog-back');
+  if(!resultOpen && !dialogOpen){
+   spotlightCtx.fillStyle='rgba(4, 6, 12, .76)';
+   spotlightCtx.fillRect(0,0,vw,vh);
+   const cutouts=[];
+   for(const [selector,pad] of [['[data-pull="10"]',7],['#recruitmentTutorialGuide',7]]){
+    const el=document.querySelector(selector);
+    if(!el||!el.getClientRects().length)continue;
+    const r=el.getBoundingClientRect();
+    const x=Math.max(0,r.left-pad),y=Math.max(0,r.top-pad);
+    const right=Math.min(vw,r.right+pad),bottom=Math.min(vh,r.bottom+pad);
+    if(right>x && bottom>y)cutouts.push({x,y,w:right-x,h:bottom-y,action:selector.includes('data-pull')});
+   }
+   for(const r of cutouts)spotlightCtx.clearRect(r.x,r.y,r.w,r.h);
+   spotlightCtx.strokeStyle='#fff200';spotlightCtx.lineWidth=4;
+   for(const r of cutouts)if(r.action)spotlightCtx.strokeRect(r.x+2,r.y+2,r.w-4,r.h-4);
+  }
+  spotFrame=requestAnimationFrame(drawRecruitmentSpotlight);
+ }
+ function startRecruitmentSpotlight(){
+  if(!guided||!spotlightCtx)return;
+  spotlight.hidden=false;
+  if(spotFrame===null)spotFrame=requestAnimationFrame(drawRecruitmentSpotlight);
+ }
  const safeRosterArt=p=>typeof p==='string' && /^assets\/recruitment\/[a-z0-9_-]+\.webp$/.test(p);
  function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
  function paint(){
@@ -133,6 +173,8 @@
  }
  async function initGuided(){
   document.body.classList.add('tutorial-recruitment');
+  startRecruitmentSpotlight();
+  document.querySelectorAll('.banner-actions button').forEach(el=>{el.disabled=true;el.setAttribute('aria-disabled','true')});
   document.querySelectorAll('[data-pull="1"]').forEach(el=>{el.disabled=true;el.setAttribute('aria-disabled','true')});
   if(tutorialDemo){
    tutorialGuide('Press RECRUIT ×10 to preview the real reveal. No rewards on replay.');
@@ -172,6 +214,7 @@
  async function init(){
   paint();await Promise.all([loadBannerConfig(),loadRoster()]);paint();
   window.RPG_RECRUITMENT_REVEAL?.setFeatured?.(banners[0]?.featured_character_id);
+  if(guided)startRecruitmentSpotlight();
   const cloud=window.RPG_V66;if(!cloud){console.error('Firebase bridge unavailable.');tutorialGuide('Firebase did not load. Reload this page.');return;}
   const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected){tutorialGuide('Firebase connection unavailable. Reload after reconnecting.');return;}
   // Text-only cloud overrides. A missing config doc means use the versioned JSON defaults.

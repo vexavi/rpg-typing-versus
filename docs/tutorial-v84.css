@@ -99,3 +99,45 @@ body.tutorial-client .uiRow .barLine .meter{background:#e0e2e1;opacity:1!importa
  text-transform:none;
  letter-spacing:0;
 }
+
+/* v86.6: separate Lesson 4 coach from the one-column Mode Select dialog. */
+body.tutorial-client #tutorialModeOverlay .tutorial-mode-stage{
+  display:grid;
+  grid-template-columns:minmax(0,510px) minmax(220px,320px);
+  align-items:start;
+  gap:18px;
+  width:min(870px,calc(100vw - 32px));
+  max-height:calc(100dvh - 30px);
+}
+body.tutorial-client #tutorialModeOverlay .overlayBox.modeSelectMenu{
+  width:100%;max-width:none;
+  max-height:calc(100dvh - 30px);
+  min-width:0;
+}
+body.tutorial-client #tutorialModeOverlay .tutorial-lesson-guide{
+  background:#f2f2ef;
+  color:#222428;
+  border-left:7px solid #fff200;
+  padding:16px 18px;
+  box-shadow:0 14px 35px #0009;
+  font:800 15px/1.5 system-ui,Arial,sans-serif;
+  cursor:default;
+}
+body.tutorial-client #tutorialModeOverlay .tutorial-lesson-guide strong{
+  display:block;font-size:12px;letter-spacing:.07em;
+}
+body.tutorial-client #tutorialModeOverlay .tutorial-lesson-guide p{
+  color:#222428!important;font-size:16px;line-height:1.45;margin:8px 0 0;
+}
+@media(max-width:880px){
+ body.tutorial-client #tutorialModeOverlay .tutorial-mode-stage{
+   display:flex; flex-direction:column; gap:10px;
+   align-items:stretch; width:min(510px,calc(100vw - 24px));
+   overflow-y:auto;overscroll-behavior:contain;
+ }
+ body.tutorial-client #tutorialModeOverlay .tutorial-lesson-guide{order:-1;padding:10px 13px;flex-shrink:0}
+ body.tutorial-client #tutorialModeOverlay .tutorial-lesson-guide p{font-size:13px;margin:3px 0 0}
+ body.tutorial-client #tutorialModeOverlay .overlayBox.modeSelectMenu{
+   max-height:none; overflow:visible; flex-shrink:0;
+ }
+}

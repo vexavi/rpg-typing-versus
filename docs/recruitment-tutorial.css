@@ -9,3 +9,22 @@ body.tutorial-recruitment [data-pull="10"]{outline:4px solid #fff;outline-offset
 @keyframes tutorial-pull-pulse{from{box-shadow:0 0 0 3px #efff0044}to{box-shadow:0 0 0 11px #efff0022}}
 @media(max-width:650px){.recruitment-tutorial-guide{width:auto;left:12px;right:12px;bottom:190px;padding:10px 13px}.recruitment-tutorial-guide p{font-size:12px}body.tutorial-recruitment .banner-copy{margin-top:2vh}}
 @media(prefers-reduced-motion:reduce){body.tutorial-recruitment [data-pull="10"]{animation:none}}
+
+/* v86.6 Guided Recruitment: spotlight is a paint-only veil, never catches input. */
+body.tutorial-recruitment #recruitmentTutorialSpotlight{
+  display:block;position:fixed;inset:0;
+  width:100vw;height:100dvh;z-index:7000;pointer-events:none;
+}
+#recruitmentTutorialSpotlight[hidden]{display:none!important}
+body.tutorial-recruitment .recruitment-tutorial-guide{z-index:8000}
+body.tutorial-recruitment [data-pull="10"]{
+  outline:4px solid #fff200;outline-offset:4px;
+  box-shadow:0 0 0 2px #181800,0 0 20px #fff20066;
+}
+body.tutorial-recruitment .banner-actions{pointer-events:none}
+body.tutorial-recruitment .banner-actions button{cursor:not-allowed}
+@media(max-width:650px){
+ body.tutorial-recruitment .recruitment-tutorial-guide{
+   bottom:clamp(168px,23vh,210px);max-height:30vh;overflow:auto;
+ }
+}
