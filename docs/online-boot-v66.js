@@ -3,7 +3,7 @@
  * New cards ask for a username once; no one has to type their QR code.
  * The existing Firebase Spark bridge remains authoritative for registration.
  */
-import {offlineCardCache} from './offline-session.js?v=86.9';
+import {offlineCardCache} from './offline-session.js?v=86.11';
 
 const gate=document.createElement('div');
 gate.id='adventureGate';
@@ -77,11 +77,14 @@ let busy=false;
 let readyPromise=null;
 // Keep the app shell available when the browser has previously visited this site.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./offline-sw.js?v=86.9',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
+  navigator.serviceWorker.register('./offline-sw.js?v=86.11',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
 }
 function installOfflineBridge(){
  window.RPG_V66_DISCONNECTED=true;
  window.RPG_OFFLINE_SESSION=true;
+ // Never allow a stale full-screen cloud error to obscure local practice.
+ document.getElementById('v66OnlineGate')?.remove();
+ document.getElementById('v66Startup')?.remove();
  sessionStorage.setItem('rpgV66Interrupted','1');
  window.RPG_V66={ready:Promise.resolve(false),
   call:async()=>{throw Error('Online Firebase required for this operation.');},
@@ -120,7 +123,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=84.1');
+   await import('./online-spark.js?v=86.11');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
@@ -144,7 +147,7 @@ async function load(identity,progress,{offline=false}={}){
  for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear],['bossTyping_extraCleared_v1',progress?.extra_clear]])localStorage.setItem(key(k),val?'1':'0');
  window.RPG_PERF?.begin('Game scripts');
  for(const file of ['story-mode.js','adventure_rewards.js','guild-coins.js','adventure_engine.js'])await new Promise((resolve,reject)=>{
-   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'86.9':file==='story-mode.js'?'86.9':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
+   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'86.11':file==='story-mode.js'?'86.9':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
  });
  window.RPG_PERF?.end('Game scripts');
  gate.remove();
@@ -152,7 +155,7 @@ async function load(identity,progress,{offline=false}={}){
 async function finish(card){
  status('Loading your saved progress…');
  const vocabPromise=Promise.race([window.RPG_V66.call('/api/vocab/load',{card_code:code,mode:'normal'}),
-   new Promise((_,reject)=>setTimeout(()=>reject(Error('Vocabulary prefetch timed out')),4000))]).catch(e=>{console.info('Vocabulary will refresh on first play:',e?.message||e);return null});
+   new Promise((_,reject)=>setTimeout(()=>reject(Error('Vocabulary prefetch timed out')),7500))]).catch(e=>{console.info('Vocabulary will refresh on first play:',e?.message||e);return null});
  const [progress,profile,vocab]=await Promise.all([
    window.RPG_V66.call('/api/adventure/progress',{card_code:code,action:'load'}),
    window.RPG_V66.call('/api/profile',{card_code:code}).catch(()=>null),

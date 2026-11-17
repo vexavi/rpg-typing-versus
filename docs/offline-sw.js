@@ -1,6 +1,6 @@
 /* v86.9 Offline shell. Public static content only. No Firestore/API responses or card codes. */
 'use strict';
-const VERSION='rpg-shell-v869';
+const VERSION='rpg-shell-v8611';
 const BASE=new URL('./',self.registration.scope);
 const CORE=["adventure.html", "online-boot-v66.js", "offline-session.js", "game-balance-runtime.js", "game-balance-cloud.js", "adventure_engine.js", "story-mode.js", "adventure_rewards.js", "guild-coins.js", "game-mechanics.js", "custom-mechanics.js", "asset-manifest.js", "media-loader.js", "performance-meter.js", "rpg-theme.css", "adventure-ui.css", "story-mode.css", "student-ui.css", "story-map-v54.css", "guild-coins.css", "story/chapters.json", "icon01.webp", "icon02.webp", "assets/boss_hit.m4a", "assets/player_hit.m4a", "assets/card_themes/navy.webp", "assets/card_themes/crimson.webp", "assets/card_themes/forest.webp", "assets/card_themes/violet.webp", "assets/previews/qr-v82-returning.webp", "assets/previews/qr-v82-first-time.webp", "assets/characters/mc.webp", "assets/characters/crimson_knight.webp", "assets/characters/silver_knight.webp", "assets/recruitment/cassian.webp", "assets/recruitment/livia.webp", "assets/recruitment/vex.webp", "assets/recruitment/aveline.webp", "assets/recruitment/nora.webp", "assets/recruitment/elise.webp", "assets/recruitment/hound.webp", "assets/recruitment/alden.webp", "assets/recruitment/vern.webp", "assets/recruitment/mira.webp", "assets/recruitment/tavi.webp", "assets/recruitment/seraphine.webp", "assets/recruitment/isolde.webp", "assets/recruitment/kade.webp", "story/images/map-placeholder.svg", "story/images/placeholder-04.svg", "story/images/placeholder-03.svg", "story/images/placeholder-02.svg", "story/images/placeholder-01.svg"];
 const allowedExt=/\.(?:html|js|css|json|webp|png|jpg|jpeg|svg|m4a|mp3|opus|webm)$/i;
@@ -34,9 +34,9 @@ self.addEventListener('fetch',evt=>{
   const cache=await caches.open(VERSION);
   const saved=await cache.match(key);
   if(!navigator.onLine && saved)return saved;
-  // Cache-first for versioned static assets avoids repeated requests in class.
-  // HTML is network-first to honor new deployments.
-  if(!key.url.endsWith('.html')&&saved)return saved;
+  // Network-first for HTML, JS and CSS: never indefinitely pin an old patch.
+  // Large media remains cache-first for classroom performance.
+  if(!/\.(?:html|js|css)$/i.test(new URL(key.url).pathname)&&saved)return saved;
   try{const response=await fetch(evt.request);
    if(response.ok&&response.type==='basic')await cache.put(key,response.clone());
    return response;

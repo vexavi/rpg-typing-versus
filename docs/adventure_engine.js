@@ -124,6 +124,8 @@ function fitAnswerToRight(wordEl){
   let assignedVocabRevision = 0;
   let assignedRankGrade = null;
   let vocabLastServerSuccess = !!window.RPG_VERIFIED_VOCAB_SYNC_AT;
+  let vocabLastError = '';
+  let vocabServerRejected = false;
   // v86.8: fetched-and-verified vocabulary, scoped to the signed-in Adventure Card.
   // Built-in words and legacy unscoped caches are NOT trusted for a playable run.
   const OFFLINE_VOCAB_KEY = adventureKey('bossTyping_verifiedVocab_v3');
@@ -333,7 +335,7 @@ function fitAnswerToRight(wordEl){
     vocabRefreshMode=mode;
     vocabRefreshInFlight=(async()=>{
       const controller=new AbortController();
-      const timer=setTimeout(()=>controller.abort(),4500);
+      const timer=setTimeout(()=>controller.abort(),11000);
       try{
         const response=await fetch('/api/vocab/load',{
           method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',
@@ -342,6 +344,7 @@ function fitAnswerToRight(wordEl){
         });
         const data=await response.json();
         if(!response.ok||!data.ok)throw Error(data.error||'Vocabulary unavailable.');
+        vocabLastError='';vocabServerRejected=false;
         const nextWords=uniqueWordsByAnswer(data.words);
         // An empty active list is authoritative: never resurrect removed teacher words.
         if(mode==='shared'){
@@ -363,6 +366,10 @@ function fitAnswerToRight(wordEl){
         return true;
       }catch(e){
         console.warn('Classroom vocabulary not loaded:',e);
+        const message=String(e?.message||e).slice(0,230);
+        vocabLastError=e?.name==='AbortError'?'Vocabulary download timed out. Try again when connected.':message;
+        // Missing assignment, revoked cards, and missing pools must not bypass teacher controls.
+        vocabServerRejected=/assign your class|not registered|disabled|expired|card.*missing|card.*match|session|vocabulary pool not installed|Firebase setup incomplete|missing or insufficient permissions/i.test(message);
         vocabLastServerSuccess=false;
         return false;
       }finally{clearTimeout(timer);}
@@ -1827,7 +1834,16 @@ const achOverlay = document.getElementById("achOverlay");
         });}
       }
     }catch(err){
-      if(req===rankingRequest)rankingsView(mode,grade,null,/Card not found|disabled|Register/i.test(String(err?.message||''))?'CARD NOT SYNCED TO LAPTOP':'FIREBASE CONNECTION REQUIRED');
+      if(req===rankingRequest){
+        const errorText=String(err?.message||err||'').slice(0,170);
+        const offline=!ADVENTURE_CONTEXT.online||window.RPG_V66_DISCONNECTED||!navigator.onLine;
+        const reason=offline?'OFFLINE PRACTICE · RECONNECT AND SCAN YOUR CARD FOR LIVE RANKINGS':
+          /Card not found|disabled|Register|session expired/i.test(errorText)?'CARD SESSION INVALID · RE-SCAN YOUR CARD':
+          /index/i.test(errorText)?'RANKINGS INDEX MISSING · ASK TEACHER TO CHECK FIRESTORE INDEXES':
+          /permission|denied/i.test(errorText)?'FIRESTORE PERMISSION DENIED · ASK TEACHER TO CHECK RULES':
+          'RANKINGS UNAVAILABLE · '+(errorText||'RETRY WHEN CONNECTED');
+        rankingsView(mode,grade,null,reason);
+      }
     }
   }
 
@@ -5952,6 +5968,9 @@ function damagePlayer(amount, reason){
     mistakes = 0;guildCorrectThisRun = 0;guildStoryAttemptId = currentMode === "story" ? crypto.randomUUID() : null;
     // A fresh Firebase check is mandatory for ranked modes. Practice/Story reuse
     // the last verified session snapshot for five minutes, refreshing when stale.
+    // The sign-in prefetch stores verified vocabulary but does not populate WORDS.
+    // Restore it before deciding a recent server download can be reused.
+    if(vocabLastServerSuccess && !assignedVocabPool && !restoreVerifiedVocab())vocabLastServerSuccess=false;
     const modeNeedsRank=['normal','extra','shared'].includes(currentMode);
     const supportsCache=['practice','story','normal','extra'].includes(currentMode);
     const connectionOkay=Boolean(ADVENTURE_CONTEXT.online&&!window.RPG_V66_DISCONNECTED&&navigator.onLine);
@@ -5964,9 +5983,13 @@ function damagePlayer(amount, reason){
     // A connection interrupted after successful loading is still unranked.
     const canRank=Boolean(live&&!window.RPG_V66_DISCONNECTED&&navigator.onLine);
     if(!canRank){
-      if(!supportsCache||!restoreVerifiedVocab()){
+      // A successful authoritative rejection must not be overridden by an older cache.
+      if(vocabServerRejected || !supportsCache || !restoreVerifiedVocab()){
         showModeSelectScreen();
-        alert('Verified vocabulary is unavailable. Connect to Firebase once to download your class words.');
+        const reason=vocabServerRejected?vocabLastError:
+          (!connectionOkay?'No verified class vocabulary is stored on this Chromebook. Reconnect and sign in once.':
+          (vocabLastError||'Class vocabulary has not downloaded. Check your class assignment in the Teacher Dashboard and try again.'));
+        alert(reason);
         return;
       }
       setLocalOnlyRun(true);

@@ -1,12 +1,10 @@
-/* v68 Spark: Firestore data + Realtime Database connection monitoring; no polling.
+/* v86.11 Spark: Firestore data is authoritative; RTDB availability is NOT a login gate.
  * No Functions, Cloud Run, or offline queue.
  * Scores/XP are client-reported (not secure against a modified browser).
  * Never trust this bridge for paid or scarce rewards. */
 import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js';
 import {makePull,getJstDate} from './recruitment-core.mjs';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
-import {getDatabase,ref as databaseRef,onValue} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-database.js';
-import {REALTIME_DATABASE_URL} from './realtime-config.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
 import {getFirestore,doc,collection,getDocFromServer,getDocsFromServer,query,where,orderBy,limit,onSnapshot,setDoc,updateDoc,serverTimestamp,runTransaction,deleteDoc,writeBatch} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 const db=getFirestore(getApp()),auth=getAuth(getApp());
@@ -351,8 +349,8 @@ async function storyProgress(b){const p=await currentPlayer(b),old=p.player.stor
  const stars={...base};for(const [key,val] of Object.entries(b.best_stars||{})){if(/^\d+-\d+$/.test(key)&&Number.isInteger(val)&&val>=0&&val<=4)stars[key]=Math.max(stars[key]||0,val);}
  await updateDoc(p.playerRef,{story:{completed,best_stars:stars}});return {ok:true,completed,best_stars:stars};}
 async function call(path,body={}){
- if(!navigator.onLine || blocked || !rtdbConnected)err('Online Firebase connection required.');
- if(path==='ping')return {ok:true,source:'rtdb-connection-state'};
+ if(!navigator.onLine || blocked)err('Online Firestore session required. Reconnect and reload.');
+ if(path==='ping'){await currentConfig();return {ok:true,source:'firestore'};}
  if(path==='/api/config/version')return {ok:true,revision:await currentConfig()};
  if(path==='/api/adventure/card')return openCard(body);
  if(path==='/api/adventure/progress')return adventureProgress(body);
@@ -379,11 +377,10 @@ async function call(path,body={}){
  if(path.startsWith('/api/recruitment/')||path.startsWith('/api/rewards/'))err('Cloud rewards and recruitment are disabled on the zero-cost Spark plan.');
  err('This action is unavailable in the Spark edition.');
 }
-// Realtime Database's client-specific .info/connected replaces Firestore polling.
-// No RTDB presence writes, Firestore heartbeats, or offline score queue.
-let rtdbConnected=false, everConnected=false, bootReady=false, blocked=true;
-let settleConnect=null;
-const connectedSignal=new Promise(resolve=>{settleConnect=resolve;});
+// v86.11: RTDB .info/connected is not a valid indicator of Firestore availability.
+// The authoritative Firestore reads/writes below decide whether actions work.
+// Browser offline events invalidate ranked runs, without requiring another database.
+let bootReady=false, blocked=true;
 function message(s,teacherRequired=false){
  let gate=$('v66OnlineGate');
  if(!gate){gate=document.createElement('div');gate.id='v66OnlineGate';Object.assign(gate.style,{position:'fixed',inset:'0',zIndex:2147483647,background:'#131426',color:'#ffecc0',display:'grid',placeItems:'center',padding:'22px',fontFamily:'system-ui,sans-serif'});
@@ -392,47 +389,25 @@ function message(s,teacherRequired=false){
  $('v67status').textContent=s;$('v67google').style.display=teacherRequired?'inline-block':'none';
 }
 function lost(reason){
- // Once a booted session loses its connection, that session cannot resume a ranked run.
- if(!blocked || bootReady || everConnected){window.RPG_V66_DISCONNECTED=true;sessionStorage.setItem('rpgV66Interrupted','1');}
+ if(!blocked || bootReady){window.RPG_V66_DISCONNECTED=true;sessionStorage.setItem('rpgV66Interrupted','1');}
  const shouldNotify=!blocked;
  blocked=true;
  if(shouldNotify)window.dispatchEvent(new Event('rpg-v66-offline'));
- message(reason||'Firebase connection lost. Current ranked run invalid. Reload after reconnecting.');
-}
-function beginMonitor(){
- if(!/^https:\/\/[^/]+\.(?:firebaseio\.com|firebasedatabase\.app)\/?$/.test(String(REALTIME_DATABASE_URL).trim())){
-  throw Error('Realtime Database URL missing/invalid. Configure docs/realtime-config.js using the URL from Firebase Console.');
- }
- const database=getDatabase(getApp(),REALTIME_DATABASE_URL.trim());
- onValue(databaseRef(database,'.info/connected'),snapshot=>{
-  const online=snapshot.val()===true;
-  rtdbConnected=online&&navigator.onLine;
-  if(rtdbConnected){
-   everConnected=true;settleConnect?.(true);settleConnect=null;
-  }else if(bootReady || everConnected){
-   // A startup handshake can have a transient initial 'false'; do not invalidate until first true.
-   lost('Firebase Realtime Database disconnected. Current run invalid; reload after reconnecting.');
-  }else{
-   message('Connecting to Firebase Realtime Database…');
-  }
- },e=>{rtdbConnected=false;settleConnect?.(false);settleConnect=null;lost('Realtime Database monitor failed: '+String(e?.message||e));});
+ message(reason||'Firestore session interrupted. Reload after reconnecting.');
 }
 async function check(){
  try{
   if(!navigator.onLine)err('Internet unavailable.');
-  beginMonitor();
-  // This timer bounds STARTUP only. It does not poll Firestore or Realtime Database.
-  const handshake=await Promise.race([connectedSignal,new Promise(resolve=>setTimeout(()=>resolve(false),15000))]);
-  if(!handshake||!rtdbConnected||window.RPG_V66_DISCONNECTED)err('Cannot connect to Firebase Realtime Database.');
   await ensureStudent();
-  if(!rtdbConnected||window.RPG_V66_DISCONNECTED)err('Connection interrupted during login.');
-  // One Firestore setup read per entry, not a repeated online heartbeat.
+  // One server read verifies the Firestore connection and current settings.
   await currentConfig();
-  if(!rtdbConnected||window.RPG_V66_DISCONNECTED)err('Connection interrupted during initialization.');
   const needTeacher=document.documentElement.dataset.v66Teacher==='required';if(needTeacher)await teacher();
-  if(!rtdbConnected||window.RPG_V66_DISCONNECTED)err('Connection interrupted during teacher sign-in.');
+  if(!navigator.onLine||window.RPG_V66_DISCONNECTED)err('Connection interrupted during login.');
   bootReady=true;blocked=false;$('v66OnlineGate')?.remove();$('v66Startup')?.remove();return true;
- }catch(e){lost('Online Firebase connection required: '+String(e.message||e));return false;}
+ }catch(e){
+  // Show the actual setup/auth error instead of blaming RTDB.
+  lost('Firestore initialization failed: '+String(e.message||e).slice(0,230));return false;
+ }
 }
 const fetchNative=window.fetch.bind(window);
 window.fetch=async(input,init)=>{
@@ -449,7 +424,7 @@ window.addEventListener('online',()=>{if(blocked)message('Internet restored. Rel
 const ready=check();
 // Practice/Story teacher settings: at most one verified fetch per scope set / 15 minutes.
 const soloBalanceSyncs=new Map();
-window.RPG_V68_CONNECTION={get connected(){return bootReady&&!blocked&&rtdbConnected;},get blocked(){return blocked;}};
+window.RPG_V68_CONNECTION={get connected(){return bootReady&&!blocked&&navigator.onLine;},get blocked(){return blocked;}};
 window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await teacher();return auth.currentUser.getIdToken();},
  async fetchSoloBalance(mode,stageIds=[],chapterId=null){
   if(blocked||!['practice','story'].includes(mode))return false;
@@ -468,7 +443,7 @@ window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await te
  watchRankings(mode,grade,update){let disposed=false;Promise.all([read('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig()]).then(([v,c])=>{
  if(disposed||!v)return;return onSnapshot(rankQuery(mode,grade,Number(v.revision)||1,c,20),{includeMetadataChanges:true},snap=>{
  if(disposed||snap.metadata.fromCache)return;const entries=snap.docs.map(s=>s.data());update({ruleset:`spark-${mode}-${grade}-v${v.revision}-c${c}`,entries});
- },e=>lost('Ranking listener unavailable: '+String(e.message||e)));}).then(unsub=>{if(disposed)unsub?.();else stop=unsub;}).catch(e=>console.warn('Rankings',e));let stop=null;
+ },e=>console.warn('Rankings live-update unavailable:',e?.message||e));}).then(unsub=>{if(disposed)unsub?.();else stop=unsub;}).catch(e=>console.warn('Rankings',e));let stop=null;
  return ()=>{disposed=true;stop?.()};}
 };
-// No scheduled Firestore connectivity checks. .info/connected stays subscribed while this page is open.
+// No periodic connection polling; ranked operations verify current server state.
