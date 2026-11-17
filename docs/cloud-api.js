@@ -35,18 +35,19 @@ export async function readCard(code){
  const data=snap.data();if(data.disabled||data.deleted)throw Error('This card is disabled.');
  return {code:secret,public_id:data.publicId,name:data.username||null,registered:!!data.username,character:data.character||'crimson_knight',disabled:!!data.disabled};
 }
-export async function registerCard(code,name){
+export async function registerCard(code,name,grade){
  const secret=normalizeCode(code);
  const n=String(name||'').trim().replace(/\s+/g,' ').slice(0,20);
  if(!codePattern.test(secret))throw Error('Invalid Adventure Card code.');
  if(!n)throw Error('Enter a username.');
+ if(!['1','2','3'].includes(String(grade||'')))throw Error('Choose Grade 1, 2, or 3.');
  await ensureStudent();
  const ref=doc(db,'cloudCards',secret);
  await runTransaction(db,async tx=>{
   const snap=await tx.get(ref);
   if(!snap.exists()||snap.data().disabled)throw Error('Card not available.');
   if(snap.data().username)return;
-  tx.update(ref,{username:n,registeredAt:serverTimestamp()});
+  tx.update(ref,{username:n,...(snap.data().grade?{}:{grade}),registeredAt:serverTimestamp()});
  });
  return readCard(secret);
 }

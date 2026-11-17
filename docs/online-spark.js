@@ -30,12 +30,28 @@ const defaultPlayer=(card)=>({publicId:card.publicId,username:card.username,char
  adventure:{xp:0,best_normal:0,best_extra:0,normal_clear:false,extra_clear:false,achievements:[]},
  cosmetics:{nickname:card.username,motto:'',theme:'signal',background:'default',featured:'mc',showcase:['crimson_knight','silver_knight']},
  story:{completed:[],best_stars:{}},tutorial:{version:0,step:1,updatedAt:null},recruitment:{coins:0,permits:0,pity_six:0,owned:{},recent:[],shards:0,auras:{}},tournament:{count:0,history:[],trophies:{gold:0,silver:0,bronze:0}}});
-async function openCard(b){await ensureStudent();const {code,card:c}=await codeInfo(b.card_code);const n=name(b.name);
- if(!c.username){if(!n){if(b.probe===true)return {ok:true,registration_required:true};err('Enter your name to register this card.');}await updateDoc(ref('cloudCards',code),{username:n});c.username=n;}
+async function openCard(b){
+ await ensureStudent();
+ const {code,card:c}=await codeInfo(b.card_code),n=name(b.name);
+ if(!c.username){
+  if(!n){if(b.probe===true)return {ok:true,registration_required:true,assigned_grade:c.grade||null};err('Enter your name to register this card.');}
+  const selectedGrade=String(b.grade||'');
+  if(!c.grade&&!['1','2','3'].includes(selectedGrade))err('Choose Grade 1, 2, or 3 when creating your name.');
+  // Claim a blank card once. A teacher-preassigned class (including B groups) takes priority.
+  const grade=c.grade||selectedGrade;
+  if(!grades.includes(grade))err('Invalid grade on Adventure Card; ask your teacher to correct it.');
+  const update={username:n};
+  if(!c.grade)update.grade=selectedGrade;
+  await updateDoc(ref('cloudCards',code),update);
+  c.username=n;c.grade=grade;
+ }
  // The QR code is a bearer credential. Auth UID sessions can be re-established on another Chromebook.
  await setDoc(ref('cardSessions',uid()),{code,publicId:c.publicId,linkedAt:serverTimestamp()});
- if(!await read('players',c.publicId)){try{await setDoc(ref('players',c.publicId),defaultPlayer(c));}catch(e){if(!await read('players',c.publicId))throw e;}}
- return {ok:true,public_id:c.publicId,name:c.username,card_code:code,online:true,cloud:true};
+ if(!await read('players',c.publicId)){
+  try{await setDoc(ref('players',c.publicId),defaultPlayer(c));}
+  catch(e){if(!await read('players',c.publicId))throw e;}
+ }
+ return {ok:true,public_id:c.publicId,name:c.username,grade:c.grade||null,card_code:code,online:true,cloud:true};
 }
 async function currentConfig(){const data=await read('systemConfig','current');if(!data)err('Firebase setup incomplete. Teacher: run SETUP SPARK first.');return Number(data.revision)||1;}
 async function vocab(b){const p=await currentPlayer(b);const shared=b.mode==='shared';const g=shared?'all':p.player.grade;if(!g)err('Teacher must assign your class before playing.');
@@ -103,12 +119,29 @@ async function cardsList(){await teacher();const snaps=await getDocsFromServer(c
  return {id:Number(c.publicId?.slice(1))||0,public_id:c.publicId,code:c.code,username:c.username,registered:!!c.username,disabled:!!c.disabled,class_year:grade?.[0]||null,class_section:grade?.endsWith('b')?'b':'a'};}));
  return {ok:true,cards:cards.sort((a,b)=>a.id-b.id)};
 }
-async function setClass(b){await teacher();const grade=b.class;if(grade!==null&&!grades.includes(grade))err('Invalid grade.');const cards=await cardsList();const c=cards.cards.find(x=>x.id===b.id);if(!c)err('Card not found.');const cardDoc=ref('cloudCards',c.code),pRef=ref('players',c.public_id);
- await updateDoc(cardDoc,{grade});const snap=await getDocFromServer(pRef);if(snap.exists())await updateDoc(pRef,{grade});
- // Previous grade scores must not remain displayed after class transfer.
- const oldScores=await getDocsFromServer(query(collection(db,'rankEntries'),where('public_id','==',c.public_id),limit(100)));
- for(const row of oldScores.docs)await deleteDoc(row.ref);
- return {ok:true,grade};}
+async function setClass(b){
+ await teacher();
+ const grade=b.class;
+ if(grade!==null&&!grades.includes(grade))err('Invalid grade.');
+ const id=Number(b.id);
+ if(!Number.isSafeInteger(id)||id<1)err('Invalid Player ID.');
+ const publicId='P'+String(id).padStart(6,'0');
+ // Find the card directly; do not read every player's profile for one grade correction.
+ const cards=await getDocsFromServer(query(collection(db,'cloudCards'),where('publicId','==',publicId),limit(2)));
+ if(cards.docs.length!==1||cards.docs[0].data().deleted)err('Card not found.');
+ const cardDoc=cards.docs[0].ref,pRef=ref('players',publicId);
+ const [player,oldScores]=await Promise.all([
+  getDocFromServer(pRef),
+  getDocsFromServer(query(collection(db,'rankEntries'),where('public_id','==',publicId),limit(100)))
+ ]);
+ // Atomically update both grade locations and remove outdated grade-specific rankings.
+ const batch=writeBatch(db);
+ batch.update(cardDoc,{grade});
+ if(player.exists())batch.update(pRef,{grade});
+ for(const row of oldScores.docs)batch.delete(row.ref);
+ await batch.commit();
+ return {ok:true,grade};
+}
 async function rankIcon(b){const p=await currentPlayer(b);if(b.action==='set'){const icon=String(b.icon_id||'');if(!/^icon\d{2}$/.test(icon))err('Invalid profile icon.');await updateDoc(p.playerRef,{rankIconId:icon,rankIconUpdatedAt:Date.now()});
  for(const mode of ['normal','extra','shared']){const r=ref('rankEntries',p.id+'_'+mode),snap=await getDocFromServer(r);
   if(snap.exists())try{await updateDoc(r,{icon_id:icon,updatedAt:serverTimestamp()})}catch(e){console.warn('Ranking icon update deferred',e);}}

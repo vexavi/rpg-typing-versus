@@ -21,6 +21,14 @@ gate.innerHTML=`
     <form id="ag-register" hidden>
       <label for="ag-name">What is your name?</label>
       <input id="ag-name" name="name" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Your name" required />
+      <label for="ag-grade">What grade are you in?</label>
+      <select id="ag-grade" name="grade" required>
+        <option value="" selected disabled>Select your grade</option>
+        <option value="1">1年生 · Grade 1</option>
+        <option value="2">2年生 · Grade 2</option>
+        <option value="3">3年生 · Grade 3</option>
+      </select>
+      <p id="ag-assigned-grade" class="ag-assigned-grade" hidden></p>
       <button class="ag-primary" type="submit">Ready <span aria-hidden="true">▶</span></button>
     </form>
     <form id="ag-manual" hidden>
@@ -50,8 +58,10 @@ style.textContent=`
   #adventureGate .ag-message{margin:0 0 24px;min-height:24px;color:#555b65;font-size:14px;line-height:1.45}
   #adventureGate form{display:grid;gap:11px}
   #adventureGate label{font-size:11px;letter-spacing:.15em;font-weight:900;color:#555a64}
-  #adventureGate input{display:block;width:100%;height:52px;background:#f9fafb;border:1px solid #7f858e;border-radius:0;padding:0 14px;font-size:17px;letter-spacing:.02em;color:#151515;outline-offset:2px}
-  #adventureGate input:focus{outline:2px solid #d7bd00;border-color:#222}
+  #adventureGate input,#adventureGate select{box-sizing:border-box;display:block;width:100%;height:52px;background:#f9fafb;border:1px solid #7f858e;border-radius:0;padding:0 14px;font-size:17px;letter-spacing:.02em;color:#151515;outline-offset:2px}
+  #adventureGate input:focus,#adventureGate select:focus{outline:2px solid #d7bd00;border-color:#222}
+  #adventureGate select{cursor:pointer}
+  #adventureGate .ag-assigned-grade{font-weight:800;font-size:14px;margin:0;color:#34393f}
   #adventureGate button{font-family:inherit;font-weight:900;cursor:pointer;border-radius:0;transition:filter .15s}
   #adventureGate button:hover{filter:brightness(.93)}
   #adventureGate .ag-primary{border:0;background:#e7d915;color:#0c0c0d;min-height:51px;padding:12px 16px;font-size:14px;display:flex;align-items:center;justify-content:space-between;margin-top:3px}
@@ -74,10 +84,11 @@ const qrCode=clean(params.get('card'));
 const resume=sessionStorage.getItem('rpgReturnToAdventureModeSelect')==='1';
 let code=qrCode||(resume?clean(cached?.card_code):'');
 let busy=false;
+let teacherAssignedGrade=null;
 let readyPromise=null;
 // Keep the app shell available when the browser has previously visited this site.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./offline-sw.js?v=86.11',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
+  navigator.serviceWorker.register('./offline-sw.js?v=86.12',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
 }
 function installOfflineBridge(){
  window.RPG_V66_DISCONNECTED=true;
@@ -123,7 +134,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=86.11');
+   await import('./online-spark.js?v=86.12');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
@@ -147,7 +158,7 @@ async function load(identity,progress,{offline=false}={}){
  for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear],['bossTyping_extraCleared_v1',progress?.extra_clear]])localStorage.setItem(key(k),val?'1':'0');
  window.RPG_PERF?.begin('Game scripts');
  for(const file of ['story-mode.js','adventure_rewards.js','guild-coins.js','adventure_engine.js'])await new Promise((resolve,reject)=>{
-   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'86.11':file==='story-mode.js'?'86.9':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
+   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'86.12':file==='story-mode.js'?'86.9':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
  });
  window.RPG_PERF?.end('Game scripts');
  gate.remove();
@@ -162,7 +173,7 @@ async function finish(card){
    vocabPromise
  ]);
  const selectedCharacter=String(profile?.selected_character||profile?.cosmetics?.featured||'mc');
- const identity={public_id:card.public_id,name:card.name,card_code:code,online:true,cloud:true,selected_character:selectedCharacter,cosmetics:profile?.cosmetics||null,recruitment:profile?.recruitment||null,tutorial:profile?.tutorial||{version:1,step:5}};
+ const identity={public_id:card.public_id,name:card.name,grade:card.grade||null,card_code:code,online:true,cloud:true,selected_character:selectedCharacter,cosmetics:profile?.cosmetics||null,recruitment:profile?.recruitment||null,tutorial:profile?.tutorial||{version:1,step:5}};
  sessionStorage.setItem('rpgAdventureContext',JSON.stringify(identity));
  // A verified online visit saves ONLY read-only progress identity + the class word list.
  // Never persist the bearer code in localStorage or any queued cloud write.
@@ -178,7 +189,17 @@ async function resolveCard(){
    await onlineReady();
    // Probe mode never registers an unclaimed card without a student-chosen name.
    const card=await window.RPG_V66.call('/api/adventure/card',{card_code:code,name:'',probe:true});
-   if(card.registration_required){view('register','WELCOME, ADVENTURER','');}
+   if(card.registration_required){
+    teacherAssignedGrade=card.assigned_grade||null;
+    const select=$('ag-grade'),assigned=$('ag-assigned-grade');
+    select.hidden=Boolean(teacherAssignedGrade);
+    select.required=!teacherAssignedGrade;
+    // If teacher already assigned a grade, students cannot change it at registration.
+    $('ag-grade').previousElementSibling.hidden=Boolean(teacherAssignedGrade);
+    assigned.hidden=!teacherAssignedGrade;
+    assigned.textContent=teacherAssignedGrade?'Grade assigned by teacher: '+teacherAssignedGrade.toUpperCase():'';
+    view('register','WELCOME, ADVENTURER','');
+   }
    else await finish(card);
  }catch(e){
    // A revoked/unregistered card must NEVER fall back to saved local identity.
@@ -192,12 +213,14 @@ async function resolveCard(){
 async function registerCard(e){
  e?.preventDefault();if(busy)return;
  const name=$('ag-name').value.trim().replace(/\s+/g,' ');
+ const grade=$('ag-grade').value;
  if(name.length<1||name.length>20){status('Enter a username (1–20 characters).');return;}
+ if(!teacherAssignedGrade&&!['1','2','3'].includes(grade)){status('Choose Grade 1, 2, or 3.');$('ag-grade').focus();return;}
  busy=true;$('ag-register').querySelector('button').disabled=true;
  status('Registering your Adventure Card…');
  try{
    await onlineReady();
-   const card=await window.RPG_V66.call('/api/adventure/card',{card_code:code,name,probe:true});
+   const card=await window.RPG_V66.call('/api/adventure/card',{card_code:code,name,grade,probe:true});
    if(card.registration_required){status('Please enter a username.');return;}
    await finish(card);
  }catch(e){status(e?.message||'Registration failed. Please retry.');}

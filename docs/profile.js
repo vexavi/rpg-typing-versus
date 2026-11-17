@@ -38,12 +38,12 @@
  function applyTheme(){document.body.className='theme-'+(themes.some(t=>t.id===player?.cosmetics?.theme)?player.cosmetics.theme:'signal')}
  async function api(path,body){const control=new AbortController(),timeout=setTimeout(()=>control.abort(),3600);try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:control.signal}),j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}finally{clearTimeout(timeout)}}
  function localPlayer(){let id=localId();return {public_id:id,name:localStorage.getItem('rpgAdventureOfflineName')||'Adventurer',selected_character:'mc',adventure:localAdventure(id),tournament:{count:null,history:[],trophies:null},collection:{owned:['crimson_knight','silver_knight'],available:['crimson_knight','silver_knight']},recruitment:{status:'offline',permits:null,coins:null,pity_six:0,owned:{},catalog:[]}}}
- function login(error=''){applyTheme();root.innerHTML=`<section class="setup"><small>// PLAYER PROFILE</small><h1>Adventure Card</h1><form id="profile-login" class="loginform"><label>CARD CODE<input id="card-code" maxlength="19" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" value="${esc(code.replace(/(.{4})/g,'$1-').replace(/-$/,''))}" required></label><label>USERNAME <small>(NEW CARDS)</small><input id="player-register" autocomplete="off" maxlength="20" placeholder="Adventurer" value="${esc(session.name||'')}"></label><button class="primary" type="submit">OPEN PROFILE</button></form><p class="error" role="alert">${esc(error)}</p></section>`}
- async function openCard(regName=''){
+ function login(error=''){applyTheme();root.innerHTML=`<section class="setup"><small>// PLAYER PROFILE</small><h1>Adventure Card</h1><form id="profile-login" class="loginform"><label>CARD CODE<input id="card-code" maxlength="19" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" value="${esc(code.replace(/(.{4})/g,'$1-').replace(/-$/,''))}" required></label><label>USERNAME <small>(NEW CARDS)</small><input id="player-register" autocomplete="off" maxlength="20" placeholder="Adventurer" value="${esc(session.name||'')}"></label><label>GRADE <small>(NEW CARDS)</small><select id="player-grade"><option value="" selected>Choose grade</option><option value="1">1年生 · Grade 1</option><option value="2">2年生 · Grade 2</option><option value="3">3年生 · Grade 3</option></select></label><button class="primary" type="submit">OPEN PROFILE</button></form><p class="error" role="alert">${esc(error)}</p></section>`}
+ async function openCard(regName='',regGrade=''){
   if(!/^[A-HJ-NP-Z2-9]{16}$/.test(code)){login('Enter a valid card code.');return}
   root.innerHTML='<section class="setup"><h1>Connecting to Firebase…</h1></section>';
   try{
-   await api('/api/adventure/card',{card_code:code,name:regName});
+   await api('/api/adventure/card',{card_code:code,name:regName,grade:regGrade});
    player=await api('/api/profile',{card_code:code});mode='server';notice='FIREBASE · ONLINE';
    player.cosmetics={...defaults(),...(player.cosmetics||{}),background:'default'};
    await loadOwnedOperators();
@@ -143,7 +143,7 @@
   if(b.id==='exchange-coins'){void exchangeCoins();return}
   if(b.id==='do-ten-pull'){void pullTen();return}
  });
- root.addEventListener('submit',e=>{if(e.target.id==='profile-login'){e.preventDefault();code=cleanCode($('card-code').value);void openCard($('player-register')?.value?.trim()||'')}});
+ root.addEventListener('submit',e=>{if(e.target.id==='profile-login'){e.preventDefault();code=cleanCode($('card-code').value);void openCard($('player-register')?.value?.trim()||'',$('player-grade')?.value||'')}});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&editor){editorClose()}});
  if(code)void openCard((!params.get('card')||cleanCode(params.get('card'))===cleanCode(session.card_code))?session.name||'':'');else login();
 })();
