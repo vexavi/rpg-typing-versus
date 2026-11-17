@@ -17,12 +17,14 @@ const serverOnline=Boolean(identity.online&&/^[A-HJ-NP-Z2-9]{16}$/.test(String(i
 function storageGet(){try{const v=JSON.parse(localStorage.getItem(STORAGE)||'[]');return Array.isArray(v)?v.filter(validId):[]}catch{return []}}
 function starGet(){try{const v=JSON.parse(localStorage.getItem(STAR_STORAGE)||'{}');if(!v||typeof v!=='object'||Array.isArray(v))return {};const out={};for(const [id,n] of Object.entries(v))if(validId(id)&&Number.isInteger(n)&&n>=0&&n<=4)out[id]=n;return out}catch{return {}}}
 function storageSave(){try{localStorage.setItem(STORAGE,JSON.stringify([...completed]));localStorage.setItem(STAR_STORAGE,JSON.stringify(bestStars))}catch{}}
-completed=new Set();bestStars={}; // v66: Firebase is the only progress source; no local offline restore.
+completed=new Set();bestStars={}; // Firebase remains authoritative; saved progress is read-only if disconnected.
 async function serverProgress(action='load'){
  if(!serverOnline)return null;
  try{const response=await fetch('/api/story/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:identity.card_code,action,completed:[...completed],best_stars:bestStars})});if(!response.ok)return null;return await response.json()}catch{return null}
 }
-async function loadProgress(){const remote=await serverProgress();if(Array.isArray(remote?.completed)){for(const id of remote.completed)if(validId(id))completed.add(id)}if(remote?.best_stars&&typeof remote.best_stars==='object'){for(const [id,n] of Object.entries(remote.best_stars))if(validId(id)&&Number.isInteger(n)&&n>=0&&n<=4)bestStars[id]=Math.max(bestStars[id]??0,n)}storageSave()}
+async function loadProgress(){const remote=await serverProgress();if(!Array.isArray(remote?.completed)){
+ completed=new Set(storageGet());bestStars=starGet();return; // read-only display; cannot unlock stages offline
+ }if(Array.isArray(remote?.completed)){for(const id of remote.completed)if(validId(id))completed.add(id)}if(remote?.best_stars&&typeof remote.best_stars==='object'){for(const [id,n] of Object.entries(remote.best_stars))if(validId(id)&&Number.isInteger(n)&&n>=0&&n<=4)bestStars[id]=Math.max(bestStars[id]??0,n)}storageSave()}
 const allStages=()=>chapters.flatMap(c=>c.stages);
 function normalizeManifest(raw){
  if(!raw||!Array.isArray(raw.chapters))throw Error('Invalid story chapters file.');
@@ -130,7 +132,7 @@ function showResult(stageId,rating,damage){
  return new Promise(resolve=>{
   const st=allStages().find(s=>s.id===stageId);const isBattle=rating&&rating.stars!==null;
   const value=isBattle?rating.stars:0;
-  show(`<div class="story-result" role="dialog" aria-label="Stage clear"><div class="story-result-label">STAGE COMPLETE</div><h2>${esc(stageId)}${st&&st.title!==stageId?` · ${esc(st.title)}`:''}</h2>${isBattle?`${starMarkup(value)}<p>${value} / 4 STARS · ${damage} DAMAGE</p>${rating.best>value?`<small>BEST ${rating.best} / 4</small>`:''}`:'<p>STORY COMPLETE</p>'}${rating?.guildCoins?`<p class="story-guild-reward">+${rating.guildCoins} GUILD COINS</p>`:rating?.guildDuplicate?'<p class="story-guild-reward">ALREADY CLAIMED</p>':rating?.guildError?`<p class="story-guild-reward">${esc(rating.guildError)}</p>`:''}<button type="button" id="story-result-continue">CONTINUE ▶</button></div>`);
+  show(`<div class="story-result" role="dialog" aria-label="Stage clear"><div class="story-result-label">STAGE COMPLETE</div><h2>${esc(stageId)}${st&&st.title!==stageId?` · ${esc(st.title)}`:''}</h2>${isBattle?`${starMarkup(value)}<p>${value} / 4 STARS · ${damage} DAMAGE</p>${rating.best>value?`<small>BEST ${rating.best} / 4</small>`:''}`:'<p>STORY COMPLETE</p>'}${rating?.offline?'<p class="story-guild-reward">UNRANKED · NOT SAVED</p>':''}${rating?.guildCoins?`<p class="story-guild-reward">+${rating.guildCoins} GUILD COINS</p>`:rating?.guildDuplicate?'<p class="story-guild-reward">ALREADY CLAIMED</p>':rating?.guildError?`<p class="story-guild-reward">${esc(rating.guildError)}</p>`:''}<button type="button" id="story-result-continue">CONTINUE ▶</button></div>`);
   const finish=()=>{box.removeEventListener('keydown',onKey);hide();resolve()};
   const onKey=e=>{if(e.key==='Enter'||e.key==='Escape'){e.preventDefault();finish()}};
   box.addEventListener('keydown',onKey);box.querySelector('#story-result-continue').onclick=finish;box.querySelector('#story-result-continue').focus();

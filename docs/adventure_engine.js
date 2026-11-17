@@ -124,6 +124,75 @@ function fitAnswerToRight(wordEl){
   let assignedVocabRevision = 0;
   let assignedRankGrade = null;
   let vocabLastServerSuccess = false;
+  // v86.8: fetched-and-verified vocabulary, scoped to the signed-in Adventure Card.
+  // Built-in words and legacy unscoped caches are NOT trusted for a playable run.
+  const OFFLINE_VOCAB_KEY = adventureKey('bossTyping_verifiedVocab_v3');
+  const VOCAB_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+  let vocabRefreshedAt = 0;
+  let vocabRefreshInFlight = null;
+  let vocabRefreshMode = null;
+  let verifiedSessionVocab = null;
+  let vocabRefreshedForMode = null;
+  let runLocalOnly = false; // Never save cloud progress, unlocks, coins or rankings from cached runs.
+  let offlineBadge = null;
+  function unverifiedRun(){return runLocalOnly||Boolean(window.RPG_V66_DISCONNECTED)||!navigator.onLine;}
+  function verifiedCache(){
+    try{
+      const data=verifiedSessionVocab||JSON.parse(localStorage.getItem(OFFLINE_VOCAB_KEY)||'null');
+      if(!data || data.v!==3 || data.publicId!==ADVENTURE_SCOPE ||
+        !['1','2','3','b'].includes(data.pool) ||
+        !/^[123]b?$/.test(String(data.rankGrade||'')) ||
+        !['1','2','3'].includes(String(data.grade||'')) ||
+        (data.pool==='b')!==String(data.rankGrade).endsWith('b') ||
+        String(data.rankGrade)[0]!==String(data.grade) ||
+        !Number.isInteger(data.revision) || data.revision<1 ||
+        !Number.isFinite(data.updatedAt) || data.updatedAt>Date.now()+60_000 ||
+        !Array.isArray(data.words) || data.words.length>1000)return null;
+      const words=uniqueWordsByAnswer(data.words);
+      if(words.length!==data.words.length)return null;
+      return {...data,words};
+    }catch(_){return null;}
+  }
+  function cacheVerifiedVocab(data,words){
+    try{
+      if(!ADVENTURE_SCOPE || ADVENTURE_SCOPE==='guest')return;
+      verifiedSessionVocab={v:3,publicId:ADVENTURE_SCOPE,pool:data.pool,grade:data.grade,rankGrade:data.rank_grade,
+        revision:Number(data.revision),updatedAt:Date.now(),words};
+      localStorage.setItem(OFFLINE_VOCAB_KEY,JSON.stringify(verifiedSessionVocab));
+    }catch(_){/* Cache may be unavailable on restricted devices. */}
+  }
+  function restoreVerifiedVocab(){
+    const cached=verifiedCache();
+    if(!cached)return false;
+    assignedVocabPool=cached.pool;
+    assignedVocabGrade=cached.grade;
+    assignedRankGrade=cached.rankGrade;
+    assignedVocabRevision=cached.revision;
+    activeClassYear=cleanClassYear(cached.grade);
+    WORDS=cached.words;
+    vocabSourceLabel='saved vocabulary';
+    applyWordsToStageLists();
+    if(currentMode==='story'&&storyBattleStage)storyBattleStage.words=WORDS;
+    return true;
+  }
+  function updateOfflineBadge(){
+    if(!offlineBadge){
+      offlineBadge=document.createElement('div');
+      offlineBadge.id='offlineRunBadge';
+      offlineBadge.setAttribute('role','status');
+      offlineBadge.textContent='CACHED VOCAB · UNRANKED · NOT SAVED';
+      offlineBadge.style.cssText='position:fixed;z-index:6000;top:5px;left:50%;transform:translateX(-50%);max-width:94vw;padding:6px 12px;background:#fff4b3;color:#171717;border:3px solid #ffe100;font:800 12px/1.3 system-ui;text-align:center;pointer-events:none;box-shadow:0 2px 12px #0007';
+      document.body.appendChild(offlineBadge);
+    }
+    offlineBadge.hidden=!runLocalOnly;
+  }
+  function setLocalOnlyRun(value){
+    runLocalOnly=Boolean(value);
+    if(runLocalOnly){
+      try{clearTimeout(soloSyncTimer);clearTimeout(profileCloudSaveTimer);}catch(_){}
+    }
+    updateOfflineBadge();
+  }
   let activeClassYear = DEFAULT_CLASS_YEAR;
   let vocabSourceLabel = "fallback";
   let WORDS = getWordsForClassYear(activeClassYear);
@@ -207,6 +276,13 @@ function fitAnswerToRight(wordEl){
   }
 
   function getWordsForClassYear(value){
+    const verified=verifiedCache();
+    // Never substitute a previous student's or different class's word list.
+    if(verified && (assignedVocabPool===verified.pool ||
+       (!assignedVocabPool && verified.pool!=='b' && cleanClassYear(value)===verified.grade))){
+      vocabSourceLabel='verified cache';
+      return verified.words;
+    }
     const cached = loadCachedWordsForClassYear(value);
     if(cached.length){
       vocabSourceLabel = "cache";
@@ -245,48 +321,54 @@ function fitAnswerToRight(wordEl){
   }
 
   async function refreshVocabFromServer(mode='normal', options={}){
-    if(!ADVENTURE_CONTEXT.card_code || !ADVENTURE_CONTEXT.online){
-      vocabLastServerSuccess=false; return false;
+    if(!ADVENTURE_CONTEXT.card_code || !ADVENTURE_CONTEXT.online || window.RPG_V66_DISCONNECTED || !navigator.onLine){
+      vocabLastServerSuccess=false;return false;
     }
-    // Never swap the word pool underneath an active battle.
-    if(typeof gameState !== 'undefined' && gameState==='playing') return false;
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),4500);
-    try{
-      const response=await fetch('/api/vocab/load',{
-        method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',
-        body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:mode==='shared'?'shared':'normal'}),
-        signal:controller.signal
-      });
-      const data=await response.json();
-      if(!response.ok || !data.ok)throw Error(data.error||'Vocabulary unavailable.');
-      const nextWords=uniqueWordsByAnswer(data.words);
-      // Even zero active words is authoritative; never resurrect deleted words from cache/Sheets.
-      if(mode==='shared'){
-        SHARED_WORDS=nextWords;
-        SHARED_STAGE[0].words=SHARED_WORDS;
-        SHARED_RULESET=data.ruleset;
-        resetSharedBuckets();
-      }else{
-        assignedVocabPool=data.pool;
-        assignedVocabGrade=data.grade;
-        assignedVocabRevision=data.revision;
-        assignedRankGrade=data.rank_grade;
-        activeClassYear=cleanClassYear(data.grade);
-        WORDS=nextWords;
-        vocabSourceLabel='Firebase';
-        try{localStorage.setItem(getVocabCacheKey(data.pool),JSON.stringify({v:2,classYear:data.grade,
-              words:nextWords,updatedAt:Date.now(),revision:data.revision}));}catch(_){/* optional cache */}
-        applyWordsToStageLists();
-        if(profile && profile.classYear!==activeClassYear){profile.classYear=activeClassYear;saveProfile(profile);}
-      }
-      vocabLastServerSuccess=true;
-      return true;
-    }catch(e){
-      console.warn('Classroom vocabulary not loaded:',e);
-      vocabLastServerSuccess=false;
-      return false;
-    }finally{clearTimeout(timer);}
+    // Never replace a word pool under a playing battle.
+    if(typeof gameState!=='undefined'&&gameState==='playing')return false;
+    if(vocabRefreshInFlight){
+      if(vocabRefreshMode===mode)return vocabRefreshInFlight;
+      await vocabRefreshInFlight; // Different pool; never reuse its response.
+    }
+    vocabRefreshMode=mode;
+    vocabRefreshInFlight=(async()=>{
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),4500);
+      try{
+        const response=await fetch('/api/vocab/load',{
+          method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',
+          body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:mode==='shared'?'shared':'normal'}),
+          signal:controller.signal
+        });
+        const data=await response.json();
+        if(!response.ok||!data.ok)throw Error(data.error||'Vocabulary unavailable.');
+        const nextWords=uniqueWordsByAnswer(data.words);
+        // An empty active list is authoritative: never resurrect removed teacher words.
+        if(mode==='shared'){
+          SHARED_WORDS=nextWords;SHARED_STAGE[0].words=SHARED_WORDS;
+          SHARED_RULESET=data.ruleset;resetSharedBuckets();
+        }else{
+          assignedVocabPool=data.pool;
+          assignedVocabGrade=data.grade;
+          assignedVocabRevision=data.revision;
+          assignedRankGrade=data.rank_grade;
+          activeClassYear=cleanClassYear(data.grade);
+          WORDS=nextWords;
+          vocabSourceLabel='Firebase';
+          cacheVerifiedVocab(data,nextWords);
+          applyWordsToStageLists();
+          if(profile&&profile.classYear!==activeClassYear){profile.classYear=activeClassYear;saveProfile(profile);}
+        }
+        vocabRefreshedAt=Date.now();vocabRefreshedForMode=mode==='shared'?'shared':'normal';vocabLastServerSuccess=true;
+        return true;
+      }catch(e){
+        console.warn('Classroom vocabulary not loaded:',e);
+        vocabLastServerSuccess=false;
+        return false;
+      }finally{clearTimeout(timer);}
+    })();
+    try{return await vocabRefreshInFlight;}
+    finally{vocabRefreshInFlight=null;vocabRefreshMode=null;}
   }
 
   async function refreshVocabFromCloud(value, options={}){
@@ -566,6 +648,7 @@ function loadNormalCleared(){
   try{ return localStorage.getItem(LS_KEY_NORMAL_CLEARED) === "1"; }catch(_){ return false; }
 }
 function saveNormalCleared(){
+  if(unverifiedRun())return;
   try{ localStorage.setItem(LS_KEY_NORMAL_CLEARED, "1"); queueAdventureSync(); }catch(_){}
 }
 
@@ -577,6 +660,7 @@ function loadExtraCleared(){
   try{ return localStorage.getItem(LS_KEY_EXTRA_CLEARED) === "1"; }catch(_){ return false; }
 }
 function saveExtraCleared(){
+  if(unverifiedRun())return;
   try{ localStorage.setItem(LS_KEY_EXTRA_CLEARED, "1"); queueAdventureSync(); }catch(_){}
 }
 
@@ -636,6 +720,7 @@ function loadHighScore(mode){
   }catch(_){ return 0; }
 }
 function saveHighScore(mode, val){
+  if(unverifiedRun())return;
   try{
     const k = (mode === "extra") ? LS_KEY_HISCORE_EXTRA : LS_KEY_HISCORE_NORMAL;
     const n = Math.max(0, Math.floor(Number(val) || 0));
@@ -1147,6 +1232,7 @@ const achOverlay = document.getElementById("achOverlay");
     return true;
   }
   function requestCloudCheckpointSave(reason="checkpoint"){
+    if(runLocalOnly||window.RPG_V66_DISCONNECTED||!navigator.onLine)return;
     // Cloud autosave should only happen at important checkpoints.
     // Do NOT call this from normal saveProfile(), correct-word XP, or regular coin gains.
     try{
@@ -1158,7 +1244,7 @@ const achOverlay = document.getElementById("achOverlay");
       if(profileCloudSaveTimer) clearTimeout(profileCloudSaveTimer);
       profileCloudSaveTimer = setTimeout(() => {
         profileCloudSaveTimer = null;
-        saveProfileToCloud(false, reason);
+        if(!unverifiedRun())saveProfileToCloud(false, reason);
       }, CLOUD_SYNC_DEBOUNCE_MS);
     }catch(_){/* ignore */}
   }
@@ -1329,11 +1415,12 @@ const achOverlay = document.getElementById("achOverlay");
   }
   let soloSyncTimer = null;
   function queueAdventureSync(){
+    if(runLocalOnly||window.RPG_V66_DISCONNECTED||!navigator.onLine)return;
     const card = ADVENTURE_CONTEXT.card_code;
     if(!card || !ADVENTURE_CONTEXT.online) return;
     clearTimeout(soloSyncTimer);
     soloSyncTimer = setTimeout(async()=>{
-      if(!profile) return;
+      if(!profile||unverifiedRun())return;
       const payload = {
         card_code:card,action:"save",xp:Math.max(0,Math.floor(Number(profile.xp)||0)),
         achievements:profile.achievements||[],
@@ -1454,6 +1541,7 @@ const achOverlay = document.getElementById("achOverlay");
     saveProfile(profile);
   }
   function addCoins(v){
+    if(unverifiedRun())return;
     if(!profile) return;
     const add = Math.max(0, Math.trunc(Number(v) || 0));
     if(add <= 0) return;
@@ -1483,6 +1571,7 @@ const achOverlay = document.getElementById("achOverlay");
   }
 
   function unlockAchievement(id, silent=false){
+    if(unverifiedRun())return false;
     if(!id) return false;
     if(!profile) profile = createDefaultProfile();
     if(profileHas(id)) return false;
@@ -1551,6 +1640,7 @@ const achOverlay = document.getElementById("achOverlay");
     }
 
   function addXp(amount){
+    if(unverifiedRun())return;
     if(!profile) return;
     const a = Math.max(0, Math.trunc(Number(amount) || 0));
     if(a <= 0) return;
@@ -1604,6 +1694,7 @@ const achOverlay = document.getElementById("achOverlay");
       fixedStage5Ramp:true});
   }
   function startRankedRun(){
+    if(runLocalOnly){rankedRun=null;window.RPG_V66_COMPETITIVE_ACTIVE=false;return;}
     rankedRun=['normal','extra','shared'].includes(currentMode)
       ? {mode:currentMode,grade:currentMode==='shared'?'all':(assignedRankGrade||cleanClassYear(profile?.classYear)),
          vocabPool:currentMode==='shared'?'all':assignedVocabPool,
@@ -1624,14 +1715,23 @@ const achOverlay = document.getElementById("achOverlay");
     if(stageRankedSnapshot()!==rankedRun.stages[stageIndex])rankedRun.invalid=true;
     if(currentMode!=='shared' && (assignedRankGrade!==rankedRun.grade || assignedVocabRevision!==rankedRun.vocabRevision))rankedRun.invalid=true;
   }
-  window.addEventListener('rpg-v66-offline',()=>{if(rankedRun)rankedRun.invalid=true;});
+  function downgradeOnConnectionLoss(){
+    if(rankedRun)rankedRun.invalid=true;
+    // If Wi-Fi drops during play, the run can finish as local practice only.
+    if(typeof gameState!=='undefined' && ['playing','paused','countdown'].includes(gameState) && !runLocalOnly){
+      setLocalOnlyRun(true);
+      try{pushMsg('CONNECTION LOST · RUN UNRANKED · NO REWARDS',true);}catch(_){}
+    }
+  }
+  window.addEventListener('rpg-v66-offline',downgradeOnConnectionLoss);
+  window.addEventListener('offline',downgradeOnConnectionLoss);
   async function submitRankedCompletion(){
     const run=rankedRun;
     if(!run||run.submitted||run.mode!==currentMode)return;
     run.submitted=true;
     await run.startPromise;
     window.RPG_V66_COMPETITIVE_ACTIVE=false;window.dispatchEvent(new Event('rpg-v66-unlock-settings'));
-    if(run.invalid || window.RPG_V66_DISCONNECTED || !run.run_token || !ADVENTURE_CONTEXT.card_code || !ADVENTURE_CONTEXT.online)return;
+    if(runLocalOnly||run.invalid || window.RPG_V66_DISCONNECTED || !run.run_token || !ADVENTURE_CONTEXT.card_code || !ADVENTURE_CONTEXT.online)return;
     if(run.stages.filter(Boolean).length!==(run.mode==='shared'?1:5))return;
     const score=getActiveScore();
     if(!Number.isInteger(score)||score<=0)return;
@@ -2772,9 +2872,14 @@ async function completeStoryStage(stage,damage=null){
   if(!stage)return;
   try{ await window.RPG_STORY.showSlides(stage.outro,stage.id,'outro'); }catch(e){console.warn(e)}
   let result=null;
-  try{ result=await window.RPG_STORY.markCompleted(stage.id,{isBattle:damage!==null,damageTaken:damage??0}); }catch(e){console.warn(e)}
+  if(runLocalOnly||window.RPG_V66_DISCONNECTED||!navigator.onLine){
+    const stars=damage===null?null:window.RPG_STORY.starsForDamage(damage);
+    result={stars,best:stars,firstClear:false,offline:true};
+  }else{
+    try{result=await window.RPG_STORY.markCompleted(stage.id,{isBattle:damage!==null,damageTaken:damage??0});}catch(e){console.warn(e)}
+  }
   // Only battle clears pay. Dialogue-only Story stages never pay Guild Coins.
-  if(result && damage!==null && !DEV_CHEATS_ENABLED && !window.RPG_V66_DISCONNECTED && guildStoryAttemptId){
+  if(result && !result.offline && damage!==null && !DEV_CHEATS_ENABLED && !window.RPG_V66_DISCONNECTED && guildStoryAttemptId){
     try{
       const award=await window.RPG_GUILD.claim({mode:'story',stageId:stage.id,attemptId:guildStoryAttemptId,firstClear:result.firstClear,correct:guildCorrectThisRun,incorrect:mistakes});
       result.guildCoins=award.awarded;result.guildDuplicate=!!award.duplicate;
@@ -2980,6 +3085,7 @@ function showModeSelectScreen(){
     return hiScoreNormal;
   }
   function setActiveHiScore(v){
+    if(unverifiedRun())return;
     v = Math.max(0, Math.trunc(Number(v) || 0));
     if(currentMode === "extra"){
       hiScoreExtra = v; saveHighScore("extra", v);
@@ -5519,6 +5625,7 @@ function damagePlayer(amount, reason){
     resumeStageClock();
     restoreBgmState();
     gameState = "playing";
+    if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
     setInputsEnabled(true);
     updateUI();
   }
@@ -5834,37 +5941,40 @@ function damagePlayer(amount, reason){
 
     stageIndex = 0;
     mistakes = 0;guildCorrectThisRun = 0;guildStoryAttemptId = currentMode === "story" ? crypto.randomUUID() : null;
-    if(ADVENTURE_CONTEXT.online){
-      const live=await refreshVocabFromServer(currentMode);
-      // Story stages are assembled before their intro slideshow, so refresh
-      // their captured word-array reference after loading the latest pool.
-      if(!live || window.RPG_V66_DISCONNECTED){
+    // A fresh Firebase check is mandatory for ranked modes. Practice/Story reuse
+    // the last verified session snapshot for five minutes, refreshing when stale.
+    const modeNeedsRank=['normal','extra','shared'].includes(currentMode);
+    const supportsCache=['practice','story','normal','extra'].includes(currentMode);
+    const connectionOkay=Boolean(ADVENTURE_CONTEXT.online&&!window.RPG_V66_DISCONNECTED&&navigator.onLine);
+    const needsRefresh=modeNeedsRank||vocabRefreshedForMode!=='normal'||!vocabLastServerSuccess||Date.now()-vocabRefreshedAt>VOCAB_REFRESH_INTERVAL_MS;
+    let live=false;
+    if(connectionOkay){
+      if(!needsRefresh&&currentMode!=='shared')live=true;
+      else live=await refreshVocabFromServer(currentMode);
+    }
+    // A connection interrupted after successful loading is still unranked.
+    const canRank=Boolean(live&&!window.RPG_V66_DISCONNECTED&&navigator.onLine);
+    if(!canRank){
+      if(!supportsCache||!restoreVerifiedVocab()){
         showModeSelectScreen();
-        alert('Firebase vocabulary is unavailable. This is an online-only game. Reconnect before starting.');
+        alert('Verified vocabulary is unavailable. Connect to Firebase once to download your class words.');
         return;
       }
-      if(currentMode==='story' && storyBattleStage)storyBattleStage.words=WORDS;
-      if(currentMode==='shared' ? SHARED_WORDS.length===0 : WORDS.length===0){
-        showModeSelectScreen();
-        alert('No active vocabulary in this group. Ask your teacher to add words in Vocabulary Manager.');
-        return;
-      }
-    }else{
-      vocabLastServerSuccess=false;
+      setLocalOnlyRun(true);
+    }else setLocalOnlyRun(false);
+    if(currentMode==='story'&&storyBattleStage)storyBattleStage.words=WORDS;
+    if(currentMode==='shared'?SHARED_WORDS.length===0:WORDS.length===0){
+      setLocalOnlyRun(false);
       showModeSelectScreen();
-      alert('Firebase sign-in required. This game cannot be played offline.');
+      alert('No active vocabulary in this group. Ask your teacher to add words in Vocabulary Manager.');
       return;
     }
-
-    // Ranked runs prefetch each stage's Firebase balance snapshot before battle.
-    // This prevents late Firestore listeners from giving different players
-    // different difficulty rules under the same ranking version.
-    if(['normal','extra'].includes(currentMode)){
+    // Do not pretend a cached/unverified snapshot is an official ranked game.
+    if(['normal','extra'].includes(currentMode)&&!runLocalOnly){
       try{await window.RPG_V66.prepareBalanceRun(currentMode,['1','2','3','4','5']);}
       catch(e){
-        showModeSelectScreen();
-        alert('Could not lock this run to Firebase game settings. '+String(e.message||e));
-        return;
+        if(supportsCache&&restoreVerifiedVocab())setLocalOnlyRun(true);
+        else{showModeSelectScreen();alert('Cannot load game settings. '+String(e.message||e));return;}
       }
     }
     continuesLeft = (currentMode === "practice") ? Infinity : (currentMode === "shared" ? 0 : MAX_CONTINUES);
@@ -5877,6 +5987,7 @@ function damagePlayer(amount, reason){
 
 
     showOverlay(false);
+    if(runLocalOnly)pushMsg('CACHED VOCAB · UNRANKED · NOT SAVED',true);
     await startStage(0);
     window.RPG_PERF?.end('Start run (cloud + art)');
   }
@@ -5978,6 +6089,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
     // Helper: wipe state back to a clean idle baseline (no screen shown yet)
     function hardResetCore(){
+      setLocalOnlyRun(false);
       setMode("normal");
       normalCleared = loadNormalCleared();
 
@@ -6046,6 +6158,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
   function onBossDefeated(){
     if(gameState !== "playing") return;
+    if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
     // Ensure EX2 survival flag doesn't linger into clear screens/next stages
     resetEx2HackMechanic();
     ex2ClearOnBgmEndActive = false;
@@ -6081,6 +6194,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
   }
 
   function onVictory(){
+  if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
   cleanupContinueListeners();
   gameState = "victory";
   setInputsEnabled(false);
@@ -6089,7 +6203,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
   // Coin payment requires a successfully submitted, non-cheat, online ranked run.
   // Each rank token is redeemable for Guild Coins only once in Firestore.
-  const guildEligible=['normal','extra'].includes(currentMode);
+  const guildEligible=!runLocalOnly&&['normal','extra'].includes(currentMode);
   const guildMode=currentMode,guildCorrect=guildCorrectThisRun,guildMisses=mistakes;
   const guildSync=guildEligible ? (async()=>{
     const ranked=await submitRankedCompletion();
@@ -6103,7 +6217,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
   const firstExtraClear = currentMode === "extra" && !extraCleared;
 
   // If Normal mode was cleared, unlock Extra permanently
-  if(currentMode === "normal" && !normalCleared){
+  if(currentMode === "normal" && !normalCleared && !runLocalOnly){
     normalCleared = true;
     saveNormalCleared();
     try{ unlockAchievement("normal_clear"); }catch(_){/* ignore */}
@@ -6114,7 +6228,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
   // If Extra mode was cleared for the first time, unlock the Master intro (Normal + Extra clear).
   // (Extra is normally only accessible after Normal clear, but debug mode may bypass that.)
-  if(currentMode === "extra" && !extraCleared){
+  if(currentMode === "extra" && !extraCleared && !runLocalOnly){
     extraCleared = true;
     saveExtraCleared();
     try{ unlockAchievement("extra_clear"); }catch(_){/* ignore */}
@@ -6130,7 +6244,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
   const clearedCount = STAGES.length;
   const unlocked = firstNormalClear ? " · EXTRA UNLOCKED" :
                    firstExtraClear ? " · MASTER INTRO UNLOCKED" : "";
-  const desc = `${clearedCount} STAGES CLEARED${unlocked}`;
+  const desc = runLocalOnly?`${clearedCount} STAGES CLEARED · UNRANKED · NOT SAVED`:`${clearedCount} STAGES CLEARED${unlocked}`;
 
   showOverlay(true);
   setOverlayText("VICTORY!", desc, "");
