@@ -6,4 +6,17 @@ async function api(path,data={}){const r=await fetch(path,{method:'POST',headers
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 async function load(){try{const r=await api('/api/cards/list');rows.innerHTML=r.cards.map(c=>`<tr><td>${esc(c.public_id)}</td><td>${esc(c.username||'Unregistered')}</td><td><select data-id="${c.id}" ${c.disabled?'disabled':''}><option value="" ${!c.class_year?'selected':''}>Unassigned</option>${['1','2','3','1b','2b','3b'].map(g=>`<option value="${g}" ${c.class_year===g[0]&&((c.class_section==='b')===g.endsWith('b'))?'selected':''}>${g.endsWith('b')?g.toUpperCase():g+'年生'}</option>`).join('')}</select></td><td>${c.disabled?'Disabled':c.registered?'Registered':'Blank'}</td></tr>`).join('');notice.textContent=r.cards.length+' cards';}catch(e){notice.textContent=e.message||String(e);}}
 rows.addEventListener('change',async e=>{const s=e.target.closest('select[data-id]');if(!s)return;s.disabled=true;try{await api('/api/cards/set-class',{id:Number(s.dataset.id),class:s.value||null});notice.textContent='Class saved.';}catch(err){notice.textContent=err.message;await load();}finally{s.disabled=false;}});
-load();</script></body></html>
+// Wait for the online connection monitor, Firebase Auth, and setup checks to finish.
+// Without this, the first Firestore request races the Firebase startup handshake.
+async function bootClassAssignments(){
+  try{
+    notice.textContent='Connecting to Firebase…';
+    const ready=await window.RPG_V66.ready;
+    if(!ready){
+      notice.textContent='Firebase connection unavailable. Check your teacher sign-in and reload.';
+      return;
+    }
+    await load();
+  }catch(e){notice.textContent=e?.message||String(e);}
+}
+void bootClassAssignments();</script></body></html>
