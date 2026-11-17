@@ -47,7 +47,10 @@
     </div>
    </main>
    <div class="reveal-demo-stamp">${session.real?'SAVED TO YOUR COLLECTION':'PREVIEW ONLY · NO CURRENCY SPENT'}</div>
-   <footer class="reveal-footer"><button type="button" class="reveal-primary" id="scoutAction" data-reveal="skip">SKIP REVEAL</button></footer>
+   <footer class="reveal-footer">
+    <button type="button" class="reveal-secondary is-hidden" id="scoutSecondary" data-reveal="results">BACK TO RESULTS</button>
+    <button type="button" class="reveal-primary" id="scoutAction" data-reveal="skip">SKIP REVEAL</button>
+   </footer>
   </div>`;
   root.querySelector('#scoutAction')?.focus({preventScroll:true});
  }
@@ -55,6 +58,52 @@
  function card(i){return root?.querySelector(`.scout-card[data-slot="${i}"]`);}
  function phase(name){const box=root?.querySelector('#scoutShowcase');if(box)box.dataset.phase=name;session.stage=name;}
  function reveal(i){const el=card(i);if(!el)return;el.dataset.state='revealed';el.setAttribute('aria-label',`Recruitment slot ${i+1}: ${session.operators[i].name}, ${session.operators[i].rarity} stars`);el.classList.remove('is-scanning');}
+
+ function newIndices(){return session?.real?session.operators.map((op,i)=>!op.duplicate?i:-1).filter(i=>i>=0):[];}
+ function setButtons(primaryText,primaryAction,secondaryText='',secondaryAction='results'){
+  const primary=root?.querySelector('#scoutAction'),secondary=root?.querySelector('#scoutSecondary');
+  if(primary){primary.textContent=primaryText;primary.dataset.reveal=primaryAction;}
+  if(secondary){
+   if(secondaryText){secondary.textContent=secondaryText;secondary.dataset.reveal=secondaryAction;secondary.classList.remove('is-hidden');}
+   else secondary.classList.add('is-hidden');
+  }
+ }
+ function renderShowcase(index=0){
+  if(!session||!root)return;
+  const picks=newIndices();
+  if(!picks.length){results();return;}
+  const safeIndex=Math.max(0,Math.min(index,picks.length-1));
+  session.showcaseIndex=safeIndex;
+  session.stage='new-showcase';
+  const slot=picks[safeIndex],op=session.operators[slot],rarity=op.rarity,t=tiers[rarity]||tiers[4];
+  root.querySelector('#revealContent').innerHTML=`
+   <section class="new-showcase-screen rarity-${rarity}" style="${theme(rarity)}">
+    <div class="new-showcase-copy">
+      <p class="new-showcase-eyebrow">NEW CHARACTER UNLOCKED</p>
+      <h1 class="new-showcase-name">${esc(op.name)}</h1>
+      <div class="new-showcase-stars" aria-label="${rarity} stars">${'★'.repeat(rarity)}</div>
+      <div class="new-showcase-meta">${safeIndex+1} / ${picks.length} NEW RECRUIT${picks.length===1?'':'S'}</div>
+    </div>
+    <div class="new-showcase-artwrap">
+      <div class="new-showcase-backglow"></div>
+      ${figure(op,'new-showcase-art')}
+      <div class="new-showcase-shadow">${figure(op,'new-showcase-silhouette')}</div>
+    </div>
+   </section>`;
+  setWords('NEW CHARACTER','FULL ART SHOWCASE',`${op.name.toUpperCase()} JOINED YOUR COLLECTION`);
+  setButtons(safeIndex<picks.length-1?'NEXT CHARACTER':'DONE', safeIndex<picks.length-1?'showcase-next':'results', 'BACK TO RESULTS','results');
+  root.querySelector('#scoutAction')?.focus({preventScroll:true});
+ }
+ function restoreResultsView(){
+  if(!session||!root)return;
+  root.querySelector('#revealContent').innerHTML=`
+    <div class="scout-heading"><p id="scoutEyebrow">RECRUITMENT COMPLETE</p><h1 id="scoutHeadline">${session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS'}</h1><div id="scoutStatus" role="status" aria-live="polite">${session.real?'All rewards saved':'Preview — no rewards awarded'}</div></div>
+    <div class="scout-showcase ${session.count===1?'scout-showcase-single':'scout-showcase-ten'}" id="scoutShowcase" data-phase="results" style="--slot-count:${session.count}">
+     ${session.operators.map(panel).join('')}
+     <div class="scout-rare-flare" aria-hidden="true"></div>
+    </div>`;
+  session.operators.forEach((_,i)=>reveal(i));
+ }
  function animate(){
   clearTimers();const gen=generation;
   const fast=reducedMotion(),speed=v=>fast?Math.max(45,Math.round(v*.12)):v;
@@ -102,19 +151,15 @@
   }
   at(350,()=>results());
  }
- function results(){if(!session||!root)return;clearTimers();phase('results');root.querySelector('#scoutShowcase')?.removeAttribute('data-scan-rarity');root.querySelectorAll('.scout-card').forEach(c=>{c.classList.remove('scout-focus','scout-rare-burst','scout-gold-pulse','scout-purple-pulse','is-scanning');});session.operators.forEach((_,i)=>reveal(i));
-  setWords('RECRUITMENT COMPLETE',session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS',session.real?'All rewards saved':'Preview — no rewards awarded');
-  const button=root.querySelector('#scoutAction');if(button){button.dataset.reveal='close';button.textContent='BACK TO RECRUITMENT';button.focus({preventScroll:true});}
-  const exit=root.querySelector('.reveal-exit');if(exit)exit.disabled=false;
- }
+ function results(){if(!session||!root)return;clearTimers();phase('results');restoreResultsView();setWords('RECRUITMENT COMPLETE',session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS',session.real?'All rewards saved':'Preview — no rewards awarded');const picks=newIndices();if(picks.length){setButtons('VIEW NEW CHARACTERS','showcase-open','BACK TO RECRUITMENT','close');}else{setButtons('BACK TO RECRUITMENT','close');}const exit=root.querySelector('.reveal-exit');if(exit)exit.disabled=false;root.querySelector('#scoutAction')?.focus({preventScroll:true});}
  function keyboard(e){if(!root)return;
   if(e.key==='Escape'){e.preventDefault();if(session.lockUntilResults&&session.stage!=='results')results();else close();}
   else if(e.key==='Tab'){const nodes=[...root.querySelectorAll('button:not([disabled])')];if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
  }
- function bind(){root.addEventListener('click',e=>{const el=e.target.closest('[data-reveal]');if(!el||el.disabled)return;if(el.dataset.reveal==='skip')results();else if(el.dataset.reveal==='close')close();});document.addEventListener('keydown',keyboard);}
+ function bind(){root.addEventListener('click',e=>{const el=e.target.closest('[data-reveal]');if(!el||el.disabled)return;const action=el.dataset.reveal;if(action==='skip')results();else if(action==='close')close();else if(action==='showcase-open')renderShowcase(0);else if(action==='showcase-next')renderShowcase((session?.showcaseIndex||0)+1);else if(action==='results')results();});document.addEventListener('keydown',keyboard);}
  function start(operators,banner,real,options={}){
   close(true);priorFocus=document.activeElement;
-  session={count:operators.length,banner:String(banner||'FEATURED').slice(0,60),operators,real,stage:'intro',lockUntilResults:!!options.lockUntilResults,onComplete:typeof options.onComplete==='function'?options.onComplete:null};
+  session={count:operators.length,banner:String(banner||'FEATURED').slice(0,60),operators,real,stage:'intro',showcaseIndex:0,lockUntilResults:!!options.lockUntilResults,onComplete:typeof options.onComplete==='function'?options.onComplete:null};
   root=document.createElement('section');root.id='revealRoot';root.className='reveal-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',real?'Recruitment results':'Recruitment visual preview');document.body.appendChild(root);
   render();bind();animate();
  }
