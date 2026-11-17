@@ -7,7 +7,23 @@
   <title>RPG Typing Versus — Recruitment Preview</title>
   <link rel="stylesheet" href="recruitment.css?v=75">
   <link rel="stylesheet" href="recruitment-reveal.css?v=75">
-  <link rel="stylesheet" href="recruitment-tutorial.css?v=86.6">
+  <link rel="stylesheet" href="recruitment-tutorial.css?v=86.7">
+
+  <!-- v86.7: critical guided-Recruitment layout is self-contained, even if a linked stylesheet is cached or unavailable. -->
+  <style id="recruitment-tutorial-critical">
+  body.tutorial-recruitment{height:100vh;height:100dvh;overflow:hidden!important;margin:0}
+  body.tutorial-recruitment main.recruit{height:100vh;height:100dvh;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+  body.tutorial-recruitment #recruitmentTutorialSpotlight{display:block;position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;z-index:7000;pointer-events:none}
+  #recruitmentTutorialSpotlight[hidden]{display:none!important}
+  body.tutorial-recruitment #recruitmentTutorialGuide{position:fixed!important;top:clamp(86px,19vh,190px);bottom:auto!important;left:clamp(12px,2.5vw,38px);right:auto;z-index:8000!important;width:min(375px,calc(100vw - 24px));max-height:min(45vh,350px);overflow:auto;box-sizing:border-box;background:#f5f5ef;color:#202123;border-left:7px solid #fff200;padding:14px 17px;box-shadow:0 14px 36px #000b;font:800 15px/1.45 Arial,Helvetica,sans-serif}
+  body.tutorial-recruitment #recruitmentTutorialGuide strong{display:block;font-size:11px;letter-spacing:.11em}
+  body.tutorial-recruitment #recruitmentTutorialGuide p{margin:6px 0 0;font-size:15px;font-weight:800;line-height:1.45;color:#202123}
+  body.tutorial-recruitment #recruitmentTutorialGuide button{margin-top:12px;border:0;background:#fff200;color:#111;padding:10px 14px;font-weight:900;cursor:pointer}
+  body.tutorial-recruitment [data-pull="10"]{outline:4px solid #fff200;outline-offset:4px;box-shadow:0 0 0 3px #111,0 0 18px #fff2007a}
+  body.tutorial-recruitment [data-pull="1"]{opacity:.38;pointer-events:none}
+  body.tutorial-recruitment .banner-actions button{pointer-events:none}
+  @media(max-width:650px){body.tutorial-recruitment #recruitmentTutorialGuide{top:clamp(75px,14vh,125px);left:12px;right:12px;width:auto;max-height:26vh;padding:10px 12px}body.tutorial-recruitment #recruitmentTutorialGuide p{font-size:12px}}
+  </style>
 </head>
 <body>
   
@@ -63,6 +79,6 @@
     if(path==='/api/recruitment/banners')return {ok:true,banners:[]};
     return {ok:true};
   }};
-  </script><script src="recruitment.js?v=86.6"></script>
+  </script><script src="recruitment.js?v=86.7"></script>
 </body>
 </html>

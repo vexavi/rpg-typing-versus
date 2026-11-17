@@ -28,3 +28,9 @@ body.tutorial-recruitment .banner-actions button{cursor:not-allowed}
    bottom:clamp(168px,23vh,210px);max-height:30vh;overflow:auto;
  }
 }
+
+/* v86.7: Never let the guide or canvas add page height. A viewport scroll belongs to main only. */
+body.tutorial-recruitment{height:100dvh;overflow:hidden!important}
+body.tutorial-recruitment main.recruit{height:100dvh;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+body.tutorial-recruitment .recruitment-tutorial-guide{top:clamp(86px,19vh,190px);bottom:auto!important;left:clamp(12px,2.5vw,38px);right:auto;z-index:8000!important;width:min(375px,calc(100vw - 24px));max-height:min(45vh,350px);overflow:auto}
+@media(max-width:650px){body.tutorial-recruitment .recruitment-tutorial-guide{top:clamp(75px,14vh,125px);bottom:auto!important;left:12px;right:12px;width:auto;max-height:26vh}}

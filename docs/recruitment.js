@@ -10,6 +10,15 @@
  const tutorialDemo=tutorialParam==='demo'||previewPage;
  // Lock secondary links before asynchronous Firebase initialization, avoiding a brief bypass.
  if(guided)document.body.classList.add('tutorial-recruitment');
+ // In v86.6 the coach could end up below the page if external tutorial CSS
+ // was missing or cached. Position it independently in script as a failsafe.
+ if(guided){
+  document.documentElement.style.overflow='hidden';
+  document.body.style.overflow='hidden';
+  document.body.style.height='100dvh';
+  const main=document.getElementById('recruitmentApp');
+  if(main){main.style.height='100dvh';main.style.minHeight='0';main.style.overflowY='auto';main.style.overflowX='hidden';}
+ }
  let tutorialState=null;
 
  // The main Recruitment artwork stays visible but subdued; the free 10-pull
@@ -48,6 +57,8 @@
  }
  function startRecruitmentSpotlight(){
   if(!guided||!spotlightCtx)return;
+  // The HTML canvas is outside main: explicit fixed styles prevent an extra page.
+  Object.assign(spotlight.style,{position:'fixed',top:'0',left:'0',right:'0',bottom:'0',width:'100vw',height:'100dvh',display:'block',zIndex:'7000',pointerEvents:'none'});
   spotlight.hidden=false;
   if(spotFrame===null)spotFrame=requestAnimationFrame(drawRecruitmentSpotlight);
  }
@@ -146,10 +157,21 @@
   let coach=$('recruitmentTutorialGuide');
   if(!coach){coach=document.createElement('section');coach.id='recruitmentTutorialGuide';coach.className='recruitment-tutorial-guide';coach.setAttribute('aria-live','polite');
    document.body.append(coach);}
+  // Inline critical styles survive a failed/stale recruitment-tutorial.css request.
+  Object.assign(coach.style,{
+   position:'fixed',top:innerWidth<=650?'clamp(75px,14vh,125px)':'clamp(86px,19vh,190px)',
+   bottom:'auto',left:innerWidth<=650?'12px':'clamp(12px,2.5vw,38px)',
+   right:innerWidth<=650?'12px':'auto',width:innerWidth<=650?'auto':'min(375px, calc(100vw - 24px))',
+   maxHeight:innerWidth<=650?'26vh':'min(45vh,350px)',overflow:'auto',
+   zIndex:'8000',background:'#f5f5ef',color:'#202123',borderLeft:'7px solid #fff200',
+   padding:innerWidth<=650?'10px 12px':'14px 17px',boxShadow:'0 14px 36px #000b',
+   boxSizing:'border-box',fontFamily:'Arial, Helvetica, sans-serif'
+  });
   coach.replaceChildren();
   const tag=document.createElement('strong');tag.textContent='LESSON 4 / 4 · RECRUITMENT';coach.append(tag);
   const desc=document.createElement('p');desc.textContent=message;coach.append(desc);
   if(action&&callback){const button=document.createElement('button');button.textContent=action;button.type='button';button.addEventListener('click',callback);coach.append(button);}
+  if(guided)startRecruitmentSpotlight();
  }
  async function tutorialFinish(){
   try{
@@ -215,7 +237,7 @@
   paint();await Promise.all([loadBannerConfig(),loadRoster()]);paint();
   window.RPG_RECRUITMENT_REVEAL?.setFeatured?.(banners[0]?.featured_character_id);
   if(guided)startRecruitmentSpotlight();
-  const cloud=window.RPG_V66;if(!cloud){console.error('Firebase bridge unavailable.');tutorialGuide('Firebase did not load. Reload this page.');return;}
+  const cloud=window.RPG_V66;if(!cloud){console.error('Firebase bridge unavailable.');if(guided)tutorialGuide('Firebase did not load. Reload this page.');return;}
   const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected){tutorialGuide('Firebase connection unavailable. Reload after reconnecting.');return;}
   // Text-only cloud overrides. A missing config doc means use the versioned JSON defaults.
   try{
