@@ -23,11 +23,12 @@ const lessonGuidance={
   3:'Defeat the training opponent by clearing the words and watching the HP bars.',
   4:'Select Recruitment from the menu to continue the tutorial.'
 };
+// Focus changes presentation only. Never change positioning or gameplay logic.
 const focusMap={
-  1:{focus:['#trainingWord','.inputBar','#lessonPanel','.training-coach'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
-  2:{focus:['#trainingWord','.inputBar','#lessonPanel','.training-coach'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
-  3:{focus:['#trainingWord','.inputBar','.bossWrap','#statusPanel','.training-coach'],dim:['.adventure-topbar']},
-  4:{focus:['#tutorialModeOverlay .overlayBox','.tutorial-target'],dim:['.adventure-topbar','.bossWrap','.inputBar','#lessonPanel','#statusPanel','.training-coach']}
+  1:{focus:['#trainingWord','.inputBar'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
+  2:{focus:['#trainingWord','.inputBar'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
+  3:{focus:['#trainingWord','.inputBar','#statusPanel .statRow'],dim:['.adventure-topbar']},
+  4:{focus:['.tutorial-target'],dim:['.adventure-topbar','.bossWrap','.inputBar','#lessonPanel','#statusPanel','.training-coach']}
 };
 let stage=1,stepCount=0,playerHP=10,frameId=null,startMs=0,busy=false;
 const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
