@@ -95,29 +95,26 @@ $('retryTutorialSave').addEventListener('click',()=>void advance());
 function showModeSelect(){
  $('trainingCoach').textContent='Select Recruitment from Mode Select.';
  $('wordLane').replaceChildren();$('answerInput').disabled=true;
- $('tutorialModeChoices').innerHTML='';
- const section=(heading,items)=>{
-  const group=document.createElement('section');group.className='student-mode-group';
-  const h=document.createElement('h3');h.className='student-mode-heading';h.textContent=heading;group.appendChild(h);
-  const grid=document.createElement('div');grid.className='student-mode-grid';group.appendChild(grid);
-  for(const [title,description] of items){
-   const button=document.createElement('button');button.type='button';
-   button.className='choiceBtn student-mode-card'+(title==='Recruitment'?' tutorial-target':' disabled');
-   button.disabled=title!=='Recruitment';
-   const label=document.createElement('span');label.className='title';label.textContent=title;button.appendChild(label);
-   const desc=document.createElement('span');desc.className='student-mode-desc';desc.textContent=description;button.appendChild(desc);
-   if(title==='Recruitment')button.addEventListener('click',()=>{
-    location.assign((demo?'recruitment-preview-v84.html':'recruitment.html')+'?tutorial='+(replay?'demo':'1'));
-   });
-   grid.appendChild(button);
-  }
-  $('tutorialModeChoices').appendChild(group);
- };
- section('PLAY', [['Story','Chapters and battles'],['Practice','Practice typing'],['Normal','Main campaign'],['Extra','Harder stages'],['Challenge','Special stage'],['All Grades Challenge','Shared leaderboard run']]);
- section('PLAYER', [['Profile','Account and collection'],['Recruitment','Recruit characters'],['Rankings','Compare scores']]);
- section('MORE', [['How to Play','Replay the tutorial'],['Tournament','Join with your teacher’s QR code']]);
+ const choices=$('tutorialModeChoices');
+ choices.replaceChildren();
+ // The names and ordering intentionally match the real post-login Mode Select.
+ const names=['Story Mode','Practice','Normal Mode','Extra Mode','Challenge Mode',
+   'All Grades Challenge','Profile','Recruitment','Rankings','Tournament'];
+ for(const title of names){
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='choiceBtn student-mode-card'+(title==='Recruitment'?' tutorial-target':' disabled');
+  button.disabled=title!=='Recruitment';
+  button.setAttribute('aria-label',title);
+  const label=document.createElement('span');label.className='title';label.textContent=title;
+  button.appendChild(label);
+  if(title==='Recruitment')button.addEventListener('click',()=>{
+   location.assign((demo?'recruitment-preview-v84.html':'recruitment.html')+'?tutorial='+(replay?'demo':'1'));
+  });
+  choices.appendChild(button);
+ }
  $('tutorialModeOverlay').classList.add('show');$('tutorialModeOverlay').setAttribute('aria-hidden','false');
- $('tutorialModeChoices').querySelector('.tutorial-target')?.focus({preventScroll:true});
+ choices.querySelector('.tutorial-target')?.focus({preventScroll:true});
 }
 function completed(){
  stop();$('tutorialFinishOverlay').classList.add('show');$('tutorialFinishOverlay').setAttribute('aria-hidden','false');

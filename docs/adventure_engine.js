@@ -2822,101 +2822,65 @@ function showModeSelectScreen(){
 
   overlayTitle.textContent = "MODE SELECT";
   overlayDesc.textContent = "";
-  overlayHint.textContent = extraCleared ? "" : (normalCleared ? "Clear Extra to unlock Challenge" : "Clear Normal to unlock Extra");
+  // Mode Select is intentionally a single column of names only.
+  // Keep onboarding in the tutorial flow rather than a replay menu entry.
+  overlayHint.textContent = "";
 
   countdownText.textContent = "";
   overlayChoices.classList.add("show");
   overlayChoices.innerHTML = "";
 
-  // v86: Keep every student destination on a single screen, grouped by purpose.
-  // Native buttons support Enter/Space, disabled state and screen readers.
-  const makeGroup = (name, sub) => {
-    const section = document.createElement('section');
-    section.className = 'student-mode-group';
-    const heading = document.createElement('h3');
-    heading.className = 'student-mode-heading';
-    heading.textContent = name;
-    section.appendChild(heading);
-    if(sub){
-      const description = document.createElement('p');
-      description.className = 'student-mode-subtitle';
-      description.textContent = sub;
-      section.appendChild(description);
-    }
-    const grid = document.createElement('div');
-    grid.className = 'student-mode-grid';
-    section.appendChild(grid);
-    overlayChoices.appendChild(section);
-    return grid;
-  };
-  const addBtn = (grid, {title, desc='', note='', disabled=false, onClick}) => {
+  const addMode = (title, {disabled=false, lockedReason='', onClick}={}) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'choiceBtn student-mode-card';
     button.disabled = !!disabled;
-    const heading = document.createElement('span');
-    heading.className = 'title';
-    heading.textContent = title;
-    button.appendChild(heading);
-    if(desc){
-      const detail = document.createElement('span');
-      detail.className = 'student-mode-desc';
-      detail.textContent = desc;
-      button.appendChild(detail);
-    }
-    if(note){
-      const state = document.createElement('span');
-      state.className = 'student-mode-note';
-      state.textContent = note;
-      button.appendChild(state);
-    }
-    if(!disabled && typeof onClick === 'function') button.addEventListener('click', e => {
-      e.stopPropagation();
+    button.setAttribute('aria-label', disabled && lockedReason ? `${title} — ${lockedReason}` : title);
+    if(disabled && lockedReason) button.title = lockedReason;
+    const label = document.createElement('span');
+    label.className = 'title';
+    label.textContent = title;
+    button.appendChild(label);
+    if(!disabled && typeof onClick === 'function') button.addEventListener('click', (event) => {
+      event.stopPropagation();
       onClick();
     });
-    grid.appendChild(button);
+    overlayChoices.appendChild(button);
     return button;
   };
-  const play = makeGroup('PLAY', 'Choose a game mode');
-  addBtn(play, {title:'Story', desc:'Chapters and battles', onClick:()=>{
+
+  addMode('Story Mode', {onClick:()=>{
     if(!window.RPG_STORY){pushMsg('Story unavailable.',true);return;}
     window.RPG_STORY.openMap(launchStoryStage);
   }});
-  addBtn(play, {title:'Practice', desc:'Practice typing', onClick:()=>{
+  addMode('Practice', {onClick:()=>{
     setMode('practice');showOverlay(false);startGame();
   }});
-  addBtn(play, {title:'Normal', desc:'Main campaign', onClick:()=>{
+  addMode('Normal Mode', {onClick:()=>{
     setMode('normal');showOverlay(false);startGame();
   }});
-  addBtn(play, {title:'Extra', desc:'Harder stages', disabled:!normalCleared,
-    note:normalCleared?'UNLOCKED':'CLEAR NORMAL TO UNLOCK',onClick:()=>{
+  addMode('Extra Mode', {disabled:!normalCleared,
+    lockedReason:'Clear Normal Mode to unlock',onClick:()=>{
       setMode('extra');showOverlay(false);startGame();
     }});
-  addBtn(play, {title:'Challenge', desc:'Special stage', disabled:!extraCleared,
-    note:extraCleared?'UNLOCKED':'CLEAR EXTRA TO UNLOCK',onClick:()=>{
+  addMode('Challenge Mode', {disabled:!extraCleared,
+    lockedReason:'Clear Extra Mode to unlock',onClick:()=>{
       setMode('challenge');showOverlay(false);startGame();
     }});
-  addBtn(play, {title:'All Grades Challenge', desc:'Shared leaderboard run', onClick:()=>{
+  addMode('All Grades Challenge', {onClick:()=>{
     setMode('shared');showOverlay(false);startGame();
   }});
-
-  const player = makeGroup('PLAYER', 'Your account and progress');
-  addBtn(player, {title:'Profile', desc:'Account and collection', onClick:()=>{
+  addMode('Profile', {onClick:()=>{
     window.location.assign('profile.html');
   }});
-  addBtn(player, {title:'Recruitment', desc:'Recruit characters', onClick:()=>{
+  addMode('Recruitment', {onClick:()=>{
     window.location.assign('recruitment.html');
   }});
-  addBtn(player, {title:'Rankings', desc:'Compare scores', onClick:()=>{
+  addMode('Rankings', {onClick:()=>{
     void openRankings('normal');
   }});
-
-  const other = makeGroup('MORE', 'Help and classroom play');
-  addBtn(other, {title:'How to Play', desc:'Replay the tutorial', onClick:()=>{
-    window.location.assign('tutorial.html?replay=1');
-  }});
-  addBtn(other, {title:'Tournament', desc:'Join with your teacher’s QR code',
-    note:'SCAN CLASSROOM QR TO JOIN', disabled:true});
+  addMode('Tournament', {disabled:true,
+    lockedReason:'Scan your teacher’s tournament QR code to join'});
   const box = overlayChoices.closest('.overlayBox');
   if(box) box.scrollTop = 0;
 
