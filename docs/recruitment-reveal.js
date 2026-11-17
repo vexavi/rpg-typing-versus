@@ -56,8 +56,9 @@
  function setWords(eyebrow,headline,status){if(!root)return;const a=root.querySelector('#scoutEyebrow'),b=root.querySelector('#scoutHeadline'),c=root.querySelector('#scoutStatus');if(a)a.textContent=eyebrow;if(b)b.textContent=headline;if(c)c.textContent=status;}
  function card(i){return root?.querySelector(`.scout-card[data-slot="${i}"]`);}
  function phase(name){const box=root?.querySelector('#scoutShowcase');if(box)box.dataset.phase=name;session.stage=name;}
- function reveal(i){const el=card(i);if(!el)return;el.dataset.state='revealed';el.setAttribute('aria-label',`Recruitment slot ${i+1}: ${session.operators[i].name}, ${session.operators[i].rarity} stars`);}
- /** One continuous screen-wide pass for each rarity. The beam does not hop between slots. */
+ function reveal(i){const el=card(i);if(!el)return;el.dataset.state='revealed';el.setAttribute('aria-label',`Recruitment slot ${i+1}: ${session.operators[i].name}, ${session.operators[i].rarity} stars`);el.classList.remove('is-scanning');}
+ function trace(i){const beam=root?.querySelector('#scoutBeam');if(!beam)return;beam.classList.remove('is-sweeping');beam.style.removeProperty('--sweep-ms');beam.style.removeProperty('--beam-color');beam.style.left=`${((i+.5)/session.count)*100}%`;beam.classList.add('active');}
+/** One continuous screen-wide pass for each rarity. The beam does not hop between slots. */
  function sweep(rarity,duration){
   const stage=root?.querySelector('#scoutShowcase');
   const beam=root?.querySelector('#scoutBeam');
@@ -86,26 +87,40 @@
   const fast=reducedMotion(),speed=v=>fast?Math.max(45,Math.round(v*.12)):v;
   let time=0;
   const at=(delay,fn)=>{time+=speed(delay);later(fn,time,gen);};
+  const fourStar=session.operators.map((op,i)=>op.rarity===4?i:-1).filter(i=>i>=0);
+  const fiveStar=session.operators.map((op,i)=>op.rarity===5?i:-1).filter(i=>i>=0);
+  const sixStar=session.operators.map((op,i)=>op.rarity===6?i:-1).filter(i=>i>=0);
   phase('intro');setWords('RECRUITMENT SIGNAL','INCOMING OPERATORS',`Receiving ${session.count} ${session.count===1?'operator':'operators'}…`);
-  at(480,()=>{phase('silhouettes');setWords('SIGNAL LOCKED','IDENTITIES CONCEALED',`${session.count} signal${session.count===1?'':'s'} acquired`);});
-  at(620,()=>{phase('silhouettes');setWords('SIGNAL READY','SCANNING BY RARITY','4★ → 5★ → 6★');});
-  // One full left-to-right sweep per rarity present. Six-star results are always last.
-  // All slots retain their original pull order; only the reveal order is tiered.
-  for(const rarity of [4,5,6]){
-   const indices=session.operators.map((op,i)=>op.rarity===rarity?i:-1).filter(i=>i>=0);
-   if(!indices.length)continue;
-   const duration=speed(rarity===6?1500:rarity===5?1280:1050);
-   at(230,()=>sweep(rarity,duration));
-   const startedAt=time;
-   for(const i of indices){
-    // Match the moment the beam reaches this original physical slot.
-    const offset=Math.round(duration*(i+.5)/session.count);
-    later(()=>revealInPass(i,rarity),startedAt+offset,gen);
-   }
-   at(rarity===6?1500:rarity===5?1280:1050,()=>{const beam=root?.querySelector('#scoutBeam');beam?.classList.remove('active','is-sweeping');});
-   at(rarity===6?270:200,()=>{root?.querySelector('#scoutShowcase')?.removeAttribute('data-scan-rarity');});
+  at(500,()=>{phase('silhouettes');setWords('SIGNAL LOCKED','IDENTITIES CONCEALED',`${session.count} signal${session.count===1?'':'s'} acquired`);});
+  at(650,()=>{phase('scanning');setWords('IDENTIFYING OPERATORS','SCANNING…','Standard 4★ signals first');});
+
+  // 4★ — quick purple scan and immediate reveal.
+  for(const i of fourStar){
+   at(110,()=>{trace(i);const el=card(i);if(el)el.classList.add('is-scanning');});
+   at(220,()=>{reveal(i);setWords('4★ SIGNAL','STANDARD RECRUIT IDENTIFIED',`${fourStar.indexOf(i)+1} / ${fourStar.length} standard signal${fourStar.length===1?'':'s'}`);});
   }
-  at(390,()=>results());
+
+  // 5★ — cinematic gold reveal after all 4★ cards, but always before any 6★.
+  if(fiveStar.length){
+   at(280,()=>{phase('five-wait');root.querySelector('#scoutBeam')?.classList.remove('active');setWords('ENHANCED SIGNAL','5★ IDENTIFICATION PENDING',`${fiveStar.length} advanced ${fiveStar.length===1?'signal remains':'signals remain'}`);});
+   fiveStar.forEach((i,number)=>{
+    at(260,()=>{phase('five-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('ENHANCED SIGNAL','GOLD WAVE RISING…',`Priority reveal ${number+1} / ${fiveStar.length}`);});
+    at(280,()=>{card(i)?.classList.add('scout-gold-pulse');});
+    at(420,()=>{reveal(i);setWords('5★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
+    at(340,()=>{card(i)?.classList.remove('scout-gold-pulse');});
+   });
+  }
+
+  // 6★ — hidden until the end, then full cinematic reveal.
+  if(sixStar.length){
+   at(320,()=>{phase('rare-wait');root.querySelector('#scoutBeam')?.classList.remove('active');setWords('UNKNOWN SIGNAL','IDENTIFICATION PENDING',`${sixStar.length} exceptional ${sixStar.length===1?'signal remains':'signals remain'}`);});
+   sixStar.forEach((i,number)=>{
+    at(300,()=>{phase('rare-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('EXCEPTIONAL SIGNAL', 'SIGNAL STRENGTH RISING…',`Final reveal ${number+1} / ${sixStar.length}`);});
+    at(650,()=>{const el=card(i);el?.classList.add('scout-rare-burst');reveal(i);setWords('6★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
+    at(800,()=>{card(i)?.classList.remove('scout-rare-burst');});
+   });
+  }
+  at(350,()=>results());
  }
  function results(){if(!session||!root)return;clearTimers();phase('results');root.querySelector('#scoutBeam')?.classList.remove('active','is-sweeping');root.querySelector('#scoutShowcase')?.removeAttribute('data-scan-rarity');root.querySelectorAll('.scout-card').forEach(c=>{c.classList.remove('scout-focus','scout-rare-burst','scout-gold-pulse','is-scanning');});session.operators.forEach((_,i)=>reveal(i));
   setWords('RECRUITMENT COMPLETE',session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS',session.real?'All rewards saved':'Preview — no rewards awarded');
