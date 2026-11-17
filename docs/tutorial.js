@@ -16,38 +16,93 @@ const samples={
   3:[{prompt:'みどり',answer:'green'},{prompt:'みず',answer:'water'},{prompt:'うれしい',answer:'happy'}]
 };
 const titles={1:'Type a word',2:'Falling words',3:'Defeat the boss',4:'Recruitment'};
-const hints={1:'The Japanese word is shown. Type the English translation and press Enter.',2:'Type the English translations before the words reach the bottom.',3:'Each correct answer damages the enemy. Clear all three words!',4:'Open Recruitment to obtain your first ten characters.'};
+const hints={1:'Type the English translation shown beside the Japanese word.',2:'Type the English translations shown beside the falling words.',3:'Type the translations to attack the boss. Clear all three words!',4:'Open Recruitment to obtain your first ten characters.'};
 const lessonGuidance={
-  1:'Look at the Japanese word. The English translation is "apple". Type apple, then press Enter.',
-  2:'Words fall, just like Normal Mode. Type their English translations before they reach the bottom.',
-  3:'Defeat the training opponent by clearing the words and watching the HP bars.',
+  1:'Read the Japanese word and its English translation. Type apple, then press Enter.',
+  2:'Read the English translation on each falling word. Type it before the word reaches the bottom.',
+  3:'Use the English translations to clear the words. Each correct answer damages the boss.',
   4:'Select Recruitment from the menu to continue the tutorial.'
 };
 // Focus changes presentation only. Never change positioning or gameplay logic.
 const focusMap={
-  1:{focus:['#trainingWord','.inputBar'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
-  2:{focus:['#trainingWord','.inputBar'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
-  3:{focus:['#trainingWord','.inputBar','#statusPanel .statRow'],dim:['.adventure-topbar']},
+  1:{focus:['#trainingWord','.inputBar','#trainingCoach','#lessonPanel'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
+  2:{focus:['#trainingWord','.inputBar','#trainingCoach','#lessonPanel'],dim:['.bossWrap','#statusPanel','.adventure-topbar']},
+  3:{focus:['#trainingWord','.inputBar','#trainingCoach','#lessonPanel','#bossWrap','#statusPanel .statRow'],dim:['.adventure-topbar']},
   4:{focus:['.tutorial-target'],dim:['.adventure-topbar','.bossWrap','.inputBar','#lessonPanel','#statusPanel','.training-coach']}
 };
 let stage=1,stepCount=0,playerHP=10,frameId=null,startMs=0,busy=false;
 const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function log(message){$('messageLog').textContent=message;}
 function status(message){$('status').textContent=message||'';}
+// A single translucent veil covers every unimportant element. Rectangular
+// cutouts leave only the lesson targets clearly visible; the overlay never
+// captures clicks or moves existing elements (which are positioned absolutely).
+const spotlightCanvas=$('tutorialSpotlight');
+const spotlightContext=spotlightCanvas?.getContext('2d');
+let spotlightFrame=null;
+let lastSpotlightPaint=0;
 function clearTutorialFocus(){
-  document.querySelectorAll('.tutorial-focus').forEach(el=>el.classList.remove('tutorial-focus'));
-  document.querySelectorAll('.tutorial-dim').forEach(el=>el.classList.remove('tutorial-dim'));
+ document.querySelectorAll('.tutorial-focus').forEach(el=>el.classList.remove('tutorial-focus'));
+ document.querySelectorAll('.tutorial-dim').forEach(el=>el.classList.remove('tutorial-dim'));
+}
+function stopSpotlight(){
+ if(spotlightFrame!==null)cancelAnimationFrame(spotlightFrame);
+ spotlightFrame=null;
+ if(spotlightCanvas)spotlightCanvas.hidden=true;
+ document.body.classList.remove('tutorial-spotlight-active');
+}
+function drawSpotlight(timestamp=0){
+ if(!spotlightContext || stage>3 || $('tutorialApp').hidden){stopSpotlight();return;}
+ // Limit full-screen repaint work on school Chromebooks while tracking falling words.
+ const interval=stage===1?140:42;
+ if(timestamp-lastSpotlightPaint<interval){spotlightFrame=requestAnimationFrame(drawSpotlight);return;}
+ lastSpotlightPaint=timestamp;
+ const ratio=1;
+ const vw=window.innerWidth, vh=window.innerHeight;
+ const cw=Math.round(vw*ratio),ch=Math.round(vh*ratio);
+ if(spotlightCanvas.width!==cw || spotlightCanvas.height!==ch){
+  spotlightCanvas.width=cw;spotlightCanvas.height=ch;
+ }
+ spotlightContext.setTransform(ratio,0,0,ratio,0,0);
+ spotlightContext.clearRect(0,0,vw,vh);
+ spotlightContext.fillStyle='rgba(5, 8, 12, 0.73)';
+ spotlightContext.fillRect(0,0,vw,vh);
+ const targets=[];
+ for(const selector of focusMap[stage]?.focus||[]){
+  for(const element of document.querySelectorAll(selector)){
+   if(!element.getClientRects().length || element.hidden)continue;
+   const r=element.getBoundingClientRect();
+   const padding=selector==='#trainingWord'?4:5;
+   const left=Math.max(0,r.left-padding),top=Math.max(0,r.top-padding);
+   const right=Math.min(vw,r.right+padding),bottom=Math.min(vh,r.bottom+padding);
+   if(right<=left||bottom<=top)continue;
+   targets.push({x:left,y:top,w:right-left,h:bottom-top,outline:selector!=='#bossWrap'});
+  }
+ }
+ // Clear all holes first, then draw borders so overlapping targets stay bright.
+ for(const r of targets)spotlightContext.clearRect(r.x,r.y,r.w,r.h);
+ spotlightContext.strokeStyle='#fff200';
+ spotlightContext.lineWidth=4;
+ for(const r of targets)if(r.outline)spotlightContext.strokeRect(r.x+2,r.y+2,r.w-4,r.h-4);
+ spotlightFrame=requestAnimationFrame(drawSpotlight);
 }
 function applyTutorialFocus(i){
-  clearTutorialFocus();
-  const cfg=focusMap[i];
-  if(!cfg)return;
-  for(const selector of cfg.focus||[]){
-    document.querySelectorAll(selector).forEach(el=>el.classList.add('tutorial-focus'));
+ clearTutorialFocus();
+ const cfg=focusMap[i];
+ if(!cfg){stopSpotlight();return;}
+ for(const selector of cfg.focus||[]){
+  document.querySelectorAll(selector).forEach(el=>el.classList.add('tutorial-focus'));
+ }
+ for(const selector of cfg.dim||[]){
+  document.querySelectorAll(selector).forEach(el=>el.classList.add('tutorial-dim'));
+ }
+ if(spotlightContext && i<4){
+  if(spotlightFrame===null){
+   spotlightCanvas.hidden=false;
+   document.body.classList.add('tutorial-spotlight-active');
+   spotlightFrame=requestAnimationFrame(drawSpotlight);
   }
-  for(const selector of cfg.dim||[]){
-    document.querySelectorAll(selector).forEach(el=>el.classList.add('tutorial-dim'));
-  }
+ }else stopSpotlight();
 }
 function stop(){if(frameId!==null){cancelAnimationFrame(frameId);frameId=null;}}
 function routeMenu(){
@@ -59,7 +114,8 @@ function nextWord(){
  stop();const record=samples[stage]?.[stepCount];if(!record){if(stage<=3)void advance();return;}
  const lane=$('wordLane');lane.replaceChildren();
  const word=document.createElement('div');word.className='word';word.id='trainingWord';word.style.setProperty('--y','18px');
- word.innerHTML=`<span class="prompt">${escapeHtml(record.prompt)}</span><span class="right"><span class="tag">${stage===1?'TRAINING':'FALLING'}</span></span>`;
+ // Display the ACTUAL English translation instead of the misleading TRAINING/FALLING badge.
+ word.innerHTML=`<span class="prompt">${escapeHtml(record.prompt)}</span><span class="right"><span class="tag translation">${escapeHtml(record.answer)}</span></span>`;
  lane.appendChild(word);
  applyTutorialFocus(stage);
  $('answerInput').value='';$('answerInput').disabled=false;$('answerInput').focus({preventScroll:true});
@@ -148,7 +204,7 @@ function showModeSelect(){
  choices.querySelector('.tutorial-target')?.focus({preventScroll:true});
 }
 function completed(){
- stop();$('tutorialFinishOverlay').classList.add('show');$('tutorialFinishOverlay').setAttribute('aria-hidden','false');
+ stop();stopSpotlight();clearTutorialFocus();$('tutorialFinishOverlay').classList.add('show');$('tutorialFinishOverlay').setAttribute('aria-hidden','false');
  $('lessonNumber').textContent='4';$('stepCounter').textContent='COMPLETE';
  $('trainingCoach').textContent='Tutorial complete!';
  $('wordLane').replaceChildren();$('answerInput').disabled=true;

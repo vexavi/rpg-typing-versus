@@ -78,3 +78,24 @@ body.tutorial-client .uiRow .barLine .meter{background:#e0e2e1;opacity:1!importa
 @media(prefers-reduced-motion:reduce){
   .tutorial-client .tutorial-dim{transition:none}
 }
+
+/* v86.5: page-wide dimming veil with transparent spotlight cutouts. */
+.tutorial-client #tutorialSpotlight{
+ position:fixed;
+ inset:0;
+ width:100vw;
+ height:100dvh;
+ pointer-events:none;
+ z-index:4000;
+ display:block;
+}
+.tutorial-client #tutorialSpotlight[hidden]{display:none!important}
+/* Canvas draws the outlines, so don't double the border on highlighted items. */
+.tutorial-client.tutorial-spotlight-active .tutorial-focus{outline:none;box-shadow:none}
+.tutorial-client .word .tag.translation{
+ color:#fff200;
+ font-weight:900;
+ font-size:clamp(15px,1.65vw,21px);
+ text-transform:none;
+ letter-spacing:0;
+}
