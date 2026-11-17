@@ -49,7 +49,7 @@ $('print').addEventListener('click',async()=>{
  for(let i=0;i<selected.length;i+=10){const group=selected.slice(i,i+10);chunks.push('<div class="gridprint">'+group.map((c,j)=>{
   const cardTheme=theme==='mixed'?cardArts[(Number(c.publicId.slice(1))-1)%4]:theme;
   const dest=new URL(u.toString());dest.searchParams.set('card',c.code);
-  return `<div class="print-card"><img class="print-card-art" alt="" src="assets/card_themes/${cardTheme}.webp"><span class="print-card-title">ADVENTURE CARD</span><div class="print-qr">${window.RPGQrSvg(dest.toString())}</div><div class="print-code"><span>${esc(c.publicId)}</span>${esc(formatCode(c.code))}</div></div>`;
+  return `<div class="print-card"><img class="print-card-art" alt="" src="assets/card_themes/${cardTheme}.webp"><div class="print-qr">${window.RPGQrSvg(dest.toString())}</div><div class="print-code"><span>${esc(c.publicId)}</span>${esc(formatCode(c.code))}</div></div>`;
  }).join('')+'</div>')}
  $('print-area').innerHTML=chunks.join('');
  await Promise.all([...$('print-area').querySelectorAll('img')].map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})})));

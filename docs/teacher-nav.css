@@ -21,3 +21,9 @@ body.teacher-nav-ready > main { min-width:0; }
 /* The old shard test page centers its body with CSS grid. The shared navigation must stay at the top. */
 body.teacher-nav-ready.teacher-nav-aura {display:block!important;} 
 body.teacher-nav-ready.teacher-nav-aura main {margin:30px auto 50px;}
+
+/* v86.1: Never allow the sticky teacher toolbar onto printed documents/cards. */
+@media print {
+  .teacher-hub-nav,
+  body.teacher-nav-ready > .teacher-hub-nav { display:none !important; }
+}
