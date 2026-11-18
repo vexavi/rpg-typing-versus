@@ -3479,12 +3479,99 @@ async function debugJumpTo(mode, idx){
     operatorPassive?.reset();
     bossHpText?.classList?.remove('operator-weak-point-ready');
     wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard');
+    operatorClearLupaVisuals();
   }
   function operatorStageWithoutBoss(){
     // Survival/time trials have a visible boss HP bar but no boss to defeat.
     const stage=STAGES[stageIndex];
     return ['challenge','shared','practice'].includes(currentMode)
       || !!stage?.bossInvulnerable || !!stage?.endStageOnBgmEnd || isExtraStage2();
+  }
+
+  function operatorStageWordEntries(){
+    const stage=STAGES[stageIndex];
+    const list=(stage&&stage.words)?stage.words:[];
+    const valid=[];
+    for(const w of list){
+      if(!w)continue;
+      const prompt=String(w.prompt??'').trim();
+      const answer=String(w.answer??'').trim();
+      if(!prompt||!answer)continue;
+      valid.push({prompt,answer});
+    }
+    return valid;
+  }
+  function operatorLongestStageEntry(exclude=new Set()){
+    const valid=operatorStageWordEntries().filter(entry=>!exclude.has(normalizeAnswer(entry.answer)));
+    if(!valid.length)return null;
+    const maxLen=Math.max(...valid.map(entry=>countEnglishLetters(entry.answer)));
+    const longest=valid.filter(entry=>countEnglishLetters(entry.answer)===maxLen);
+    return longest[Math.floor(Math.random()*longest.length)]||valid[0]||null;
+  }
+  function operatorRandomStageEntry(exclude=new Set()){
+    const valid=operatorStageWordEntries().filter(entry=>!exclude.has(normalizeAnswer(entry.answer)));
+    if(!valid.length)return null;
+    return valid[Math.floor(Math.random()*valid.length)]||valid[0]||null;
+  }
+  function operatorClearLupaVisuals(){
+    document.body.classList.remove('operator-lupa-focus');
+    wordLane?.classList?.remove('operator-lupa-focus');
+    for(const word of wordsOnField){
+      word?.el?.classList?.remove('operator-lupa-weakpoint');
+      word?.el?.removeAttribute?.('data-lupa-time');
+    }
+  }
+  function operatorApplyLupaVisuals(wordIds,seconds){
+    operatorClearLupaVisuals();
+    const ids=new Set(Array.isArray(wordIds)?wordIds:[]);
+    if(!ids.size)return;
+    document.body.classList.add('operator-lupa-focus');
+    wordLane?.classList?.add('operator-lupa-focus');
+    for(const word of wordsOnField){
+      if(!ids.has(word.id))continue;
+      word.el?.classList?.add('operator-lupa-weakpoint');
+      if(word.el?.setAttribute)word.el.setAttribute('data-lupa-time',String(seconds));
+    }
+  }
+  function operatorRefreshLupaVisuals(time=stageElapsedSec()){
+    if(operatorPassive?.rule?.id!=='lupa')return;
+    const debug=operatorPassive.debug?.();
+    if(!debug?.lupaActive){operatorClearLupaVisuals();return;}
+    const seconds=Math.max(1,Math.ceil((debug.lupaDeadline||0)-time));
+    const ids=new Set(debug.lupaTargets||[]);
+    if(!ids.size){operatorClearLupaVisuals();return;}
+    document.body.classList.add('operator-lupa-focus');
+    wordLane?.classList?.add('operator-lupa-focus');
+    for(const word of wordsOnField){
+      const active=ids.has(word.id);
+      word?.el?.classList?.toggle('operator-lupa-weakpoint',active);
+      if(active && word.el?.setAttribute)word.el.setAttribute('data-lupa-time',String(seconds));
+      else word?.el?.removeAttribute?.('data-lupa-time');
+    }
+  }
+  function operatorPrepareLupaTargets(){
+    const chosen=landedWords().sort((a,b)=>b.y-a.y).slice(0,3);
+    const need=Math.max(0,3-chosen.length);
+    if(!need)return chosen;
+    const exclude=new Set(wordsOnField.map(w=>normalizeAnswer(w.answer)));
+    const spawned=[];
+    for(let i=0;i<need;i++){
+      let pick=null;
+      if(i===0)pick=operatorLongestStageEntry(exclude);
+      if(!pick)pick=operatorRandomStageEntry(exclude);
+      if(!pick)break;
+      exclude.add(normalizeAnswer(pick.answer));
+      const word=spawnOneWord({state:'landed',countSpawn:false,prompt:pick.prompt,answer:pick.answer,skipMechanicHooks:true});
+      if(word)spawned.push(word);
+    }
+    if(spawned.length){restackDirty=true;restackLanded();}
+    return chosen.concat(spawned).slice(0,3);
+  }
+  function operatorStartLupa(){
+    const targets=operatorPrepareLupaTargets();
+    const effect=operatorPassive?.startLupa?.(targets.map(w=>w.id),stageElapsedSec());
+    if(effect)applyOperatorFieldEffect(effect);
+    return effect;
   }
   function operatorOnCorrect(clearedWord){
     if(!operatorPassive?.rule)return null;
@@ -3517,6 +3604,14 @@ async function debugJumpTo(mode, idx){
       pushMsg('SERAPHINE · TARGET MARKED',true);
     }else if(effect.type==='execution-pending'){
       pushMsg('SERAPHINE · NEXT TARGET (3s)',true);
+    }else if(effect.type==='lupa-ready'){
+      operatorStartLupa();
+      return effect;
+    }else if(effect.type==='lupa-hit'){
+      pushMsg(`LUPA · WEAK POINT (+${effect.damage} BOSS DMG)`,true);
+    }else if(effect.type==='lupa-complete'){
+      pushMsg(`LUPA · MOONLIT AMBUSH COMPLETE (+${effect.damage} BOSS DMG)`,true);
+      operatorClearLupaVisuals();
     }
     applyOperatorFieldEffect(effect);
     return effect;
@@ -3525,7 +3620,15 @@ async function debugJumpTo(mode, idx){
   // after frame spawns, so timed effects can pick up newly arriving words.
   function applyOperatorFieldEffect(effect){
     if(!effect)return;
-    if(effect.type==='foxfire-start'){
+    if(effect.type==='lupa-start'){
+      operatorApplyLupaVisuals(effect.wordIds,effect.seconds);
+      pushMsg(`LUPA · MOONLIT AMBUSH (${effect.wordIds.length} WEAK POINTS)`,true);
+    }else if(effect.type==='lupa-timeout'){
+      operatorClearLupaVisuals();
+      pushMsg(effect.count>0
+        ?`LUPA · WEAK POINT FAILED (-${effect.selfDamage} HP)`
+        :'LUPA · MOONLIT AMBUSH ENDED',true);
+    }else if(effect.type==='foxfire-start'){
       spawnAccMs=0;
       const ids=new Set(effect.wordIds);
       for(const word of wordsOnField){
@@ -5586,6 +5689,7 @@ if(state === "landed"){
     const passiveEffect=operatorOnCorrect(best);
     let bonusDamage=0;
     if(passiveEffect?.type==='boss-bonus')bonusDamage+=passiveEffect.damage;
+    if(passiveEffect?.type==='lupa-hit'||passiveEffect?.type==='lupa-complete')bonusDamage+=passiveEffect.damage||0;
     if(passiveEffect?.type==='aveline-cleave'){
       bossHpText?.classList?.remove('operator-weak-point-ready');
       operatorCleaveLowest();
@@ -6831,7 +6935,13 @@ if(gameState === "paused"){
         const autoDamage=operatorAutoEliminate(fieldEffect.wordId,true);
         if(autoDamage>0)damageBoss(autoDamage);
         if(gameState!=='playing'){scheduleTick(true);return;}
-      }else applyOperatorFieldEffect(fieldEffect);
+      }else{
+        applyOperatorFieldEffect(fieldEffect);
+        if(fieldEffect?.type==='lupa-timeout'&&fieldEffect.selfDamage>0){
+          damagePlayer(fieldEffect.selfDamage,'Moonlit Ambush timeout');
+          if(gameState!=='playing'){scheduleTick(true);return;}
+        }
+      }
 
       const h = laneHeight();
       let fallSpeed = (stageIndex === 4)

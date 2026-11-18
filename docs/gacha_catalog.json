@@ -91,6 +91,12 @@
       "name": "Tavi",
       "rarity": 6,
       "art": "assets/recruitment/tavi.webp"
+    },
+    {
+      "id": "lupa",
+      "name": "Lupa",
+      "rarity": 6,
+      "art": "assets/recruitment/lupa.webp"
     }
   ]
 }

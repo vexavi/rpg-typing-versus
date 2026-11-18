@@ -304,3 +304,42 @@ body.adventure-client .uiRow #playerMeter{
   animation:operator-phantom-strike .45s ease-out forwards;
 }
 @media(prefers-reduced-motion:reduce){.operator-sovereign-slash{animation:none;opacity:.5}}
+
+
+/* v86.36 — Lupa weak-point focus UI */
+.word.operator-lupa-weakpoint{
+  border-color:#ffe8a3!important;
+  box-shadow:inset 0 0 0 2px #ffcf4f9b,0 0 14px #ffcb4d95!important;
+}
+.word.operator-lupa-weakpoint::before{
+  content:'WEAK POINT · ' attr(data-lupa-time) 's';
+  position:absolute;top:-18px;left:0;
+  color:#fff0c7;font:900 12px/1 system-ui,sans-serif;
+  text-shadow:0 0 7px #7b5615;white-space:nowrap;pointer-events:none;
+}
+.wordLane.operator-lupa-focus{
+  border-color:#ffe093!important;
+  box-shadow:inset 0 0 0 2px #ffd36b61,0 0 16px #f2d27142;
+}
+body.operator-lupa-focus .bgImg,
+body.operator-lupa-focus .bgFallback,
+body.operator-lupa-focus .bossWrap,
+body.operator-lupa-focus .laneLabel,
+body.operator-lupa-focus .overflowBadge,
+body.operator-lupa-focus #msgBox,
+body.operator-lupa-focus .panel .small,
+body.operator-lupa-focus .panel .menuList,
+body.operator-lupa-focus .panel .bgmRow,
+body.operator-lupa-focus .panel .teacherLinkRow,
+body.operator-lupa-focus .panelHeader .muted,
+body.operator-lupa-focus .adventure-topbar{
+  opacity:.22;
+}
+body.operator-lupa-focus #wordLane,
+body.operator-lupa-focus #inputBar,
+body.operator-lupa-focus #bossHpLine,
+body.operator-lupa-focus #playerMeter,
+body.operator-lupa-focus #playerHpText,
+body.operator-lupa-focus #bossHpText{
+  opacity:1!important;
+}

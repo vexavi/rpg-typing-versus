@@ -27,6 +27,8 @@
       description:'Every 5 manually typed words, mark the lowest falling word. Typing it eliminates another word for its minimum length-based score and normal boss damage.'}),
     tavi: Object.freeze({id:'tavi',name:'Tavi',rarity:6,title:'Foxfire Rewind',every:6,
       description:'After 6 consecutive correct words, hide and rewind falling words, then release them one at a time from shortest to longest. Mistakes reset the combo; rewound words cannot recharge it.'}),
+    lupa: Object.freeze({id:'lupa',name:'Lupa',rarity:6,title:'Moonlit Ambush',every:6,weakpointCount:3,weakpointSec:6,bonusDamage:2,fullClearBonus:3,selfDamage:2,
+      description:'After 6 consecutive correct words without error, mark 3 stacked Weak Point words for 6 seconds. Each cleared Weak Point deals +2 boss damage; clearing all 3 in time deals +3 more. Any remaining Weak Point deals 2 damage to the player when time expires.'}),
     hound: Object.freeze({id:'hound',name:'Hound',rarity:6,title:'Blood Hunt',every:4,preySec:6,chainSec:3,maxChain:3,bonusDamage:2,
       description:'After 4 consecutive correct words, type the marked Prey within 6 seconds to start Blood Hunt: complete up to 3 timed Prey (3 seconds each) for +2 boss damage apiece.'}),
     cassian: Object.freeze({id:'cassian',name:'Cassian',rarity:6,title:"Sovereign’s Decree",every:6,maxEliminations:3,invulnerableSec:5,
@@ -45,6 +47,7 @@
     let streak=0,domainFreezeUntil=0,charged=false,marked=null,awaitingMark=false,executionPendingUntil=0;
     // 6★ state. Only one operator runs per game, so no inter-operator effect stacking.
     let foxfireProgress=0,foxfirePrimed=false,foxfireActive=false,foxfireQueue=[],foxfireCurrentId=null;
+    let lupaProgress=0,lupaActive=false,lupaDeadline=0,lupaTargets=[];
     let houndProgress=0,houndPhase='none',houndMarked=null,houndDeadline=0,houndChainHits=0,houndNeedSpawn=false;
     let cassianProgress=0,cassianGuardUntil=0;
     function releaseFrozen(){
@@ -94,11 +97,26 @@
       foxfireCurrentId=ids[0];foxfireQueue=ids.slice(1);activations++;
       return {type:'foxfire-start',wordIds:ids,releaseId:foxfireCurrentId,characterId:rule.id};
     }
+
+    function startLupa(wordIds,time){
+      const ids=(Array.isArray(wordIds)?wordIds:[]).filter(id=>Number.isFinite(id));
+      lupaProgress=0;
+      if(!ids.length)return null;
+      lupaActive=true;
+      lupaTargets=ids.slice(0,rule.weakpointCount);
+      lupaDeadline=validTime(time)+rule.weakpointSec;
+      activations++;
+      return {type:'lupa-start',wordIds:lupaTargets.slice(),seconds:rule.weakpointSec,characterId:rule.id};
+    }
+    function endLupa(){
+      lupaActive=false;lupaDeadline=0;lupaTargets=[];lupaProgress=0;
+    }
     function reset(){
       releaseFrozen();releaseMark();releaseHoundMark();correct=0;activations=0;spawnPauseUntil=0;slowUntil=0;
       lastSlowAt=-Infinity;mistakeArmed=false;used=false;streak=0;domainFreezeUntil=0;
       charged=false;awaitingMark=false;executionPendingUntil=0;
       foxfireProgress=0;foxfirePrimed=false;foxfireActive=false;foxfireQueue=[];foxfireCurrentId=null;
+      endLupa();
       endHound();cassianProgress=0;cassianGuardUntil=0;
     }
     function tick(time){
@@ -153,6 +171,10 @@
         if(!foxfireActive)foxfireProgress=0;
         return null;
       }
+      if(rule.id==='lupa'){
+        if(!lupaActive)lupaProgress=0;
+        return null;
+      }
       if(rule.id==='hound'){
         houndProgress=0;return null;
       }
@@ -185,6 +207,23 @@
       // chain count rather than letting tick() treat that as a failed mark.
       if(wasHoundHit)releaseHoundMark();
       tick(t);
+      if(rule.id==='lupa'){
+        const clearedId=context.clearedWord?.id??null;
+        if(lupaActive){
+          if(!Number.isFinite(clearedId)||!lupaTargets.includes(clearedId))return null;
+          lupaTargets=lupaTargets.filter(id=>id!==clearedId);
+          if(!lupaTargets.length){
+            endLupa();
+            return {type:'lupa-complete',damage:rule.bonusDamage+rule.fullClearBonus,characterId:rule.id};
+          }
+          return {type:'lupa-hit',damage:rule.bonusDamage,remaining:lupaTargets.length,characterId:rule.id};
+        }
+        if(++lupaProgress>=rule.every){
+          lupaProgress=0;
+          return {type:'lupa-ready',characterId:rule.id};
+        }
+        return null;
+      }
       if(rule.id==='tavi'){
         // Rewound words never charge the next combo, even if typed after landing.
         if(foxfireActive||foxfirePrimed||context.clearedWord?.foxfireOrigin)return null;
@@ -296,6 +335,16 @@
     }
     // Called once per gameplay frame, after spawns. Automatic clears never call onCorrect.
     function updateField(words,time){
+      if(rule?.id==='lupa'){
+        const t=validTime(time);
+        if(!lupaActive)return null;
+        if(t<lupaDeadline)return null;
+        const activeIds=new Set((Array.isArray(words)?words:[]).map(w=>w.id));
+        const remaining=lupaTargets.filter(id=>activeIds.has(id));
+        const count=remaining.length;
+        endLupa();
+        return {type:'lupa-timeout',remainingWordIds:remaining,selfDamage:count*rule.selfDamage,count,characterId:rule.id};
+      }
       if(rule?.id==='tavi'){
         if(foxfirePrimed){
           const available=(Array.isArray(words)?words:[]).some(rewindableWord);
@@ -339,12 +388,14 @@
     function debug(){return {id:rule?.id||null,correct,activations,streak,charged,markedWordId:marked?.id??null,
       awaitingMark,executionPendingUntil,domainFreezeUntil,spawnPauseUntil,slowUntil,freezeUntil,
       frozenWordId:frozen?.id??null,mistakeArmed,used,
+      lupaProgress,lupaActive,lupaDeadline,lupaTargets:lupaTargets.slice(),
       foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
       cassianProgress,cassianGuardUntil};}
     function isInvulnerable(time){return rule?.id==='cassian'&&validTime(time)<cassianGuardUntil;}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,updateField,
+      startLupa,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getMaxHpBonus,
       isInvulnerable,isFoxfireHidden,debug});
   }
