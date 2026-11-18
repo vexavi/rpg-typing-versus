@@ -1,4 +1,4 @@
-/* v86.34 — 4★, 5★ and 6★ operator passives. Counters reset per stage.
+/* v86.42 — 4★, 5★ and 6★ operator passives. Counters reset per stage.
  * Automatic word clears are never counted as manually typed answers. */
 (() => {
   'use strict';
@@ -26,7 +26,7 @@
     seraphine: Object.freeze({id:'seraphine',name:'Seraphine',rarity:5,title:'Phantom Execution',every:5,pendingSec:3,
       description:'Every 5 manually typed words, mark the lowest falling word. Typing it eliminates another word for its minimum length-based score and normal boss damage.'}),
     tavi: Object.freeze({id:'tavi',name:'Tavi',rarity:6,title:'Foxfire Rewind',every:6,
-      description:'After 6 consecutive correct words, hide and rewind falling words, then release them one at a time from shortest to longest. Mistakes reset the combo; rewound words cannot recharge it.'}),
+      description:'After 6 consecutive correct words, rewind and hide falling and stacked words, then release them one at a time from shortest to longest. Mistakes reset the combo; rewound words cannot recharge it.'}),
     lupa: Object.freeze({id:'lupa',name:'Lupa',rarity:6,title:'Moonlit Ambush',every:6,weakpointCount:3,weakpointSec:6,bonusDamage:2,fullClearBonus:3,selfDamage:2,
       description:'After 6 consecutive correct words without error, mark 3 stacked Weak Point words for 6 seconds. Each cleared Weak Point deals +2 boss damage; clearing all 3 in time deals +3 more. Any remaining Weak Point deals 2 damage to the player when time expires.'}),
     hound: Object.freeze({id:'hound',name:'Hound',rarity:6,title:'Blood Hunt',every:4,preySec:6,chainSec:3,maxChain:3,bonusDamage:2,
@@ -37,7 +37,7 @@
   const ALLOWED_MODES = new Set(['normal','extra','practice','story','challenge','shared']);
   const validTime=t=>Number.isFinite(t)&&t>=0?t:0;
   const fallingWord=w=>w&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
-  const rewindableWord=w=>w&&w.state==='falling'&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
+  const rewindableWord=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const lowestWord=words=>(Array.isArray(words)?words:[]).filter(fallingWord).reduce((best,w)=>!best||w.y>best.y?w:best,null);
 
   function create(characterId,mode){

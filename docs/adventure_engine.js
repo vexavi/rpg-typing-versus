@@ -3666,13 +3666,29 @@ async function debugJumpTo(mode, idx){
       const ids=new Set(effect.wordIds);
       for(const word of wordsOnField){
         if(!ids.has(word.id))continue;
+        // Both airborne and already stacked words become a falling-word queue.
+        // Reclassify landed words before restacking, otherwise a queued word
+        // stays in the grounded stack and skips the falling-word lifecycle.
+        const wasLanded=word.state==='landed';
         word.foxfireOrigin=true;
         word.foxfireHidden=true;
+        word.state='falling';
         word.y=-30;
         word.groupId=0;word.groupIndex=0;word.spawnBaseCount=undefined;
+        word.el?.classList?.remove('landed');
         word.el?.classList?.add('operator-foxfire-hidden');
+        if(wasLanded){
+          // Landed-only special timers should not expire while rewound.
+          word.ex1DamageArmed=false;word.ex1DeadlineMs=0;
+          word.ex3DeadlineMs=0;word.ex4DeadlineMs=0;
+          word.el?.classList?.remove('ex1StarArmed');
+        }
         setWordY(word.el,word.y);
       }
+      // Residual non-rewindable words (such as expired ghosts) still need
+      // their correct stack positions after the eligible words leave it.
+      restackDirty=true;
+      restackLanded();
       wordLane?.classList?.add('operator-foxfire-active');
       releaseFoxfireWord(effect.releaseId);
       pushMsg(`TAVI · FOXFIRE REWIND (${effect.wordIds.length} WORDS)`,true);
