@@ -6,7 +6,7 @@
  const session=(()=>{try{return JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')||{}}catch{return {}}})();
  let code=cleanCode(params.get('card')||session.card_code||''),player=null,mode='server',draft=null,section='overview',editor='',notice='',busy=false;
  let editorTrigger=null,showcaseSlot=0;
- let chars=[{id:'mc',name:'Main Character',img:(window.RPG_MEDIA?.url('assets/characters/mc.webp')||'assets/characters/mc.webp')}];
+ let chars=[{id:'mc',name:'Player',img:(window.RPG_MEDIA?.url('assets/characters/mc.webp')||'assets/characters/mc.webp')}];
  const backgrounds=[{id:'default',name:'Guild Grid',locked:false},{id:'horizon',name:'Horizon',locked:true},{id:'ruins',name:'Ruins',locked:true},{id:'afterglow',name:'Afterglow',locked:true}];
  const themes=[{id:'signal',name:'Signal',color:'#f0f500'},{id:'steel',name:'Steel',color:'#e1e2e5'},{id:'amber',name:'Amber',color:'#ffcf60'},{id:'frost',name:'Frost',color:'#91e4ff'}];
  const defaults=()=>({nickname:'',motto:'',theme:'signal',featured:'mc',background:'default',showcase:['mc','']});
@@ -74,6 +74,7 @@
  }
  async function setPlayer(next){
   player=next;mode='server';code=cleanCode(next.card_code||code);
+  chars[0].name=String(next.name||'').trim()||'Player';
   notice='';await loadOwnedOperators();player.cosmetics=normalizeCosmetics(player.cosmetics||{});player.selected_character=player.cosmetics.featured;
   try{
    const current=JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')||{};

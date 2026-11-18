@@ -1872,10 +1872,18 @@ const achOverlay = document.getElementById("achOverlay");
     return !!(el && el.classList.contains("show"));
   }
 
+  // The default character is the Adventure Card's player, not a separate named operator.
+  // Read the current card identity each time so sharing a Chromebook never leaks a prior name.
+  function adventurePlayerDisplayName(){
+    const cardName = String(ADVENTURE_CONTEXT.name || "").trim();
+    const localName = String(profile?.name || "").trim();
+    return cardName || localName || "Player";
+  }
+
   function getIntroCharacterMeta(){
     const charId = getSelectedOperator(); // Equipped operator is the only visual character selection.
     const map = {
-      mc: { name: "Main Character", path: "assets/characters/mc.webp" },
+      mc: { name: adventurePlayerDisplayName(), path: "assets/characters/mc.webp" },
 
     };
     // The player may feature any operator they have actually recruited.
@@ -1898,8 +1906,7 @@ const achOverlay = document.getElementById("achOverlay");
     if(!introProfileCard || !introProfileIcon || !introProfileName || !introProfileLevel) return;
 
     const p = profile || null;
-    const nameRaw = p ? String(p.name || "").trim() : "";
-    const name = nameRaw ? nameRaw : "Player";
+    const name = adventurePlayerDisplayName();
     const lvl = p ? levelFromXp(p.xp) : 1;
 
     // Always show the equipped operator, not the old editable Profile icon.
@@ -1917,7 +1924,8 @@ const achOverlay = document.getElementById("achOverlay");
     if(introProfileIcon.dataset.sourceSrc !== src) setImageSource(introProfileIcon, src);
     if(introProfileSelected){
       const charMeta = getIntroCharacterMeta();
-      const selectedText = `EQUIPPED / ${String(charMeta.name || 'Main Character').toUpperCase()}`;
+      const selectedName = charMeta.id === 'mc' ? charMeta.name : String(charMeta.name).toUpperCase();
+      const selectedText = `EQUIPPED / ${selectedName}`;
       if(introProfileSelected.textContent !== selectedText) introProfileSelected.textContent = selectedText;
     }
     renderIntroCharacterFigure();
@@ -1934,11 +1942,11 @@ const achOverlay = document.getElementById("achOverlay");
     syncCoreAchievementsFromFlags();
 
     const p = profile;
-    const name = p ? String(p.name || "").trim() : "";
+    const name = adventurePlayerDisplayName();
     const lvl = p ? levelFromXp(p.xp) : 1;
 
     // Name + level
-    const label = name ? name : "Player";
+    const label = name;
     const labelText = label;
     if(playerLabel.textContent !== labelText) playerLabel.textContent = labelText;
 
@@ -2992,9 +3000,9 @@ function showModeSelectScreen(){
   overlay.querySelector('.operator-selection-backdrop')?.remove();
   const operatorMeta=id=>{
     const rule=window.RPG_OPERATOR_PASSIVES?.RULES?.[id];
-    return {id,name:rule?.name||(id==='mc'?'Main Character':id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())),
+    return {id,name:id==='mc'?adventurePlayerDisplayName():(rule?.name||id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())),
       rarity:rule?.rarity||0,passive:rule?.title||'No passive',
-      description:rule?.description||'Main Character has no operator passive.',
+      description:rule?.description||'Default character · No operator passive.',
       fullArt:id==='mc'?'assets/characters/mc.webp':`assets/recruitment/${id}.webp`,
       icon:`assets/profile-icons/${id}.webp`};
   };
