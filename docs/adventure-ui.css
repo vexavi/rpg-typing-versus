@@ -509,3 +509,6 @@ body.adventure-client .operator-lupa-timer-value {
 
 /* v86.43: equipped operator portrait, not the legacy Profile icon. */
 #playerIcon, #introProfileIcon{image-rendering:auto!important;object-fit:contain;}
+
+/* v86.45 — clear indication that Anodyne medicine can exceed base maximum HP. */
+#playerHpText.operator-anodyne-overheal{color:#a6f5db!important;text-shadow:0 0 7px rgba(64,255,173,.55)}

@@ -1,4 +1,4 @@
-/* v86.42 — 4★, 5★ and 6★ operator passives. Counters reset per stage.
+/* v86.45 — 4★, 5★ and 6★ operator passives. Counters reset per stage.
  * Automatic word clears are never counted as manually typed answers. */
 (() => {
   'use strict';
@@ -23,6 +23,8 @@
       description:'Every 6 correct words, charge the next manually typed word: +2 boss damage, or clear one extra falling word in survival stages (no extra rewards).'}),
     isolde: Object.freeze({id:'isolde',name:'Isolde',rarity:5,title:'Frozen Domain',every:6,freezeSec:2.5,slowSec:3,slowPct:15,
       description:'Every 6 consecutive correct words, freeze all falling words and spawns for 2.5 seconds, then slow falling words 15% for 3 seconds. Mistakes reset the streak.'}),
+    anodyne: Object.freeze({id:'anodyne',name:'Anodyne',rarity:5,title:'Experimental Medicine',every:6,heal:2,slowPct:30,slowSec:5,suppressSec:4,
+      description:'Every 6 correct words, administer one of three random medicines: Recovery Serum (+2 HP, can overheal), Cryogenic Solution (30% slower falling for 5 seconds), or Suppression Formula (no new spawns for up to 4 seconds; ends when no falling or stacked words remain).'}),
     seraphine: Object.freeze({id:'seraphine',name:'Seraphine',rarity:5,title:'Phantom Execution',every:5,pendingSec:3,
       description:'Every 5 manually typed words, mark the lowest falling word. Typing it eliminates another word for its minimum length-based score and normal boss damage.'}),
     tavi: Object.freeze({id:'tavi',name:'Tavi',rarity:6,title:'Foxfire Rewind',every:6,
@@ -40,7 +42,7 @@
   const rewindableWord=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const lowestWord=words=>(Array.isArray(words)?words:[]).filter(fallingWord).reduce((best,w)=>!best||w.y>best.y?w:best,null);
 
-  function create(characterId,mode){
+  function create(characterId,mode,random=Math.random){
     const rule=ALLOWED_MODES.has(mode)?RULES[characterId]||null:null;
     let correct=0,activations=0,spawnPauseUntil=0,slowUntil=0,lastSlowAt=-Infinity;
     let frozen=null,freezeUntil=0,mistakeArmed=false,used=false;
@@ -50,6 +52,7 @@
     let lupaProgress=0,lupaActive=false,lupaDeadline=0,lupaTargets=[];
     let houndProgress=0,houndPhase='none',houndMarked=null,houndDeadline=0,houndChainHits=0,houndNeedSpawn=false;
     let cassianProgress=0,cassianGuardUntil=0;
+    let anodyneProgress=0;
     function releaseFrozen(){
       if(frozen?.el?.classList)frozen.el.classList.remove('operator-shadow-hold');
       frozen=null;freezeUntil=0;
@@ -117,7 +120,7 @@
       charged=false;awaitingMark=false;executionPendingUntil=0;
       foxfireProgress=0;foxfirePrimed=false;foxfireActive=false;foxfireQueue=[];foxfireCurrentId=null;
       endLupa();
-      endHound();cassianProgress=0;cassianGuardUntil=0;
+      endHound();cassianProgress=0;cassianGuardUntil=0;anodyneProgress=0;
     }
     function tick(time){
       const t=validTime(time);
@@ -146,6 +149,7 @@
     function isSpawnPaused(time){
       const t=validTime(time);
       return (rule?.id==='mira'&&t<spawnPauseUntil)||(rule?.id==='isolde'&&t<domainFreezeUntil)
+        ||(rule?.id==='anodyne'&&t<spawnPauseUntil)
         ||(rule?.id==='tavi'&&foxfireActive);
     }
     function isWordFrozen(word,time){
@@ -156,6 +160,7 @@
       const t=validTime(time);
       if(rule.id==='livia')return rule.fallMultiplier;
       if((rule.id==='alden'||rule.id==='elise')&&t<slowUntil)return 1-rule.slowPct/100;
+      if(rule.id==='anodyne'&&t<slowUntil)return 1-rule.slowPct/100;
       if(rule.id==='isolde'){
         if(t<domainFreezeUntil)return 0;
         if(t<slowUntil)return 1-rule.slowPct/100;
@@ -272,6 +277,24 @@
           seconds:eligible.length>rule.maxEliminations?rule.invulnerableSec:0,
           characterId:rule.id};
       }
+      if(rule.id==='anodyne'){
+        if(++anodyneProgress<rule.every)return null;
+        anodyneProgress=0;activations++;
+        // Roll once per six manually typed correct answers. Mistakes do not reset progress.
+        // RNG argument is optional and used for repeatable local simulations.
+        const roll=Math.max(0,Math.min(0.999999,Number(random())||0));
+        if(roll<1/3)return {type:'anodyne-serum',hp:rule.heal,allowOverheal:true,characterId:rule.id};
+        if(roll<2/3){
+          slowUntil=t+rule.slowSec;
+          return {type:'anodyne-cryo',seconds:rule.slowSec,percent:rule.slowPct,characterId:rule.id};
+        }
+        // Suppression only pauses while at least one typable word remains.
+        const active=(Array.isArray(words)?words:[]).some(w=>w&&(w.state==='falling'||w.state==='landed'));
+        spawnPauseUntil=active?t+rule.suppressSec:0;
+        return active
+          ? {type:'anodyne-suppression',seconds:rule.suppressSec,characterId:rule.id}
+          : {type:'anodyne-suppression-ended',reason:'empty',characterId:rule.id};
+      }
       if(rule.id==='elise'){
         if(!mistakeArmed||t<lastSlowAt+rule.cooldownSec)return null;
         mistakeArmed=false;lastSlowAt=t;slowUntil=t+rule.durationSec;activations++;
@@ -335,6 +358,13 @@
     }
     // Called once per gameplay frame, after spawns. Automatic clears never call onCorrect.
     function updateField(words,time){
+      if(rule?.id==='anodyne'&&spawnPauseUntil){
+        const active=(Array.isArray(words)?words:[]).some(w=>w&&(w.state==='falling'||w.state==='landed'));
+        if(!active){
+          spawnPauseUntil=0;
+          return {type:'anodyne-suppression-ended',reason:'empty',characterId:rule.id};
+        }
+      }
       if(rule?.id==='lupa'){
         const t=validTime(time);
         if(!lupaActive)return null;
@@ -391,7 +421,7 @@
       lupaProgress,lupaActive,lupaDeadline,lupaTargets:lupaTargets.slice(),
       foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
-      cassianProgress,cassianGuardUntil};}
+      cassianProgress,cassianGuardUntil,anodyneProgress};}
     function isInvulnerable(time){return rule?.id==='cassian'&&validTime(time)<cassianGuardUntil;}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,updateField,

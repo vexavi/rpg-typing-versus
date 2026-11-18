@@ -69,6 +69,12 @@
       "art": "assets/recruitment/isolde.webp"
     },
     {
+      "id": "anodyne",
+      "name": "Anodyne",
+      "rarity": 5,
+      "art": "assets/recruitment/anodyne.webp"
+    },
+    {
       "id": "seraphine",
       "name": "Seraphine",
       "rarity": 5,

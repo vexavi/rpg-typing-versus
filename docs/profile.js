@@ -11,7 +11,7 @@
  const themes=[{id:'signal',name:'Signal',color:'#f0f500'},{id:'steel',name:'Steel',color:'#e1e2e5'},{id:'amber',name:'Amber',color:'#ffcf60'},{id:'frost',name:'Frost',color:'#91e4ff'}];
  const defaults=()=>({nickname:'',motto:'',theme:'signal',featured:'mc',background:'default',showcase:['mc','']});
  // Custom portrait assets are explicit opt-ins; no fallback to cropped full-body artwork.
- const customIconIds=new Set(['alden','aveline','cassian','elise','hound','isolde','kade','livia','lupa','mc','mira','nora','seraphine','tavi','vern','vex']);
+ const customIconIds=new Set(['alden','anodyne','aveline','cassian','elise','hound','isolde','kade','livia','lupa','mc','mira','nora','seraphine','tavi','vern','vex']);
  function customIcon(id){return customIconIds.has(id)?`assets/profile-icons/${id}.webp`:'';}
  function iconMarkup(ch,klass='showcase-custom-icon'){
   const url=customIcon(ch?.id);

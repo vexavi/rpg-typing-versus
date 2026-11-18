@@ -3638,6 +3638,17 @@ async function debugJumpTo(mode, idx){
       playerHp=Math.min(playerMaxHp,playerHp+effect.hp);
       pushMsg('VEX · ENDURANCE (+1 HP)',true);
       updateUI();
+    }else if(effect.type==='anodyne-serum'){
+      // Overheal is intentionally allowed. Preserve the base max HP for each stage.
+      playerHp+=effect.hp;
+      pushMsg('ANODYNE · RECOVERY SERUM (+2 HP)',true);
+      updateUI();
+    }else if(effect.type==='anodyne-cryo'){
+      pushMsg('ANODYNE · CRYOGENIC SOLUTION (30% SLOW · 5s)',true);
+    }else if(effect.type==='anodyne-suppression'){
+      // Don't queue a burst of words after the pause ends.
+      spawnAccMs=0;
+      pushMsg('ANODYNE · SUPPRESSION FORMULA (4s)',true);
     }else if(effect.type==='charge'){
       bossHpText?.classList?.add('operator-weak-point-ready');
       pushMsg('AVELINE · WEAK POINT READY',true);
@@ -3676,6 +3687,9 @@ async function debugJumpTo(mode, idx){
       pushMsg(effect.count>0
         ?`LUPA · WEAK POINT FAILED (-${effect.selfDamage} HP)`
         :'LUPA · MOONLIT AMBUSH ENDED',true);
+    }else if(effect.type==='anodyne-suppression-ended'){
+      spawnAccMs=0;
+      pushMsg('ANODYNE · SUPPRESSION ENDED',true);
     }else if(effect.type==='foxfire-start'){
       spawnAccMs=0;
       const ids=new Set(effect.wordIds);
@@ -3942,6 +3956,7 @@ function updateUI(){
     if(playerHpStr !== uiCache.playerHpStr){
       uiCache.playerHpStr = playerHpStr;
       playerHpText.textContent = playerHpStr;
+      playerHpText.classList.toggle('operator-anodyne-overheal',playerHp>playerMaxHp);
     }
 
     const playerW = `${(clamp(playerHp/playerMaxHp,0,1) * 100).toFixed(1)}%`;
