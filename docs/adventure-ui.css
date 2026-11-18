@@ -270,3 +270,37 @@ body.adventure-client .uiRow #playerMeter{
 
 .wordLane.operator-frozen-domain{border-color:#a6ddff;box-shadow:inset 0 0 0 2px #d5f4ff62,0 0 12px #87caff59}
 #bossHpText.operator-weak-point-ready::after{content:' ◉';color:#ffd56d;text-shadow:0 0 8px #ffbe41}
+
+/* v86.33 — 6★ operator gameplay indicators. Hidden words remain in the game
+   model, but cannot be seen, typed or advanced until Foxfire releases them. */
+.word.operator-foxfire-hidden{display:none!important}
+.word.operator-foxfire-released{
+  border-color:#ffca79!important;
+  box-shadow:inset 0 0 0 2px #ffa84c91,0 0 11px #e9a54888!important;
+}
+.wordLane.operator-foxfire-active{
+  border-color:#ffbe78!important;
+  box-shadow:inset 0 0 0 2px #ffaa4e40;
+}
+.word.operator-hound-prey{
+  border-color:#ff777b!important;
+  box-shadow:inset 0 0 0 2px #e64e5980,0 0 12px #e64e5990!important;
+}
+.word.operator-hound-prey::before{
+  content:'PREY · ' attr(data-hunt-time) 's';
+  position:absolute;top:-18px;left:0;
+  color:#ffd6d6;font:900 12px/1 system-ui,sans-serif;
+  text-shadow:0 0 7px #8b161e;white-space:nowrap;pointer-events:none;
+}
+.word.operator-hound-chain{border-color:#ff394d!important}
+.wordLane.operator-sovereign-guard{
+  border-color:#f5d783!important;
+  box-shadow:inset 0 0 0 3px #f0cf6b8c,0 0 14px #ddbc5d46;
+}
+.operator-sovereign-slash{
+  position:absolute;z-index:9;left:5%;width:90%;height:28px;
+  pointer-events:none;border-top:3px solid #ffe29b;
+  filter:drop-shadow(0 0 8px #e9b94d);
+  animation:operator-phantom-strike .45s ease-out forwards;
+}
+@media(prefers-reduced-motion:reduce){.operator-sovereign-slash{animation:none;opacity:.5}}

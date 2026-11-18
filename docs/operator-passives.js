@@ -1,4 +1,4 @@
-/* v86.32 — 4★ and 5★ operator passives. Counters reset per stage.
+/* v86.33 — 4★, 5★ and 6★ operator passives. Counters reset per stage.
  * Automatic word clears are never counted as manually typed answers. */
 (() => {
   'use strict';
@@ -24,11 +24,18 @@
     isolde: Object.freeze({id:'isolde',name:'Isolde',rarity:5,title:'Frozen Domain',every:6,freezeSec:2.5,slowSec:3,slowPct:15,
       description:'Every 6 consecutive correct words, freeze all falling words and spawns for 2.5 seconds, then slow falling words 15% for 3 seconds. Mistakes reset the streak.'}),
     seraphine: Object.freeze({id:'seraphine',name:'Seraphine',rarity:5,title:'Phantom Execution',every:5,pendingSec:3,
-      description:'Every 5 manually typed words, mark the lowest falling word. Typing it eliminates another word for its minimum length-based score and normal boss damage.'})
+      description:'Every 5 manually typed words, mark the lowest falling word. Typing it eliminates another word for its minimum length-based score and normal boss damage.'}),
+    tavi: Object.freeze({id:'tavi',name:'Tavi',rarity:6,title:'Foxfire Rewind',every:6,
+      description:'After 6 consecutive correct words, hide and rewind falling words, then release them one at a time from shortest to longest. Mistakes reset the combo; rewound words cannot recharge it.'}),
+    hound: Object.freeze({id:'hound',name:'Hound',rarity:6,title:'Blood Hunt',every:4,preySec:6,chainSec:3,maxChain:3,bonusDamage:2,
+      description:'After 4 consecutive correct words, type the marked Prey within 6 seconds to start Blood Hunt: complete up to 3 timed Prey (3 seconds each) for +2 boss damage apiece.'}),
+    cassian: Object.freeze({id:'cassian',name:'Cassian',rarity:6,title:"Sovereign’s Decree",every:6,maxEliminations:3,invulnerableSec:5,
+      description:'Every 6 correct words, instantly eliminate up to 3 falling words. Missing eliminations deal 1 boss damage each; 4+ available words grant 5 seconds of invulnerability.'})
   });
   const ALLOWED_MODES = new Set(['normal','extra','practice','story','challenge','shared']);
   const validTime=t=>Number.isFinite(t)&&t>=0?t:0;
   const fallingWord=w=>w&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
+  const rewindableWord=w=>w&&w.state==='falling'&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const lowestWord=words=>(Array.isArray(words)?words:[]).filter(fallingWord).reduce((best,w)=>!best||w.y>best.y?w:best,null);
 
   function create(characterId,mode){
@@ -36,6 +43,10 @@
     let correct=0,activations=0,spawnPauseUntil=0,slowUntil=0,lastSlowAt=-Infinity;
     let frozen=null,freezeUntil=0,mistakeArmed=false,used=false;
     let streak=0,domainFreezeUntil=0,charged=false,marked=null,awaitingMark=false,executionPendingUntil=0;
+    // 6★ state. Only one operator runs per game, so no inter-operator effect stacking.
+    let foxfireProgress=0,foxfirePrimed=false,foxfireActive=false,foxfireQueue=[],foxfireCurrentId=null;
+    let houndProgress=0,houndPhase='none',houndMarked=null,houndDeadline=0,houndChainHits=0,houndNeedSpawn=false;
+    let cassianProgress=0,cassianGuardUntil=0;
     function releaseFrozen(){
       if(frozen?.el?.classList)frozen.el.classList.remove('operator-shadow-hold');
       frozen=null;freezeUntil=0;
@@ -50,10 +61,45 @@
       marked.el?.classList?.add('operator-phantom-mark');
       return {type:'mark-word',wordId:marked.id,characterId:rule.id};
     }
+    function releaseHoundMark(){
+      houndMarked?.el?.classList?.remove('operator-hound-prey','operator-hound-chain');
+      if(houndMarked?.el?.removeAttribute)houndMarked.el.removeAttribute('data-hunt-time');
+      houndMarked=null;
+    }
+    function endHound(){
+      releaseHoundMark();houndPhase='none';houndDeadline=0;houndChainHits=0;
+      houndProgress=0;houndNeedSpawn=false;
+    }
+    function markHound(word,t){
+      if(!fallingWord(word))return null;
+      releaseHoundMark();houndMarked=word;houndNeedSpawn=false;
+      const chain=houndPhase==='chain',seconds=chain?rule.chainSec:rule.preySec;
+      houndDeadline=t+seconds;
+      word.el?.classList?.add('operator-hound-prey');
+      if(chain)word.el?.classList?.add('operator-hound-chain');
+      if(word.el?.setAttribute)word.el.setAttribute('data-hunt-time',String(seconds));
+      return {type:'hound-mark',wordId:word.id,seconds,chain,chainHits:houndChainHits,characterId:rule.id};
+    }
+    function startFoxfire(words){
+      const ordered=(Array.isArray(words)?words:[]).filter(rewindableWord)
+        .slice().sort((a,b)=>{
+          const al=String(a.answer||'').replace(/[^a-z]/gi,'').length;
+          const bl=String(b.answer||'').replace(/[^a-z]/gi,'').length;
+          return al-bl||a.id-b.id;
+        });
+      foxfireProgress=0;
+      if(!ordered.length){foxfirePrimed=true;return {type:'foxfire-ready',characterId:rule.id};}
+      foxfirePrimed=false;foxfireActive=true;
+      const ids=ordered.map(w=>w.id);
+      foxfireCurrentId=ids[0];foxfireQueue=ids.slice(1);activations++;
+      return {type:'foxfire-start',wordIds:ids,releaseId:foxfireCurrentId,characterId:rule.id};
+    }
     function reset(){
-      releaseFrozen();releaseMark();correct=0;activations=0;spawnPauseUntil=0;slowUntil=0;
+      releaseFrozen();releaseMark();releaseHoundMark();correct=0;activations=0;spawnPauseUntil=0;slowUntil=0;
       lastSlowAt=-Infinity;mistakeArmed=false;used=false;streak=0;domainFreezeUntil=0;
       charged=false;awaitingMark=false;executionPendingUntil=0;
+      foxfireProgress=0;foxfirePrimed=false;foxfireActive=false;foxfireQueue=[];foxfireCurrentId=null;
+      endHound();cassianProgress=0;cassianGuardUntil=0;
     }
     function tick(time){
       const t=validTime(time);
@@ -63,11 +109,22 @@
       if(slowUntil&&t>=slowUntil)slowUntil=0;
       if(domainFreezeUntil&&t>=domainFreezeUntil)domainFreezeUntil=0;
       if(executionPendingUntil&&t>=executionPendingUntil)executionPendingUntil=0;
+      if(rule?.id==='hound'&&houndPhase!=='none'){
+        if(houndMarked){
+          const valid=houndMarked.state==='falling'&&houndMarked.el?.isConnected!==false;
+          if(!valid||t>=houndDeadline)endHound();
+          else if(houndMarked.el?.setAttribute){
+            const remaining=String(Math.max(1,Math.ceil(houndDeadline-t)));
+            if(houndMarked.el.getAttribute?.('data-hunt-time')!==remaining)houndMarked.el.setAttribute('data-hunt-time',remaining);
+          }
+        }
+      }
     }
     function isFieldFrozen(time){return rule?.id==='isolde'&&validTime(time)<domainFreezeUntil;}
     function isSpawnPaused(time){
       const t=validTime(time);
-      return (rule?.id==='mira'&&t<spawnPauseUntil)||(rule?.id==='isolde'&&t<domainFreezeUntil);
+      return (rule?.id==='mira'&&t<spawnPauseUntil)||(rule?.id==='isolde'&&t<domainFreezeUntil)
+        ||(rule?.id==='tavi'&&foxfireActive);
     }
     function isWordFrozen(word,time){
       return (rule?.id==='nora'&&word===frozen&&validTime(time)<freezeUntil&&word.state==='falling')||isFieldFrozen(time);
@@ -88,6 +145,13 @@
       if(!rule)return null;
       const t=validTime(time);
       if(rule.id==='isolde'){streak=0;return null;}
+      if(rule.id==='tavi'){
+        if(!foxfireActive)foxfireProgress=0;
+        return null;
+      }
+      if(rule.id==='hound'){
+        houndProgress=0;return null;
+      }
       if(rule.id==='elise'){
         if(t>=lastSlowAt+rule.cooldownSec)mistakeArmed=true;
         return null;
@@ -109,7 +173,62 @@
       const t=validTime(time);
       // Capture the marked-word hit before tick() removes DOM-disconnected marks.
       const wasMarkedHit=rule.id==='seraphine'&&!!marked&&!!context.clearedWord&&marked.id===context.clearedWord.id;
+      // Capture the prey before tick() sees the newly removed DOM node.
+      const houndPreviousPhase=houndPhase;
+      const wasHoundHit=rule.id==='hound'&&!!houndMarked&&!!context.clearedWord
+        &&houndMarked.id===context.clearedWord.id&&t<houndDeadline;
+      // The DOM was removed before onCorrect; preserve the ongoing hunt's
+      // chain count rather than letting tick() treat that as a failed mark.
+      if(wasHoundHit)releaseHoundMark();
       tick(t);
+      if(rule.id==='tavi'){
+        // Rewound words never charge the next combo, even if typed after landing.
+        if(foxfireActive||foxfirePrimed||context.clearedWord?.foxfireOrigin)return null;
+        if(++foxfireProgress>=rule.every)return startFoxfire(words);
+        return null;
+      }
+      if(rule.id==='hound'){
+        if(wasHoundHit){
+          releaseHoundMark();
+          if(houndPreviousPhase==='initial'){
+            houndPhase='chain';houndChainHits=0;
+          }else if(houndPreviousPhase==='chain'){
+            houndChainHits++;
+          }
+          const awarded=houndPreviousPhase==='chain'?rule.bonusDamage:0;
+          if(houndChainHits>=rule.maxChain){
+            endHound();return {type:'hound-complete',damage:awarded,characterId:rule.id};
+          }
+          const next=lowestWord(words);
+          if(next)markHound(next,t);
+          else houndNeedSpawn=true;
+          return {type:'hound-next',damage:awarded,chainHits:houndChainHits,
+            wordId:houndMarked?.id??null,forceSpawn:houndNeedSpawn,characterId:rule.id};
+        }
+        // A word unrelated to the hunt is typed; it earns normal rewards, not combo progress.
+        if(houndPhase!=='none')return null;
+        if(++houndProgress>=rule.every){
+          houndProgress=0;houndPhase='initial';
+          const target=lowestWord(words);
+          if(target)return markHound(target,t);
+          return {type:'hound-await-prey',characterId:rule.id};
+        }
+        return null;
+      }
+      if(rule.id==='cassian'){
+        if(t<cassianGuardUntil)return null; // no activation progress under invulnerability
+        if(++cassianProgress<rule.every)return null;
+        cassianProgress=0;activations++;
+        const eligible=(Array.isArray(words)?words:[]).filter(fallingWord).slice()
+          .sort((a,b)=>b.y-a.y||a.id-b.id);
+        const chosen=eligible.slice(0,rule.maxEliminations);
+        if(eligible.length>rule.maxEliminations)cassianGuardUntil=t+rule.invulnerableSec;
+        return {type:'cassian-decree',wordIds:chosen.map(w=>w.id),
+          missingDamage:rule.maxEliminations-chosen.length,
+          invulnerable:eligible.length>rule.maxEliminations,
+          seconds:eligible.length>rule.maxEliminations?rule.invulnerableSec:0,
+          characterId:rule.id};
+      }
       if(rule.id==='elise'){
         if(!mistakeArmed||t<lastSlowAt+rule.cooldownSec)return null;
         mistakeArmed=false;lastSlowAt=t;slowUntil=t+rule.durationSec;activations++;
@@ -173,6 +292,33 @@
     }
     // Called once per gameplay frame, after spawns. Automatic clears never call onCorrect.
     function updateField(words,time){
+      if(rule?.id==='tavi'){
+        if(foxfirePrimed){
+          const available=(Array.isArray(words)?words:[]).some(rewindableWord);
+          if(available)return startFoxfire(words);
+        }
+        if(!foxfireActive)return null;
+        const current=(Array.isArray(words)?words:[]).find(w=>w.id===foxfireCurrentId);
+        if(current&&current.state==='falling')return null;
+        const next=foxfireQueue.shift();
+        if(next!=null){
+          foxfireCurrentId=next;
+          return {type:'foxfire-next',wordId:next,characterId:rule.id};
+        }
+        foxfireActive=false;foxfireCurrentId=null;foxfireQueue=[];foxfireProgress=0;
+        return {type:'foxfire-end',characterId:rule.id};
+      }
+      if(rule?.id==='hound'){
+        const t=validTime(time);tick(t);
+        if(houndPhase==='none'||houndMarked)return null;
+        const target=lowestWord(words);
+        if(target)return markHound(target,t);
+        if(houndPhase==='chain'&&!houndNeedSpawn){
+          houndNeedSpawn=true;
+          return {type:'hound-force-spawn',characterId:rule.id};
+        }
+        return null;
+      }
       if(rule?.id!=='seraphine')return null;
       const t=validTime(time);
       tick(t);
@@ -188,9 +334,15 @@
     }
     function debug(){return {id:rule?.id||null,correct,activations,streak,charged,markedWordId:marked?.id??null,
       awaitingMark,executionPendingUntil,domainFreezeUntil,spawnPauseUntil,slowUntil,freezeUntil,
-      frozenWordId:frozen?.id??null,mistakeArmed,used};}
+      frozenWordId:frozen?.id??null,mistakeArmed,used,
+      foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
+      houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
+      cassianProgress,cassianGuardUntil};}
+    function isInvulnerable(time){return rule?.id==='cassian'&&validTime(time)<cassianGuardUntil;}
+    function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,updateField,
-      isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getMaxHpBonus,debug});
+      isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getMaxHpBonus,
+      isInvulnerable,isFoxfireHidden,debug});
   }
   window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create});
 })();

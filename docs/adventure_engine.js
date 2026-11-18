@@ -3369,7 +3369,7 @@ async function debugJumpTo(mode, idx){
   function resetOperatorForStage(){
     operatorPassive?.reset();
     bossHpText?.classList?.remove('operator-weak-point-ready');
-    wordLane?.classList?.remove('operator-frozen-domain');
+    wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard');
   }
   function operatorStageWithoutBoss(){
     // Survival/time trials have a visible boss HP bar but no boss to defeat.
@@ -3409,9 +3409,71 @@ async function debugJumpTo(mode, idx){
     }else if(effect.type==='execution-pending'){
       pushMsg('SERAPHINE · NEXT TARGET (3s)',true);
     }
+    applyOperatorFieldEffect(effect);
     return effect;
   }
-  function operatorAutoEliminate(wordId,grantRewards){
+  // Visual/field effects are kept outside the rules engine. This is also used
+  // after frame spawns, so timed effects can pick up newly arriving words.
+  function applyOperatorFieldEffect(effect){
+    if(!effect)return;
+    if(effect.type==='foxfire-start'){
+      spawnAccMs=0;
+      const ids=new Set(effect.wordIds);
+      for(const word of wordsOnField){
+        if(!ids.has(word.id))continue;
+        word.foxfireOrigin=true;
+        word.foxfireHidden=true;
+        word.y=-30;
+        word.groupId=0;word.groupIndex=0;word.spawnBaseCount=undefined;
+        word.el?.classList?.add('operator-foxfire-hidden');
+        setWordY(word.el,word.y);
+      }
+      wordLane?.classList?.add('operator-foxfire-active');
+      releaseFoxfireWord(effect.releaseId);
+      pushMsg(`TAVI · FOXFIRE REWIND (${effect.wordIds.length} WORDS)`,true);
+    }else if(effect.type==='foxfire-next'){
+      releaseFoxfireWord(effect.wordId);
+    }else if(effect.type==='foxfire-ready'){
+      pushMsg('TAVI · FOXFIRE READY',true);
+    }else if(effect.type==='foxfire-end'){
+      wordLane?.classList?.remove('operator-foxfire-active');
+      spawnAccMs=0;
+      pushMsg('TAVI · FOXFIRE COMPLETE',true);
+    }else if(effect.type==='hound-mark'){
+      pushMsg(effect.chain
+        ?`HOUND · BLOOD HUNT (${effect.chainHits+1}/3 · 3s)`
+        :'HOUND · PREY MARKED (6s)',true);
+    }else if(effect.type==='hound-await-prey'){
+      pushMsg('HOUND · WAITING FOR PREY',true);
+    }else if(effect.type==='hound-next'){
+      pushMsg(effect.damage>0
+        ?`HOUND · BLOOD HUNT (+${effect.damage} BOSS DMG)`
+        :'HOUND · BLOOD HUNT START',true);
+    }else if(effect.type==='hound-complete'){
+      pushMsg('HOUND · BLOOD HUNT COMPLETE',true);
+    }else if(effect.type==='hound-force-spawn'){
+      // Forced chain targets bypass ordinary spawn pacing, not stage/word rules.
+      if(gameState==='playing'){
+        spawnOneWord({forceOperatorSpawn:true});
+        const newMark=operatorPassive?.updateField(wordsOnField,stageElapsedSec());
+        if(newMark?.type==='hound-mark')applyOperatorFieldEffect(newMark);
+      }
+    }else if(effect.type==='cassian-decree'){
+      pushMsg(effect.invulnerable
+        ?'CASSIAN · DECREE + ROYAL AUTHORITY (5s)'
+        :'CASSIAN · SOVEREIGN’S DECREE',true);
+      if(effect.invulnerable)wordLane?.classList?.add('operator-sovereign-guard');
+    }
+  }
+  function releaseFoxfireWord(wordId){
+    const word=wordsOnField.find(w=>w.id===wordId);
+    if(!word)return;
+    word.foxfireHidden=false;
+    word.el?.classList?.remove('operator-foxfire-hidden');
+    word.el?.classList?.add('operator-foxfire-released');
+    setWordY(word.el,word.y);
+  }
+  function operatorAutoEliminate(wordId,grantRewards,operatorId='seraphine'){
     // This removes an existing falling word only. It never triggers onCorrect,
     // another operator charge, typing streak, or server-side "correctWord" claim.
     const word=wordsOnField.find(w=>w.id===wordId&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost);
@@ -3419,7 +3481,7 @@ async function debugJumpTo(mode, idx){
     const pts=grantRewards?calcMinimumWordScore(word):0;
     const slash=grantRewards?document.createElement('span'):null;
     if(slash){
-      slash.className='operator-phantom-slash';
+      slash.className=operatorId==='cassian'?'operator-sovereign-slash':'operator-phantom-slash';
       slash.style.top=`${Math.max(0,word.y)}px`;
       slash.setAttribute('aria-hidden','true');
       wordLane.appendChild(slash);
@@ -3429,7 +3491,7 @@ async function debugJumpTo(mode, idx){
     if(grantRewards){
       addScore(pts); // addScore also awards regular score-linked coins where eligible.
       if(currentMode!=='shared')addXp(1);
-      pushMsg(`SERAPHINE · PHANTOM EXECUTION (+${pts})`,true);
+      pushMsg(operatorId==='cassian'?`CASSIAN · DECREE (+${pts})`:`SERAPHINE · PHANTOM EXECUTION (+${pts})`,true);
       return baseHitDamage;
     }
     pushMsg('AVELINE · TACTICAL CLEAR',true);
@@ -4504,7 +4566,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     if(!isExtraStage2Hack()) return;
 
     const targets = wordsOnField
-      .filter(w => w && !w.ex2Hacked && !w.ex2HackUsed && (w.state === "falling" || w.state === "landed"))
+      .filter(w => w && !w.foxfireHidden && !w.ex2Hacked && !w.ex2HackUsed && (w.state === "falling" || w.state === "landed"))
       .sort((a,b) => (b.y || 0) - (a.y || 0))
       .slice(0, EX2_HACK_MAX_WORDS);
     ex2HackActive = true;
@@ -4649,7 +4711,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
   function ex4DoShuffle(ids){
     for(const id of ids){
       const w = wordsOnField.find(x => x.id === id);
-      if(!w) continue;
+      if(!w || w.foxfireOrigin) continue; // Preserve Foxfire's original shortest-first order.
       // pick a different word if possible
       const before = `${w.prompt}||${w.answer}`;
       let picked = null;
@@ -4985,7 +5047,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
 
   function spawnOneWord(opts = {}){
     if(gameState !== "playing") return null;
-    if(operatorSpawnPaused() && (opts.state||'falling')==='falling')return null;
+    if(!opts.forceOperatorSpawn && operatorSpawnPaused() && (opts.state||'falling')==='falling')return null;
 
     const state = opts.state || "falling";
     const countSpawn = (opts.countSpawn !== false);
@@ -5358,6 +5420,7 @@ if(state === "landed"){
     for(const w of wordsOnField){
       if(!w) continue;
       if(w.ex2Hacked) continue;
+      if(w.foxfireHidden) continue;
       if(w.ex3ExpiredGhost) continue;
       if(isExtraStage1() && w.s5Permafrost) continue;
       // answerNorm is cached on spawn/shuffle for speed + reliability
@@ -5419,10 +5482,24 @@ if(state === "landed"){
       operatorCleaveLowest();
     }
     if(passiveEffect?.type==='auto-eliminate')bonusDamage+=operatorAutoEliminate(passiveEffect.wordId,true);
+    if(passiveEffect?.type==='hound-next'||passiveEffect?.type==='hound-complete'){
+      bonusDamage+=passiveEffect.damage||0;
+    }
+    if(passiveEffect?.type==='cassian-decree'){
+      bonusDamage+=passiveEffect.missingDamage;
+      // Each word actually removed contributes one normal boss hit; missing
+      // slots always deal exactly 1 direct damage.
+      for(const id of passiveEffect.wordIds){
+        bonusDamage+=operatorAutoEliminate(id,true,'cassian');
+      }
+    }
     // Combine manual and instant secondary damage into ONE boss hit. Otherwise
     // the first hit could finish the stage before the automatic hit is awarded.
     const dmg = baseHitDamage+bonusDamage;
     damageBoss(dmg);
+    if(passiveEffect?.forceSpawn && gameState==='playing' && (bossHp>0||operatorStageWithoutBoss())){
+      applyOperatorFieldEffect({type:'hound-force-spawn'});
+    }
 
     pushMsg(`HIT! 「${best.prompt}」→ ${best.answer} (+${pts})`);
 
@@ -5674,6 +5751,11 @@ function togglePause(fromGesture=false){
 
 function damagePlayer(amount, reason){
     if(amount <= 0) return;
+    if(operatorPassive?.isInvulnerable(stageElapsedSec())&&gameState==='playing'){
+      // Invulnerability means no lost HP and no recorded damage (including
+      // special mechanics, overflow and incorrect submissions).
+      return;
+    }
 
     const scaled = Math.max(1, Math.round(amount));
     damageTakenThisStage += scaled;
@@ -6592,6 +6674,7 @@ if(gameState === "paused"){
       operatorPassive?.tick(elapsed);
       // Low-cost arena status indication, cleared when the timed freeze expires.
       wordLane?.classList?.toggle('operator-frozen-domain',!!operatorPassive?.isFieldFrozen(elapsed));
+      wordLane?.classList?.toggle('operator-sovereign-guard',!!operatorPassive?.isInvulnerable(elapsed));
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
       if(!overflowSpawnPaused && !operatorPause){
@@ -6632,14 +6715,14 @@ if(gameState === "paused"){
           }
         }
 
-      // Seraphine can mark a new arrival or execute a queued secondary target
-      // (up to 3s). Neither operation is considered a manually completed word.
+      // Operator effects advance after new spawns. Hidden Foxfire words cannot
+      // be typed/moved until their turn, and Hound can force a chain target.
       const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed);
       if(fieldEffect?.type==='auto-eliminate'){
         const autoDamage=operatorAutoEliminate(fieldEffect.wordId,true);
         if(autoDamage>0)damageBoss(autoDamage);
         if(gameState!=='playing'){scheduleTick(true);return;}
-      }
+      }else applyOperatorFieldEffect(fieldEffect);
 
       const h = laneHeight();
       let fallSpeed = (stageIndex === 4)
@@ -6670,6 +6753,7 @@ if(gameState === "paused"){
       for(let i=0;i<words.length;i++){
         const w = words[i];
         if(w.ex2Hacked) continue;
+        if(w.foxfireHidden) continue; // Hidden rewind queue is in stasis.
         if(w.state !== "falling") continue;
 
         const v = (Number.isFinite(w.fallSpeedOverride)
