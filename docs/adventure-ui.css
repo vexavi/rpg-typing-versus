@@ -506,3 +506,6 @@ body.adventure-client .operator-lupa-timer-value {
   }
   body.adventure-client .operator-lupa-timer-value {font-size:25px;}
 }
+
+/* v86.43: equipped operator portrait, not the legacy Profile icon. */
+#playerIcon, #introProfileIcon{image-rendering:auto!important;object-fit:contain;}

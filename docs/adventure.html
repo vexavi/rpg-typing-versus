@@ -1322,7 +1322,7 @@ width:min(600px, calc(100% - 30px));
 
     /* ---- Profile / Achievements UI ---- */
     /* Hide Profile/Achievements entries from the in-game command list (moved to Mode Select) */
-    #profileCmd, #achievementsCmd{ display:none; }
+    #achievementsCmd{ display:none; }
 
     .playerHeaderWrap{
       display:flex;
@@ -1753,9 +1753,9 @@ width:min(600px, calc(100% - 30px));
   <link rel="preload" as="script" href="story-mode.js?v=73">
   <link rel="preload" as="script" href="adventure_rewards.js?v=73">
   <link rel="preload" as="script" href="guild-coins.js?v=73">
-  <link rel="preload" as="script" href="adventure_engine.js?v=86.42">
+  <link rel="preload" as="script" href="adventure_engine.js?v=86.43">
   <link rel="stylesheet" href="rpg-theme.css" />
-  <link rel="stylesheet" href="adventure-ui.css?v=86.41" />
+  <link rel="stylesheet" href="adventure-ui.css?v=86.43" />
 <link rel="stylesheet" href="story-mode.css">
 <link rel="stylesheet" href="student-ui.css?v=86.36">
 <link rel="stylesheet" href="story-map-v54.css?v=54">
@@ -1829,60 +1829,6 @@ width:min(600px, calc(100% - 30px));
     </div>
 
 
-      <div class="overlay" id="profileOverlay" aria-hidden="true">
-        <div class="overlayBox" role="dialog" aria-modal="true">
-          <h2 id="profileTitle">PROFILE</h2>
-          <p id="profileDesc"></p>
-
-          <div class="profileCoinsRow">
-            <span class="profileCoinsLabel">Coins</span>
-            <b id="profileCoinsValue">0</b>
-          </div>
-
-          <div class="profileForm">
-            <div class="profileStep" id="profileAccountStep">
-              <div class="profileTopRow">
-                <div class="profileLoginStack">
-                  <div>
-                    <div class="profileLabel">Username</div>
-                    <input class="profileInput" id="profileNameInput" type="text" maxlength="16" placeholder="Username (max 16)" autocomplete="off" autocapitalize="none" />
-                  </div>
-
-                  <div>
-                    <div class="profileLabel">Password</div>
-                    <input class="profileInput" id="profileCloudPinInput" type="password" maxlength="32" placeholder="4–32 characters" autocomplete="off" />
-                  </div>
-                </div>
-
-                <div class="cloudBox" id="profileCloudBox">
-                  <div class="cloudBtnRow">
-                    <button class="uiBtn" id="profileCloudLoadBtn" type="button">Load Profile</button>
-                    <button class="uiBtn primary" id="profileCloudSaveBtn" type="button">Save Profile</button>
-                    <button class="uiBtn primary" id="profileNextBtn" type="button">Next</button>
-                  </div>
-                  <div class="cloudStatus" id="profileCloudStatus"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="profileStep" id="profileIconStep">
-              <div>
-                <div class="profileLabel">Icon</div>
-                <div class="iconGrid" id="profileIconGrid"></div>
-              </div>
-            </div>
-
-            <div class="btnRow">
-              <button class="uiBtn" id="profileBackBtn" type="button">Back</button>
-              <button class="uiBtn" id="profileCancelBtn" type="button">Cancel</button>
-              <button class="uiBtn primary" id="profileSaveBtn" type="button">Save</button>
-            </div>
-
-            <div class="overlayHint" id="profileHint"></div>
-          </div>
-        </div>
-      </div>
-
       <div class="overlay" id="achOverlay" aria-hidden="true">
         <div class="overlayBox" role="dialog" aria-modal="true">
           <h2 id="achTitle">ACHIEVEMENTS</h2>
@@ -1899,13 +1845,12 @@ width:min(600px, calc(100% - 30px));
     <div class="uiRow">
       <div class="panel">
         <div class="panelHeader">
-          <span class="playerHeaderWrap"><img id="playerIcon" class="playerIcon pixel" alt="icon" /><span class="playerMeta"><span class="playerNameRow"><b id="playerLabel">Player</b><span class="playerLevel muted" id="playerLevelText"></span></span><span class="playerExp muted" id="playerExpText"></span></span></span>
+          <span class="playerHeaderWrap"><img id="playerIcon" class="playerIcon" alt="icon" /><span class="playerMeta"><span class="playerNameRow"><b id="playerLabel">Player</b><span class="playerLevel muted" id="playerLevelText"></span></span><span class="playerExp muted" id="playerExpText"></span></span></span>
           <span class="muted">PLAYER</span>
         </div>
         <ul class="menuList">
 <li><button class="menuItem" type="button" id="pauseCmd"><span class="arrow">▶</span><span id="pauseCmdText">Pause (ESC)</span></button></li>
 <li><button class="menuItem" type="button" id="runCmd"><span class="arrow">▶</span><span>Mode Select</span></button></li>
-<li><button class="menuItem" type="button" id="profileCmd"><span class="arrow">▶</span><span>Profile</span></button></li>
 <li><button class="menuItem" type="button" id="achievementsCmd"><span class="arrow">▶</span><span>Achievements</span></button></li>
 </ul>
       </div>
@@ -1994,12 +1939,12 @@ width:min(600px, calc(100% - 30px));
 
 
     <div class="introProfileCard" id="introProfileCard" aria-hidden="true">
-      <img class="introProfileIcon" id="introProfileIcon" src="icon01.webp" alt="icon" decoding="async" fetchpriority="high" />
+      <img class="introProfileIcon" id="introProfileIcon" src="assets/profile-icons/mc.webp" alt="icon" decoding="async" fetchpriority="high" />
       <div class="introProfileText">
         <div class="introProfileName" id="introProfileName">Player</div>
         <div class="introProfileLevel" id="introProfileLevel">Lv.1</div>
         <div class="introProfileExp" id="introProfileExp">EXP: 0/20</div>
-        <div class="introProfileSelected" id="introProfileSelected">DEFAULT / MAIN CHARACTER</div>
+        <div class="introProfileSelected" id="introProfileSelected">EQUIPPED / MAIN CHARACTER</div>
       </div>
     </div>
 
@@ -2010,11 +1955,11 @@ width:min(600px, calc(100% - 30px));
     </div>
   </div>
 
-<script src="asset-manifest.js?v=69"></script>
+<script src="asset-manifest.js?v=86.43"></script>
 <script src="media-loader.js?v=69"></script>
 <script src="performance-meter.js?v=69"></script>
 <script src="game-mechanics.js"></script>
-<script src="operator-passives.js?v=86.42"></script>
+<script src="operator-passives.js?v=86.43"></script>
 <script src="custom-mechanics.js"></script>
 <script src="game-balance-runtime.js?v=86.11"></script>
 <script type="module" src="game-balance-cloud.js"></script>
@@ -2022,9 +1967,9 @@ width:min(600px, calc(100% - 30px));
 // An old offline shell may cache old JavaScript even after GitHub Pages publishes new files.
 // Request the updated worker from fresh HTML before starting the application.
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./offline-sw.js?v=86.41',{scope:'./'}).catch(()=>{});
+  navigator.serviceWorker.register('./offline-sw.js?v=86.43',{scope:'./'}).catch(()=>{});
 }
 </script>
-<script type="module">await import("./online-boot-v66.js?v=86.41");</script>
+<script type="module">await import("./online-boot-v66.js?v=86.43");</script>
 </body>
 </html>

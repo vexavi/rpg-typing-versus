@@ -1873,7 +1873,7 @@ const achOverlay = document.getElementById("achOverlay");
   }
 
   function getIntroCharacterMeta(){
-    const charId = String(window.ADVENTURE_PLAYER?.selected_character || window.ADVENTURE_PLAYER?.cosmetics?.featured || "mc");
+    const charId = getSelectedOperator(); // Equipped operator is the only visual character selection.
     const map = {
       mc: { name: "Main Character", path: "assets/characters/mc.webp" },
 
@@ -1881,7 +1881,7 @@ const achOverlay = document.getElementById("achOverlay");
     // The player may feature any operator they have actually recruited.
     const owned = window.ADVENTURE_PLAYER?.recruitment?.owned || {};
     if(Object.prototype.hasOwnProperty.call(owned,charId) && /^[a-z][a-z0-9_]{0,39}$/.test(charId)){
-      map[charId] = {name:charId.replace(/_/g,' '),path:`assets/recruitment/${charId}.webp`};
+      map[charId] = {name:window.RPG_OPERATOR_PASSIVES?.RULES?.[charId]?.name||charId.replace(/_/g,' '),path:`assets/recruitment/${charId}.webp`};
     }
     const meta = map[charId] || map.mc;
     return { id: map[charId] ? charId : "mc", name: meta.name, src: window.RPG_MEDIA?.url(meta.path) || meta.path };
@@ -1902,10 +1902,8 @@ const achOverlay = document.getElementById("achOverlay");
     const name = nameRaw ? nameRaw : "Player";
     const lvl = p ? levelFromXp(p.xp) : 1;
 
-    // Icon source
-    const iconId = p ? (p.iconId || "icon01") : "icon01";
-    const iconDef = PROFILE_ICON_PRESETS.find(x => x.id === iconId) || PROFILE_ICON_PRESETS[0];
-    const src = iconDef ? iconDef.file : "icon01.webp";
+    // Always show the equipped operator, not the old editable Profile icon.
+    const src = equippedOperatorIconSrc();
 
     if(introProfileName.textContent !== name) introProfileName.textContent = name;
     const lvlText = `Lv.${lvl}`;
@@ -1919,7 +1917,7 @@ const achOverlay = document.getElementById("achOverlay");
     if(introProfileIcon.dataset.sourceSrc !== src) setImageSource(introProfileIcon, src);
     if(introProfileSelected){
       const charMeta = getIntroCharacterMeta();
-      const selectedText = `DEFAULT / ${String(charMeta.name || 'Main Character').toUpperCase()}`;
+      const selectedText = `EQUIPPED / ${String(charMeta.name || 'Main Character').toUpperCase()}`;
       if(introProfileSelected.textContent !== selectedText) introProfileSelected.textContent = selectedText;
     }
     renderIntroCharacterFigure();
@@ -1961,12 +1959,15 @@ const achOverlay = document.getElementById("achOverlay");
       }
     }
 
-    // Icon
+    // Player HUD portrait is always the equipped operator's face icon.
     if(playerIconEl){
-      const iconId = p ? p.iconId : "icon01";
-      const iconDef = PROFILE_ICON_PRESETS.find(x => x.id === iconId) || PROFILE_ICON_PRESETS[0];
-      const src = iconDef ? iconDef.file : "icon01.webp";
-      if(playerIconEl.dataset.sourceSrc !== src) setImageSource(playerIconEl, src);
+      const src = equippedOperatorIconSrc();
+      if(playerIconEl.dataset.sourceSrc !== src){
+        setImageSource(playerIconEl,src,{onerror:()=>{
+          const fallback='assets/profile-icons/mc.webp';
+          if(src!==fallback)setImageSource(playerIconEl,fallback);
+        }});
+      }
     }
     try{ renderIntroProfileCard(); }catch(_){/* ignore */}
 
@@ -2927,10 +2928,13 @@ function showModeSelectScreen(){
   window.RPG_V66_COMPETITIVE_ACTIVE=false;window.dispatchEvent(new Event("rpg-v66-unlock-settings"));
   rankingRequest++;
 
-  // Ensure the player has created a profile first (first-time login flow)
+  // No Profile screen. The Adventure Card supplies the name; local game
+  // progress still uses a background save record for XP and currency.
   if(!profileReady()){
-    openProfileModal(true, () => { showModeSelectScreen(); });
-    return;
+    profile=profile||createDefaultProfile();
+    profile.name=String(ADVENTURE_CONTEXT.name||profile.name||'Player').slice(0,16);
+    profile.iconId=profile.iconId||'icon01';
+    saveProfile(profile);
   }
   renderProfileHeader();
   void initializeRankIcon();
@@ -3123,9 +3127,6 @@ function showModeSelectScreen(){
     }});
   addMode('All Grades Challenge', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     setMode('shared');showOverlay(false);startGame();
-  }});
-  addMode('Profile', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
-    window.location.assign('profile.html');
   }});
   addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     window.location.assign('recruitment.html');
@@ -3457,6 +3458,10 @@ async function debugJumpTo(mode, idx){
   let selectedOperatorId=null;
   let activeOperatorId='mc';
   let operatorPassive=null;
+  function equippedOperatorIconSrc(){
+    const id=getSelectedOperator();
+    return `assets/profile-icons/${id}.webp`;
+  }
   function getSelectedOperator(){
     const roster=ownedOperatorIds();
     if(!roster.includes(selectedOperatorId)){
@@ -3470,6 +3475,8 @@ async function debugJumpTo(mode, idx){
   function selectOperator(id){
     selectedOperatorId=ownedOperatorIds().includes(id)?id:'mc';
     try{localStorage.setItem(adventureKey('selectedOperator'),selectedOperatorId);}catch(_){}
+    // Immediately refresh both the in-game HUD and the Adventure intro portrait.
+    renderProfileHeader();
   }
   function prepareOperatorForRun(){
     activeOperatorId=operatorModeEligible()?getSelectedOperator():'mc';
@@ -7132,14 +7139,6 @@ if(gameState === "paused"){
 
   });
 
-profileCmd && profileCmd.addEventListener('click', () => {
-  if(['playing','paused','countdown','dialogue','stageclear','continuePrompt'].includes(gameState)) return;
-  window.location.assign('profile.html');
-});
-achievementsCmd && achievementsCmd.addEventListener('click', () => {
-  if(['playing','paused','countdown','dialogue','stageclear','continuePrompt'].includes(gameState)) return;
-  window.location.assign('profile.html?tab=adventure');
-});
 
 pauseCmd && pauseCmd.addEventListener("click", (e) => {
   if(gameState === "playing" && isExtraStage2()){

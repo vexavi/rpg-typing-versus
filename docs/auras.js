@@ -59,7 +59,7 @@
   const context=(()=>{try{return JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')}catch{return {}}})();
   code=String(context.card_code||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
   if(window.RPG_AURA_DEMO)code='AAAAAAAAAAAAAAAA';
-  if(!/^[A-HJ-NP-Z2-9]{16}$/.test(code)){document.getElementById('characterList').textContent='Open your Adventure Card from Profile first.';notice('Please log in through your player profile.');return;}
+  if(!/^[A-HJ-NP-Z2-9]{16}$/.test(code)){document.getElementById('characterList').textContent='Open Adventure with your card first.';notice('Open Adventure with your card, then return to Aura Workshop.');return;}
   try{await loadCatalog();await refresh();notice('Auras are cosmetic. Your shared shard balance is saved in Firebase.');}
   catch(e){notice(e?.message||'Could not load your operator collection.');}
  }
