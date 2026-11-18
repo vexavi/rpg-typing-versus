@@ -5,11 +5,18 @@
  const params=new URLSearchParams(location.search);
  const session=(()=>{try{return JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')||{}}catch{return {}}})();
  let code=cleanCode(params.get('card')||session.card_code||''),player=null,mode='server',draft=null,section='overview',editor='',notice='',busy=false;
- let editorTrigger=null;
- let chars=[{id:'mc',name:'Main Character',img:(window.RPG_MEDIA?.url('assets/characters/mc.webp')||'assets/characters/mc.webp')},{id:'crimson_knight',name:'Crimson Knight',img:(window.RPG_MEDIA?.url('assets/characters/crimson_knight.webp')||'assets/characters/crimson_knight.webp')},{id:'silver_knight',name:'Silver Knight',img:(window.RPG_MEDIA?.url('assets/characters/silver_knight.webp')||'assets/characters/silver_knight.webp')}];
+ let editorTrigger=null,showcaseSlot=0;
+ let chars=[{id:'mc',name:'Main Character',img:(window.RPG_MEDIA?.url('assets/characters/mc.webp')||'assets/characters/mc.webp')}];
  const backgrounds=[{id:'default',name:'Guild Grid',locked:false},{id:'horizon',name:'Horizon',locked:true},{id:'ruins',name:'Ruins',locked:true},{id:'afterglow',name:'Afterglow',locked:true}];
  const themes=[{id:'signal',name:'Signal',color:'#f0f500'},{id:'steel',name:'Steel',color:'#e1e2e5'},{id:'amber',name:'Amber',color:'#ffcf60'},{id:'frost',name:'Frost',color:'#91e4ff'}];
- const defaults=()=>({nickname:'',motto:'',theme:'signal',featured:'mc',background:'default',showcase:['crimson_knight','silver_knight']});
+ const defaults=()=>({nickname:'',motto:'',theme:'signal',featured:'mc',background:'default',showcase:['mc','']});
+ // Custom portrait assets are explicit opt-ins; no fallback to cropped full-body artwork.
+ const customIconIds=new Set(['alden','aveline','cassian','elise','hound','isolde','kade','livia','mc','mira','nora','seraphine','tavi','vern','vex']);
+ function customIcon(id){return customIconIds.has(id)?`assets/profile-icons/${id}.webp`:'';}
+ function iconMarkup(ch,klass='showcase-custom-icon'){
+  const url=customIcon(ch?.id);
+  return url?`<img class="${klass}" src="${url}" alt="" loading="lazy" decoding="async">`:'';
+ }
  function cleanCode(s){return String(s||'').toUpperCase().replace(/[^A-Z2-9]/g,'')}
  const num=n=>Math.max(0,Math.trunc(Number(n)||0));
  const storageKey=(s,id)=>`${s}__${String(id||'guest').replace(/[^\w-]/g,'').slice(0,32)}`;
@@ -22,22 +29,34 @@
  function date(ts){return ts?new Date(ts*1000).toLocaleDateString():'—'}
  async function loadOwnedOperators(){
   if(!player)return;
-  const keys=new Set(Object.keys(player.recruitment?.owned||{}));
+  const keys=new Set(Object.keys(player.recruitment?.owned||{}).filter(id=>!retired.has(id)));
   try{
    const response=await fetch('gacha_catalog.json',{cache:'default'});
    if(!response.ok)return;
    const catalog=(await response.json()).characters||[];
-   const starters=chars.filter(x=>['mc','crimson_knight','silver_knight'].includes(x.id));
+   const starters=chars.filter(x=>x.id==='mc');
    chars=[...starters,...catalog.filter(x=>keys.has(x.id)&&[4,5,6].includes(x.rarity)&&/^assets\/recruitment\/[a-z0-9_-]+\.webp$/.test(x.art||'')).map(x=>({id:x.id,name:x.name,img:x.art}))];
   }catch(e){console.warn('Operator portraits unavailable:',e)}
  }
  function pick(id){return chars.find(x=>x.id===id)||chars[0]}
+ const retired=new Set(['crimson_knight','silver_knight']); // Read-only migration for existing saves; never render these characters.
+ function normalizedShowcase(list){
+  const values=Array.isArray(list)?list:[];
+  const available=new Set(chars.map(ch=>ch.id));
+  const first=available.has(values[0])?values[0]:'mc';
+  const second=available.has(values[1])&&values[1]!==first?values[1]:'';
+  return [first,second];
+ }
+ function normalizeCosmetics(raw={}){
+  const featured=chars.some(x=>x.id===raw.featured)?raw.featured:'mc';
+  return {...defaults(),...raw,featured,showcase:normalizedShowcase(raw.showcase),background:'default'};
+ }
  function getCosmeticCache(id){try{return JSON.parse(localStorage.getItem(storageKey('rpgProfileCosmetics',id))||'null')}catch{return null}}
  function setCosmeticCache(id,c){try{localStorage.setItem(storageKey('rpgProfileCosmetics',id),JSON.stringify(c))}catch{}}
- function cosmetics(p){const saved=getCosmeticCache(p.public_id),raw=p.cosmetics||saved||{};return {...defaults(),...raw,featured:raw.featured||p.selected_character||'mc',showcase:Array.isArray(raw.showcase)&&raw.showcase.length===2?raw.showcase:['crimson_knight','silver_knight'],background:'default'}}
+ function cosmetics(p){const saved=getCosmeticCache(p.public_id),raw=p.cosmetics||saved||{};return normalizeCosmetics(raw)}
  function applyTheme(){document.body.className='profile-client theme-'+(themes.some(t=>t.id===player?.cosmetics?.theme)?player.cosmetics.theme:'signal')}
  async function api(path,body){const control=new AbortController(),timeout=setTimeout(()=>control.abort(),3600);try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:control.signal}),j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}finally{clearTimeout(timeout)}}
- function localPlayer(){let id=localId();return {public_id:id,name:localStorage.getItem('rpgAdventureOfflineName')||'Adventurer',selected_character:'mc',adventure:localAdventure(id),tournament:{count:null,history:[],trophies:null},collection:{owned:['crimson_knight','silver_knight'],available:['crimson_knight','silver_knight']},recruitment:{status:'offline',permits:null,coins:null,pity_six:0,owned:{},catalog:[]}}}
+ function localPlayer(){let id=localId();return {public_id:id,name:localStorage.getItem('rpgAdventureOfflineName')||'Adventurer',selected_character:'mc',adventure:localAdventure(id),tournament:{count:null,history:[],trophies:null},collection:{owned:['mc'],available:['mc']},recruitment:{status:'offline',permits:null,coins:null,pity_six:0,owned:{},catalog:[]}}}
  function profileStatus(title,message='',actions=''){
   root.innerHTML=`<section class="setup profile-gate"><small>PLAYER PROFILE</small><h1>${esc(title)}</h1><p>${esc(message)}</p>${actions}</section>`;
  }
@@ -55,8 +74,7 @@
  }
  async function setPlayer(next){
   player=next;mode='server';code=cleanCode(next.card_code||code);
-  notice='';player.cosmetics={...defaults(),...(player.cosmetics||{}),background:'default'};
-  await loadOwnedOperators();
+  notice='';await loadOwnedOperators();player.cosmetics=normalizeCosmetics(player.cosmetics||{});player.selected_character=player.cosmetics.featured;
   try{
    const current=JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')||{};
    const samePlayer=current.public_id===player.public_id;
@@ -108,26 +126,26 @@
  function trophyCount(){let t=player.tournament?.trophies;return t?num(t.gold)+num(t.silver)+num(t.bronze):null}
  function editorButton(field,label='EDIT'){return `<button type="button" class="editbtn" data-edit="${esc(field)}" aria-label="${esc(label)}" title="${esc(label)}">✎</button>`}
  function auraClass(id){const level=Number(player?.recruitment?.auras?.[id]?.equipped)||0;return 'aura-outline-'+(level>=0&&level<=4?level:0);}
- // Showcase intentionally has blank icon slots until custom portraits are provided.
- // Character assignments are retained in saved cosmetics; only their thumbnails are hidden.
+ // Display dedicated icons only when provided. No full-body image crop or wrong-character fallback.
  function spotlight(){
-  const selections=player.cosmetics.showcase.map(id=>pick(id));
+  const selections=player.cosmetics.showcase.map(id=>id?chars.find(x=>x.id===id)||null:null);
   return `<div class="dark-card profile-showcase-card"><div class="section-top"><span class="mini-kicker">OPERATOR SHOWCASE · 02/04</span>${editorButton('showcase','Edit showcase')}</div>
    <div class="showcase-list" role="list" aria-label="Featured operator icon slots">
-    ${selections.map((c,i)=>`<div class="showcase-tile showcase-placeholder" role="listitem" aria-label="Slot ${i+1}: ${esc(c.name)}, custom icon not set" title="${esc(c.name)} · Icon not set"></div>`).join('')}
+    ${selections.map((ch,i)=>`<div class="showcase-tile ${ch&&customIcon(ch.id)?'showcase-has-icon':'showcase-placeholder'}" role="listitem" aria-label="Slot ${i+1}: ${ch?esc(ch.name):'empty'}" title="${ch?esc(ch.name):'Empty slot'}">${ch?iconMarkup(ch):''}</div>`).join('')}
     <div class="showcase-tile locked" role="listitem" aria-label="Slot 3: locked"><span aria-hidden="true">+</span></div>
     <div class="showcase-tile locked" role="listitem" aria-label="Slot 4: locked"><span aria-hidden="true">+</span></div>
    </div></div>`;
  }
+
  function detailContent(){const a=player.adventure||{},t=player.tournament||{},rw=player.recruitment||{},hist=t.history||[];
   if(section==='adventure')return `<div class="detail-panel"><div class="record"><strong>Normal Campaign</strong><span>${a.normal_clear?'CLEARED':'IN PROGRESS'}</span></div><div class="record"><strong>Extra Campaign</strong><span>${a.extra_clear?'CLEARED':'LOCKED'}</span></div><div class="record"><strong>Best Score · Normal</strong><span>${num(a.best_normal).toLocaleString()}</span></div><div class="record"><strong>Best Score · Extra</strong><span>${num(a.best_extra).toLocaleString()}</span></div><div class="record"><strong>Achievements</strong><span>${a.achievements?.length||0}</span></div>${a.achievements?.length?`<div class="subtext">${a.achievements.map(x=>esc(x.replaceAll('_',' '))).join(' · ')}</div>`:''}</div>`;
   if(section==='tournaments')return `<div class="detail-panel">${hist.length?hist.slice(0,12).map(r=>`<div class="record"><strong>${esc(date(r.date))} · ${esc(r.award?.toUpperCase())}</strong><span>#${num(r.place)} · ${num(r.score).toLocaleString()}</span></div>`).join(''):'<div class="subtext">No finalized tournament results yet.</div>'}</div>`;
-  if(section==='characters')return `<div class="detail-panel">${player.cosmetics.showcase.map(id=>pick(id)).map(c=>`<div class="record"><strong>${esc(c.name)}</strong><span>${esc(['NONE','WHITE','AZURE','VIOLET','GOLD'][Number(player.recruitment?.auras?.[c.id]?.equipped)||0]||'NONE')} AURA</span></div>`).join('')}<div class="record"><strong>Character Shards</strong><span>${num(player.recruitment?.shards)}</span></div><a class="smallbtn" href="auras.html" style="display:inline-block;margin-top:10px">OPEN AURA WORKSHOP ✦</a> <button class="smallbtn" data-edit="featured" style="margin-top:10px">CHANGE FEATURED</button></div>`;
+  if(section==='characters')return `<div class="detail-panel">${player.cosmetics.showcase.filter(Boolean).map(id=>pick(id)).map(c=>`<div class="record"><strong>${esc(c.name)}</strong><span>${esc(['NONE','WHITE','AZURE','VIOLET','GOLD'][Number(player.recruitment?.auras?.[c.id]?.equipped)||0]||'NONE')} AURA</span></div>`).join('')}<div class="record"><strong>Character Shards</strong><span>${num(player.recruitment?.shards)}</span></div><a class="smallbtn" href="auras.html" style="display:inline-block;margin-top:10px">OPEN AURA WORKSHOP ✦</a> <button class="smallbtn" data-edit="featured" style="margin-top:10px">CHANGE FEATURED</button></div>`;
   if(section==='recruitment')return `<div class="detail-panel"><div class="record"><strong>Guild Coins</strong><span>${num(rw.coins).toLocaleString()} · ${Math.floor(num(rw.coins)/100)} SINGLE PULL EQUIVALENT</span></div><div class="record"><strong>Recruitment</strong><span>FEATURED</span></div><a class="smallbtn" href="recruitment.html" style="display:inline-block;margin:10px 0;text-decoration:none">OPEN RECRUITMENT</a></div>`;
     return `<div class="detail-panel"><div class="subtext">Select Adventure, Tournaments, Characters, or Recruitment to view records.</div></div>`;
  }
  function render(){if(!player){login();return}applyTheme();const a=player.adventure||{},t=player.tournament||{},rw=player.recruitment||{},c=player.cosmetics||defaults();const level=levelOf(num(a.xp)),start=xpNeed(level),end=xpNeed(level+1),progress=Math.max(0,Math.min(100,100*(num(a.xp)-start)/(end-start||1)));const selected=pick(c.featured);const decorated=c.nickname||player.name;
-  root.innerHTML=`<section class="hero-area"><p class="crumbs"><b>//</b> PLAYER PROFILE</p><div class="hero-grid"><div class="hero-left"><div class="identity"><div class="avatar"><img class="${auraClass(selected.id)}" src="${esc(selected.img)}" alt="${esc(selected.name)}"></div><div class="identity-text"><div class="edit-line"><strong class="player-name">${esc(decorated)}</strong>${editorButton('name','Edit display name')}</div><div class="idline">${esc(player.public_id)} <span aria-label="Player account">· ADVENTURE CARD</span></div><div class="edit-line"><p class="motto">${esc(c.motto||'')}</p>${editorButton('motto','Edit profile message')}</div><div class="meta"><span class="pill">FEATURED / ${esc(selected.name.toUpperCase())}</span>${editorButton('featured','Change featured character')}</div></div></div><div class="summary-row"><div class="summary-num"><b>${level}</b><small>ADVENTURE LV.</small></div><div class="summary-num"><b>${t.count??'—'}</b><small>TOURNAMENTS</small></div><div class="summary-num"><b>${player.collection?.owned?.length||2}</b><small>OPERATORS</small></div></div></div><div class="featured-stage" aria-label="Featured character: ${esc(selected.name)}"><div class="featured-stage-backdrop" aria-hidden="true"></div><img class="featured-stage-art ${auraClass(selected.id)}" src="${esc(selected.img)}" alt="${esc(selected.name)} full character portrait"><div class="featured-stage-label"><span>FEATURED OPERATOR</span><strong>${esc(selected.name)}</strong></div></div><div class="hero-right"><div class="dark-card progress-card"><div class="section-top"><span class="mini-kicker">ADVENTURE PROGRESS</span><span class="mini-kicker">LV. ${level}</span></div><div class="progress-value">${num(a.xp).toLocaleString()} <small>XP</small></div><div class="xpbar"><div style="width:${progress}%"></div></div><div class="xp-line"><span>${start.toLocaleString()} XP</span><span>NEXT LEVEL · ${end.toLocaleString()} XP</span></div></div>${spotlight()}</div></div></section>
+  root.innerHTML=`<section class="hero-area"><p class="crumbs"><b>//</b> PLAYER PROFILE</p><div class="hero-grid"><div class="hero-left"><div class="identity"><div class="avatar"><img class="${auraClass(selected.id)}" src="${esc(selected.img)}" alt="${esc(selected.name)}"></div><div class="identity-text"><div class="edit-line"><strong class="player-name">${esc(decorated)}</strong>${editorButton('name','Edit display name')}</div><div class="idline">${esc(player.public_id)} <span aria-label="Player account">· ADVENTURE CARD</span></div><div class="edit-line"><p class="motto">${esc(c.motto||'')}</p>${editorButton('motto','Edit profile message')}</div><div class="meta"><span class="pill">FEATURED / ${esc(selected.name.toUpperCase())}</span>${editorButton('featured','Change featured character')}</div></div></div><div class="summary-row"><div class="summary-num"><b>${level}</b><small>ADVENTURE LV.</small></div><div class="summary-num"><b>${t.count??'—'}</b><small>TOURNAMENTS</small></div><div class="summary-num"><b>${player.collection?.owned?.length||1}</b><small>OPERATORS</small></div></div></div><div class="featured-stage" aria-label="Featured character: ${esc(selected.name)}"><div class="featured-stage-backdrop" aria-hidden="true"></div><img class="featured-stage-art ${auraClass(selected.id)}" src="${esc(selected.img)}" alt="${esc(selected.name)} full character portrait"><div class="featured-stage-label"><span>FEATURED OPERATOR</span><strong>${esc(selected.name)}</strong></div></div><div class="hero-right"><div class="dark-card progress-card"><div class="section-top"><span class="mini-kicker">ADVENTURE PROGRESS</span><span class="mini-kicker">LV. ${level}</span></div><div class="progress-value">${num(a.xp).toLocaleString()} <small>XP</small></div><div class="xpbar"><div style="width:${progress}%"></div></div><div class="xp-line"><span>${start.toLocaleString()} XP</span><span>NEXT LEVEL · ${end.toLocaleString()} XP</span></div></div>${spotlight()}</div></div></section>
   ${notice?`<div class="notice profile-inline-notice" role="status">${esc(notice)}</div>`:''}<div id="editor-root"></div>`;
   if(editor)renderEditor();
  }
@@ -135,21 +153,24 @@
  function renderEditor(){const c=draft||player.cosmetics||defaults(),title={name:'Display Name',motto:'Profile Message',featured:'Featured Character',showcase:'Operator Showcase',background:'Background Editor',theme:'Profile Theme'}[editor]||'Customize';let content='';
   if(editor==='name')content=`<label class="field">DISPLAY NAME<input id="edit-name" class="edit-input" maxlength="20" autocomplete="off" value="${esc(c.nickname||player.name)}"><small>This is the name shown on your profile. Your Adventure Card login stays the same.</small></label>`;
   if(editor==='motto')content=`<label class="field">PROFILE MESSAGE<textarea id="edit-motto" class="edit-input" rows="3" maxlength="80">${esc(c.motto||'')}</textarea><small>Up to 80 characters.</small></label>`;
-  if(editor==='featured')content=`<div class="field">CHOOSE FEATURED OPERATOR</div><div class="pick-grid">${chars.map(x=>`<button class="pick ${c.featured===x.id?'active':''}" aria-pressed="${c.featured===x.id}" type="button" data-featured="${x.id}"><img src="${x.img}" alt="" loading="lazy" decoding="async"><strong>${x.name}</strong><small>${x.id==='mc'?'DEFAULT CHARACTER':'STARTER · OWNED'}</small></button>`).join('')}</div>`;
-  if(editor==='showcase')content=`<div class="pick-grid">${c.showcase.map(x=>pick(x)).map((ch,i)=>`<div class="pick"><img src="${ch.img}" alt=""><strong>SLOT ${i+1} / ${ch.name}</strong></div>`).join('')}</div><button class="smallbtn" type="button" id="swap-showcase">⇄ SWAP ORDER</button><div class="hint"></div>`;
+  if(editor==='featured')content=`<div class="field">CHOOSE FEATURED OPERATOR</div><div class="pick-grid">${chars.map(x=>`<button class="pick ${c.featured===x.id?'active':''}" aria-pressed="${c.featured===x.id}" type="button" data-featured="${x.id}"><img src="${x.img}" alt="" loading="lazy" decoding="async"><strong>${x.name}</strong><small>${x.id==='mc'?'DEFAULT CHARACTER':'RECRUITED · OWNED'}</small></button>`).join('')}</div>`;
+  if(editor==='showcase')content=`<div class="field">SELECT A SLOT, THEN AN OWNED OPERATOR</div>
+   <div class="showcase-edit-slots" role="group" aria-label="Choose showcase slot">${c.showcase.map((id,i)=>{const ch=id?chars.find(x=>x.id===id):null;return `<button type="button" class="pick showcase-edit-slot ${showcaseSlot===i?'active':''}" data-showcase-slot="${i}" aria-pressed="${showcaseSlot===i}">${ch?iconMarkup(ch):''}<strong>SLOT ${i+1}</strong><small>${esc(ch?.name||'EMPTY')}</small></button>`}).join('')}</div>
+   <div class="showcase-edit-choices" role="group" aria-label="Owned operators">${chars.map(ch=>`<button type="button" class="pick showcase-edit-choice ${c.showcase[showcaseSlot]===ch.id?'active':''}" data-showcase-pick="${esc(ch.id)}" aria-pressed="${c.showcase[showcaseSlot]===ch.id}" ${c.showcase[1-showcaseSlot]===ch.id?'disabled title="Already assigned to the other slot"':''}>${iconMarkup(ch)}<strong>${esc(ch.name)}</strong></button>`).join('')}</div>
+   <button class="smallbtn" type="button" id="clear-showcase">CLEAR SLOT</button> <button class="smallbtn" type="button" id="swap-showcase">⇄ SWAP ORDER</button>`;
   if(editor==='theme')content=`<div class="field">COLOR ACCENT</div><div class="theme-grid">${themes.map(x=>`<button class="pick ${c.theme===x.id?'active':''}" aria-pressed="${c.theme===x.id}" type="button" data-theme-choice="${x.id}"><span class="swatch" style="--swatch:${x.color}"></span><strong>${x.name.toUpperCase()}</strong></button>`).join('')}</div>`;
   if(editor==='background')content=`<div class="background-grid">${backgrounds.map(x=>`<button type="button" class="pick placeholder ${x.locked?'locked':''} ${c.background===x.id?'active':''}" ${x.locked?'disabled':''} data-background="${x.id}"><strong>${x.locked?'🔒':'✓'} ${esc(x.name.toUpperCase())}</strong><small>${x.locked?'LOCKED':'EQUIPPED'}</small></button>`).join('')}</div>`;
   $('editor-root').innerHTML=`<div class="dialog-back" id="edit-backdrop"><section class="editor" role="dialog" aria-modal="true" aria-labelledby="editor-title"><header><h2 id="editor-title">${esc(title)}</h2><button class="smallbtn" id="close-editor" type="button" aria-label="Close editor">×</button></header><div class="editor-body">${content}<div class="modalerror" id="editor-error" role="alert"></div></div><footer><button class="smallbtn" type="button" id="cancel-editor">CANCEL</button><button class="primary" type="button" id="save-editor" ${busy?'disabled':''}>SAVE</button></footer></section></div>`;
   if(editor==='name'&&$('edit-name'))$('edit-name').focus();
  }
  function errorEditor(text){if($('editor-error'))$('editor-error').textContent=text}
- function editorOpen(field){editorTrigger=document.activeElement;editor=field;draft={...defaults(),...player.cosmetics,showcase:[...player.cosmetics.showcase]};busy=false;renderEditor()}
+ function editorOpen(field){editorTrigger=document.activeElement;editor=field;showcaseSlot=0;draft={...defaults(),...player.cosmetics,showcase:[...player.cosmetics.showcase]};busy=false;renderEditor()}
  function editorClose(){editor='';draft=null;if($('editor-root'))$('editor-root').innerHTML='';if(editorTrigger?.isConnected)editorTrigger.focus({preventScroll:true});editorTrigger=null}
  function refocusOption(attribute,value){const list=root.querySelectorAll('button['+attribute+']');for(const button of list){if(button.getAttribute(attribute)===String(value)){button.focus({preventScroll:true});break}}}
  async function saveEditor(){if(!player||busy)return;const c={...defaults(),...draft};if(editor==='name'){c.nickname=String($('edit-name')?.value||'').trim();if(!c.nickname||c.nickname.length>20){errorEditor('Enter a display name (1–20 characters).');return}}
   if(editor==='motto'){c.motto=String($('edit-motto')?.value||'').trim();if(c.motto.length>80){errorEditor('Maximum 80 characters.');return}}
   if(!chars.some(x=>x.id===c.featured))c.featured='mc';
-  if(!Array.isArray(c.showcase)||c.showcase.length!==2||c.showcase[0]===c.showcase[1]){errorEditor('Choose two different owned operators.');return}
+  if(!Array.isArray(c.showcase)||c.showcase.length!==2||c.showcase.some(id=>id&&!chars.some(ch=>ch.id===id))||(c.showcase[0]&&c.showcase[0]===c.showcase[1])){errorEditor('Choose two different owned operators, or leave a slot empty.');return}
   if(c.background!=='default'){errorEditor('Background locked.');return}
   busy=true;if($('save-editor'))$('save-editor').disabled=true;
   let status='';try{
@@ -191,6 +212,9 @@
   if(b.id==='save-editor'){void saveEditor();return}
   if(b.dataset.featured){draft.featured=b.dataset.featured;renderEditor();refocusOption('data-featured',draft.featured);return}
   if(b.dataset.themeChoice){draft.theme=b.dataset.themeChoice;renderEditor();refocusOption('data-theme-choice',draft.theme);return}
+  if(b.dataset.showcaseSlot!==undefined){showcaseSlot=Number(b.dataset.showcaseSlot)===1?1:0;renderEditor();refocusOption('data-showcase-slot',showcaseSlot);return}
+  if(b.dataset.showcasePick){const id=b.dataset.showcasePick;if(draft?.showcase&&chars.some(ch=>ch.id===id)&&draft.showcase[1-showcaseSlot]!==id){draft.showcase[showcaseSlot]=id;renderEditor();refocusOption('data-showcase-pick',id)}return}
+  if(b.id==='clear-showcase'){draft.showcase[showcaseSlot]='';renderEditor();refocusOption('data-showcase-slot',showcaseSlot);return}
   if(b.id==='swap-showcase'){draft.showcase=[...draft.showcase].reverse();renderEditor();return}
   if(b.dataset.background){if(b.dataset.background==='default'){draft.background='default';renderEditor();refocusOption('data-background',draft.background)}return}
   if(b.id==='change-card'){sessionStorage.removeItem('rpgAdventureContext');sessionStorage.removeItem('rpgReturnToAdventureModeSelect');window.location.assign('adventure.html?switch=1');return}
@@ -199,6 +223,8 @@
   if(b.id==='exchange-coins'){void exchangeCoins();return}
   if(b.id==='do-ten-pull'){void pullTen();return}
  });
+ // If a custom file is missing, leave a neat blank slot instead of a broken-image icon.
+ root.addEventListener('error',e=>{const img=e.target;if(!(img instanceof HTMLImageElement)||!img.classList.contains('showcase-custom-icon'))return;const tile=img.closest('.showcase-tile');if(tile){tile.classList.remove('showcase-has-icon');tile.classList.add('showcase-placeholder')}img.remove();},true);
  root.addEventListener('submit',e=>{if(e.target.id==='profile-login'){e.preventDefault();code=cleanCode($('card-code').value);void openCard()}});
  root.addEventListener('click',e=>{if(e.target.closest('#retry-profile'))void restoreProfile();});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&editor){editorClose()}});

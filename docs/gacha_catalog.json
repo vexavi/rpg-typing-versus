@@ -6,7 +6,7 @@
     5,
     6
   ],
-  "notes": "Recruitment roster for real classroom pulls. Featured status is held separately in the banner editor. Starter knights and MC are excluded.",
+  "notes": "Recruitment roster for real classroom pulls. Featured status is held separately in the banner editor. Main Character is not recruitable.",
   "characters": [
     {
       "id": "alden",

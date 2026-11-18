@@ -2,7 +2,7 @@
  * No Functions, Cloud Run, or offline queue.
  * Scores/XP are client-reported (not secure against a modified browser).
  * Never trust this bridge for paid or scarce rewards. */
-import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js?v=86.22';
+import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js?v=86.30';
 import {makePull,getJstDate} from './recruitment-core.mjs';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
@@ -28,7 +28,7 @@ async function currentPlayer(body={}){
 }
 const defaultPlayer=(card)=>({publicId:card.publicId,username:card.username,character:'mc',grade:card.grade||null,rankIconId:'icon01',rankIconUpdatedAt:0,disabled:false,
  adventure:{xp:0,best_normal:0,best_extra:0,normal_clear:false,extra_clear:false,achievements:[]},
- cosmetics:{nickname:card.username,motto:'',theme:'signal',background:'default',featured:'mc',showcase:['crimson_knight','silver_knight']},
+ cosmetics:{nickname:card.username,motto:'',theme:'signal',background:'default',featured:'mc',showcase:['mc','']},
  story:{completed:[],best_stars:{}},tutorial:{version:0,step:1,updatedAt:null},recruitment:{coins:0,permits:0,pity_six:0,owned:{},recent:[],shards:0,auras:{}},tournament:{count:0,history:[],trophies:{gold:0,silver:0,bronze:0}}});
 // Remembered browser sign-in: Firebase Auth already persists its anonymous UID.
 // Only a server-verified cardSessions document can restore the linked card.
@@ -247,8 +247,21 @@ async function guildClaim(b){
 }
 // Aura currency is separate from Guild Coins, so existing unverified earnings never turn into shards.
 const AURA_TOTALS=[0,10,30,70,150];
+const RETIRED_OPERATORS=new Set(['crimson_knight','silver_knight']); // Legacy IDs are excluded from the active roster.
+function allowedOperatorIDs(d){return new Set(['mc',...Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id))]);}
+function safeShowcase(list,allowed){
+ const values=Array.isArray(list)?list:[];
+ const first=allowed.has(values[0])?values[0]:'mc';
+ const second=allowed.has(values[1])&&values[1]!==first?values[1]:'';
+ return [first,second];
+}
+function sanitizedCosmetics(d){
+ const raw=d.cosmetics||{},allowed=allowedOperatorIDs(d);
+ const featured=allowed.has(raw.featured)?raw.featured:(allowed.has(d.character)?d.character:'mc');
+ return {...raw,featured,showcase:safeShowcase(raw.showcase,allowed),background:'default'};
+}
 const auraId=id=>typeof id==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(id);
-const auraOwned=(d,id)=>['crimson_knight','silver_knight'].includes(id)||Object.prototype.hasOwnProperty.call(d.recruitment?.owned||{},id);
+const auraOwned=(d,id)=>id!=='mc'&&allowedOperatorIDs(d).has(id);
 async function auraChange(b){
  const p=await currentPlayer(b),id=String(b.character_id||''),action=String(b.action||'');
  if(!auraId(id)||!['upgrade','equip'].includes(action))err('Unknown operator or action.');
@@ -284,8 +297,8 @@ async function auraChange(b){
   return {ok:true,shards:shards-cost,auras:{...auras,[id]:after},level:after.level,equipped:after.equipped,spent:cost};
  });return result;
 }
-async function profile(b){const p=await currentPlayer(b),d=p.player;const owned=Object.keys(d.recruitment?.owned||{}).filter(auraId);
- return {ok:true,public_id:p.id,name:d.username,selected_character:d.character||'mc',cosmetics:d.cosmetics||{},adventure:d.adventure||{},tournament:d.tournament||{},collection:{owned:[...new Set(['crimson_knight','silver_knight',...owned])],available:[...new Set(['crimson_knight','silver_knight',...owned])]},recruitment:{coins:Math.max(0,Math.trunc(Number(d.recruitment?.coins)||0)),permits:0,pity_six:Math.max(0,Number(d.recruitment?.pity_six)||0),pity_five:Math.max(0,Number(d.recruitment?.pity_five)||0),featured_guarantee:!!d.recruitment?.featured_guarantee,status:'classroom-browser-reported',daily_claimed:d.recruitment?.lastDailyDate===getJstDate(),shards:Math.max(0,Math.trunc(Number(d.recruitment?.shards)||0)),auras:d.recruitment?.auras||{},owned:d.recruitment?.owned||{}},tutorial:d.tutorial||{version:1,step:5}};}
+async function profile(b){const p=await currentPlayer(b),d=p.player;const owned=Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id));const safe=sanitizedCosmetics(d);
+ return {ok:true,public_id:p.id,name:d.username,selected_character:safe.featured,cosmetics:safe,adventure:d.adventure||{},tournament:d.tournament||{},collection:{owned:['mc',...owned],available:['mc',...owned]},recruitment:{coins:Math.max(0,Math.trunc(Number(d.recruitment?.coins)||0)),permits:0,pity_six:Math.max(0,Number(d.recruitment?.pity_six)||0),pity_five:Math.max(0,Number(d.recruitment?.pity_five)||0),featured_guarantee:!!d.recruitment?.featured_guarantee,status:'classroom-browser-reported',daily_claimed:d.recruitment?.lastDailyDate===getJstDate(),shards:Math.max(0,Math.trunc(Number(d.recruitment?.shards)||0)),auras:d.recruitment?.auras||{},owned:Object.fromEntries(Object.entries(d.recruitment?.owned||{}).filter(([id])=>!RETIRED_OPERATORS.has(id)))},tutorial:d.tutorial||{version:1,step:5}};}
 
 
 // Each new profile has tutorial.version=0. Profiles created in older builds do not,
@@ -378,11 +391,25 @@ async function recruitmentTutorialDraw(b={}){
  if(!receipt||receipt.publicId!==p.id||receipt.mode!=='tutorial'||receipt.count!==10||!Array.isArray(receipt.results)||receipt.results.length!==10)err('Tutorial receipt is not available.');
  return {ok:true,results:receipt.results,drawId:id};
 }
-async function profileCustom(b){const p=await currentPlayer(b),c={...p.player.cosmetics};if(typeof b.nickname==='string')c.nickname=name(b.nickname);
- if(typeof b.motto==='string')c.motto=String(b.motto).trim().slice(0,80);if(['signal','steel','amber','frost'].includes(b.theme))c.theme=b.theme;
- if(['mc','crimson_knight','silver_knight'].includes(b.character)||Object.prototype.hasOwnProperty.call(p.player.recruitment?.owned||{},b.character))c.featured=b.character;
- if(Array.isArray(b.showcase)&&b.showcase.length===2)c.showcase=b.showcase.filter(x=>['crimson_knight','silver_knight'].includes(x)||Object.prototype.hasOwnProperty.call(p.player.recruitment?.owned||{},x));c.background='default';
- await updateDoc(p.playerRef,{cosmetics:c,character:c.featured});return {ok:true,cosmetics:c,selected_character:c.featured};}
+async function profileCustom(b){
+ const p=await currentPlayer(b),allowed=allowedOperatorIDs(p.player);
+ const c={...sanitizedCosmetics(p.player)};
+ if(typeof b.nickname==='string')c.nickname=name(b.nickname);
+ if(typeof b.motto==='string')c.motto=String(b.motto).trim().slice(0,80);
+ if(['signal','steel','amber','frost'].includes(b.theme))c.theme=b.theme;
+ if(typeof b.character==='string'){
+  if(!allowed.has(b.character))err('You do not own that operator.');
+  c.featured=b.character;
+ }
+ if(b.showcase!==undefined){
+  if(!Array.isArray(b.showcase)||b.showcase.length!==2||b.showcase.some(id=>typeof id!=='string'||(id!==''&&!allowed.has(id)))||(b.showcase[0]&&b.showcase[0]===b.showcase[1]))err('Choose owned operators or leave a showcase slot blank.');
+  c.showcase=[...b.showcase];
+ }
+ c.background='default';
+ await updateDoc(p.playerRef,{cosmetics:c,character:c.featured});
+ return {ok:true,cosmetics:c,selected_character:c.featured};
+}
+
 async function adventureProgress(b){const p=await currentPlayer(b),a=p.player.adventure||{};if(b.action==='load')return {ok:true,...a};if(b.action!=='save')err('Invalid action.');
  const up={xp:Math.max(a.xp||0,Number(b.xp)||0),best_normal:Math.max(a.best_normal||0,Number(b.best_normal)||0),best_extra:Math.max(a.best_extra||0,Number(b.best_extra)||0),normal_clear:!!(a.normal_clear||b.normal_clear),extra_clear:!!(a.extra_clear||b.extra_clear),achievements:[...new Set([...(a.achievements||[]),...(Array.isArray(b.achievements)?b.achievements:[])])].slice(0,200)};
  if(up.xp>100000000||up.best_normal>2000000||up.best_extra>2000000)err('Progress out of range.');await updateDoc(p.playerRef,{adventure:up});return {ok:true,...up};}

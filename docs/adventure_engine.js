@@ -1872,8 +1872,7 @@ const achOverlay = document.getElementById("achOverlay");
     const charId = String(window.ADVENTURE_PLAYER?.selected_character || window.ADVENTURE_PLAYER?.cosmetics?.featured || "mc");
     const map = {
       mc: { name: "Main Character", path: "assets/characters/mc.webp" },
-      crimson_knight: { name: "Crimson Knight", path: "assets/characters/crimson_knight.webp" },
-      silver_knight: { name: "Silver Knight", path: "assets/characters/silver_knight.webp" }
+
     };
     // The player may feature any operator they have actually recruited.
     const owned = window.ADVENTURE_PLAYER?.recruitment?.owned || {};
@@ -1881,7 +1880,7 @@ const achOverlay = document.getElementById("achOverlay");
       map[charId] = {name:charId.replace(/_/g,' '),path:`assets/recruitment/${charId}.webp`};
     }
     const meta = map[charId] || map.mc;
-    return { id: charId, name: meta.name, src: window.RPG_MEDIA?.url(meta.path) || meta.path };
+    return { id: map[charId] ? charId : "mc", name: meta.name, src: window.RPG_MEDIA?.url(meta.path) || meta.path };
   }
 
   function renderIntroCharacterFigure(){

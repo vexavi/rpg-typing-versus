@@ -88,7 +88,7 @@ let teacherAssignedGrade=null;
 let readyPromise=null;
 // Keep the app shell available when the browser has previously visited this site.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./offline-sw.js?v=86.22',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
+  navigator.serviceWorker.register('./offline-sw.js?v=86.30',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
 }
 function installOfflineBridge(){
  window.RPG_V66_DISCONNECTED=true;
@@ -134,7 +134,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=86.22');
+   await import('./online-spark.js?v=86.30');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
@@ -210,7 +210,7 @@ async function beginSwitchPlayer(){
  sessionStorage.removeItem('rpgReturnToAdventureModeSelect');
  view('checking','SWITCH PLAYER','Clearing this browser’s previous sign-in…');
  try{
-  const cloud=await import('./cloud-api.js?v=86.22');
+  const cloud=await import('./cloud-api.js?v=86.30');
   await cloud.forgetStudentSignIn();
   // A one-time URL flag must not linger after a successful sign-out.
   const next=new URL(location.href);next.searchParams.delete('switch');

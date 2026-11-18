@@ -39,7 +39,7 @@ export async function readCard(code){
  const snap=await getDoc(doc(db,'cloudCards',secret));
  if(!snap.exists())throw Error('This card is not in the cloud registry. Ask your teacher to migrate it.');
  const data=snap.data();if(data.disabled||data.deleted)throw Error('This card is disabled.');
- return {code:secret,public_id:data.publicId,name:data.username||null,registered:!!data.username,character:data.character||'crimson_knight',disabled:!!data.disabled};
+ return {code:secret,public_id:data.publicId,name:data.username||null,registered:!!data.username,character:'mc',disabled:!!data.disabled};
 }
 export async function registerCard(code,name,grade){
  const secret=normalizeCode(code);
@@ -75,7 +75,7 @@ export async function createCards(count){
  await runTransaction(db,async tx=>{
    const snap=await tx.get(counter),next=Math.max(high,Number(snap.exists()?snap.data().lastId:0)||0);
    tx.set(counter,{lastId:next+n,updatedAt:serverTimestamp()});
-   for(let i=0;i<n;i++)tx.set(doc(db,'cloudCards',codes[i]),{publicId:`P${String(next+i+1).padStart(6,'0')}`,username:null,registeredAt:null,createdAt:serverTimestamp(),disabled:false,deleted:false,character:'crimson_knight',schemaVersion:1});
+   for(let i=0;i<n;i++)tx.set(doc(db,'cloudCards',codes[i]),{publicId:`P${String(next+i+1).padStart(6,'0')}`,username:null,registeredAt:null,createdAt:serverTimestamp(),disabled:false,deleted:false,character:'mc',schemaVersion:1});
  });
  return n;
 }
@@ -90,7 +90,7 @@ export async function importCards(rows){
   const previous=byId.get(id);
   if(previous){if(previous.code!==code)throw Error('Card '+id+' already exists in cloud with a DIFFERENT code. Rotate or resolve before importing.');continue;}
   if(byCode.has(code))throw Error('Duplicate card credential in cloud.');
-  adds.push({code,id,username:row.username||null,registered:!!(row.registered||row.registeredAt||row.registered_at),disabled:!!row.disabled,character:['crimson_knight','silver_knight'].includes(row.character)?row.character:'crimson_knight',created:row.created_at||null});
+  adds.push({code,id,username:row.username||null,registered:!!(row.registered||row.registeredAt||row.registered_at),disabled:!!row.disabled,character:'mc',created:row.created_at||null});
   byId.set(id,{code});byCode.add(code);
  }
  const maxId=Math.max(0,...[...byId.keys()].map(x=>Number(x.slice(1))||0));
@@ -106,7 +106,7 @@ export async function importCards(rows){
 }
 export async function disableCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{disabled:true})}
 export async function enableCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{disabled:false})}
-export async function clearCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{username:null,registeredAt:null,character:'crimson_knight'})}
+export async function clearCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{username:null,registeredAt:null,character:'mc'})}
 export async function revokeCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{username:null,registeredAt:null,disabled:true,deleted:true})}
 export async function rotateCard(code){
  const old=normalizeCode(code),fresh=secretCode();
@@ -138,8 +138,8 @@ export async function writeProfileCosmetics(code,value){
  const secret=normalizeCode(code);if(!codePattern.test(secret))throw Error('Invalid Adventure Card.');
  await ensureStudent();
  const payload={nickname:String(value.nickname||'').trim().slice(0,20),motto:String(value.motto||'').trim().slice(0,80),
-  theme:value.theme||'signal',background:'default',featured:value.featured||'crimson_knight',
-  showcase:Array.isArray(value.showcase)?value.showcase:['crimson_knight','silver_knight'],updatedAt:serverTimestamp()};
+  theme:value.theme||'signal',background:'default',featured:(typeof value.featured==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(value.featured)&&!['crimson_knight','silver_knight'].includes(value.featured)?value.featured:'mc'),
+  showcase:(Array.isArray(value.showcase)?value.showcase:['mc','']).slice(0,2).map(id=>typeof id==='string'&&!['crimson_knight','silver_knight'].includes(id)?id:''),updatedAt:serverTimestamp()};
  await setDoc(doc(db,'cloudProfileCosmetics',secret),payload);
  return payload;
 }

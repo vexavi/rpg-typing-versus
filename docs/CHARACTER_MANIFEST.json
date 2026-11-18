@@ -1,21 +1,16 @@
 {
-  "version": 41,
-  "type": "default playable characters",
+  "version": 42,
+  "type": "active default playable character",
   "characters": [
     {
-      "id": "crimson_knight",
-      "name": "Crimson Knight",
-      "path": "assets/characters/crimson_knight.webp"
-    },
-    {
-      "id": "silver_knight",
-      "name": "Silver Knight",
-      "path": "assets/characters/silver_knight.webp"
+      "id": "mc",
+      "name": "Main Character",
+      "path": "assets/characters/mc.webp"
     }
   ],
-  "note": "Tournament uses the fixed MC portrait; old Crimson Knight and Silver Knight artwork is retained for profile cosmetics. Recruitment characters use a separate catalog.",
+  "note": "Main Character is the default. Other playable operators must be recruited; retired starter knights are no longer included.",
   "mainCharacter": {
-    "id": "crimson_knight",
+    "id": "mc",
     "name": "Main Character",
     "role": "fixed_tournament_protagonist",
     "path": "assets/characters/mc.webp",

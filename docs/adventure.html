@@ -2015,9 +2015,9 @@ width:min(600px, calc(100% - 30px));
 // An old offline shell may cache old JavaScript even after GitHub Pages publishes new files.
 // Request the updated worker from fresh HTML before starting the application.
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./offline-sw.js?v=86.22',{scope:'./'}).catch(()=>{});
+  navigator.serviceWorker.register('./offline-sw.js?v=86.30',{scope:'./'}).catch(()=>{});
 }
 </script>
-<script type="module">await import("./online-boot-v66.js?v=86.22");</script>
+<script type="module">await import("./online-boot-v66.js?v=86.30");</script>
 </body>
 </html>

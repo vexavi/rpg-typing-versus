@@ -5,13 +5,13 @@
  const core=window.RPG_AURA_CORE,$=id=>document.getElementById(id),cloud=window.RPG_V66;
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const safeId=s=>typeof s==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(s);
- const starter=[{id:'crimson_knight',name:'Crimson Knight',img:'assets/characters/crimson_knight.webp',rarity:'STARTER'},
-  {id:'silver_knight',name:'Silver Knight',img:'assets/characters/silver_knight.webp',rarity:'STARTER'}];
- let player=null,code='',selected='crimson_knight',preview=0,working=false,catalog=[],characters=[];
+ const starter=[]; // Aura upgrades apply to recruited operators only.
+ const retired=new Set(['crimson_knight','silver_knight']); // Exclude retired operators from old Firestore saves.
+ let player=null,code='',selected='',preview=0,working=false,catalog=[],characters=[];
  function notice(message){$('message').textContent=message;}
  function collection(){
   const owned=player?.recruitment?.owned||{};
-  const keys=new Set([...starter.map(x=>x.id),...Object.keys(owned).filter(safeId)]);
+  const keys=new Set([...starter.map(x=>x.id),...Object.keys(owned).filter(id=>safeId(id)&&!retired.has(id))]);
   const all=[...starter,...catalog];
   return [...keys].map(id=>all.find(c=>c.id===id)||{id,name:id.replaceAll('_',' ').toUpperCase(),img:null,rarity:'OPERATOR'});
  }
@@ -20,7 +20,17 @@
  function restoreSelectedFocus(list,field,value){
   for(const b of document.querySelectorAll(list))if(b.dataset[field]===String(value)){b.focus({preventScroll:true});break;}
  }
- function render(){if(!player)return;characters=collection();if(!characters.some(x=>x.id===selected))selected=characters[0]?.id||'crimson_knight';
+ function render(){if(!player)return;characters=collection();if(!characters.some(x=>x.id===selected))selected=characters[0]?.id||'';
+  if(!characters.length){
+   $('shards').textContent=shards().toLocaleString();
+   $('characterList').textContent='Recruit an operator first.';
+   $('characterName').textContent='NO OPERATORS';$('rarity').textContent='NONE';$('equippedName').textContent='';
+   $('previewTag').textContent='';$('characterArt').hidden=true;$('noArt').hidden=false;
+   $('tierList').textContent='';$('progressText').textContent='0 / 150 SHARDS';$('progressFill').style.width='0%';
+   $('actionHint').textContent='NO RECRUITED OPERATORS';$('actionCost').textContent='';
+   $('auraAction').textContent='RECRUIT AN OPERATOR';$('auraAction').disabled=true;return;
+  }
+
   const ch=characters.find(x=>x.id===selected),state=current();$('shards').textContent=shards().toLocaleString();
   $('characterList').innerHTML=characters.map(c=>`<button type="button" class="roster-item ${c.id===selected?'selected':''}" aria-pressed="${c.id===selected}" data-char="${esc(c.id)}"><span>${c.img?`<img class="roster-icon" loading="lazy" src="${esc(c.img)}" alt="">`:'<span class="roster-placeholder">◇</span>'}</span>${esc(c.name)}<small>${esc(core.names[core.state(player.recruitment.auras?.[c.id]).equipped])} AURA</small></button>`).join('');
   $('characterName').textContent=ch.name;$('rarity').textContent=ch.rarity;$('equippedName').textContent=`EQUIPPED · ${state.equipped===0?'NO AURA':core.names[state.equipped]+' AURA'}`;

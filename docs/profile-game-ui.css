@@ -363,3 +363,16 @@ body.profile-client .profile-showcase-card .showcase-tile.locked{
   min-height:0;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:none;gap:8px;
  }
 }
+
+/* v86.29 — real 256px custom operator icons, never crop source portraits. */
+body.profile-client .profile-showcase-card .showcase-tile.showcase-has-icon{background:linear-gradient(150deg,#2f293f,#171523);border-color:#c2aa67}
+body.profile-client .profile-showcase-card .showcase-tile .showcase-custom-icon{display:block;width:100%;height:100%;min-width:0;min-height:0;object-fit:contain;object-position:center center;filter:none;position:relative;z-index:1}
+body.profile-client .showcase-edit-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0 16px}
+body.profile-client .showcase-edit-slot{min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;overflow:hidden}
+body.profile-client .showcase-edit-slot img.showcase-custom-icon{width:60px;height:60px;object-fit:contain}
+body.profile-client .showcase-edit-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:9px;max-height:330px;overflow-y:auto;margin-bottom:14px}
+body.profile-client .showcase-edit-choice{display:flex;min-height:98px;align-items:center;justify-content:center;flex-direction:column;gap:7px;overflow:hidden}
+body.profile-client .showcase-edit-choice img.showcase-custom-icon{width:64px;height:64px;object-fit:contain}
+body.profile-client .showcase-edit-choice strong{max-width:100%;overflow-wrap:anywhere}
+body.profile-client .showcase-edit-choice:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:600px){body.profile-client .showcase-edit-choices{grid-template-columns:repeat(2,minmax(0,1fr));max-height:44vh}}
