@@ -1780,6 +1780,8 @@ const achOverlay = document.getElementById("achOverlay");
     rankingGrade=visibleRankingGrade(grade);
     if(rankingGrade!=='all')lastStandardRankingGrade=rankingGrade;
     gameState='rankings';setInputsEnabled(false);showOverlay(true);
+    overlayBox?.querySelector('.operator-showcase')?.remove();
+    overlay.querySelector('.operator-selection-backdrop')?.remove();
     overlay.classList.remove('defeat-active');overlay.classList.add('mode-select-active');
     if(overlayBox){overlayBox.classList.remove('defeat-card','hearts-phase','modeSelectMenu','debugSmall');overlayBox.classList.add('rankings-card');}
     overlay.style.cursor='default';overlayTitle.textContent='RANKINGS';
@@ -2371,13 +2373,19 @@ const iconDef = PROFILE_ICON_PRESETS.find(x=>x.id===iconId) || PROFILE_ICON_PRES
     // Only Mode Select gets the full-screen background. Dialogue and battle
     // overlays retain their original translucent behavior.
     if(!show) overlay.classList.remove("mode-select-active", "defeat-active");
-    if(!show && overlayBox) overlayBox.classList.remove("modeSelectMenu", "defeat-card", "hearts-phase", "rankings-card");
+    if(!show && overlayBox){
+      overlayBox.classList.remove("modeSelectMenu", "defeat-card", "hearts-phase", "rankings-card");
+      overlayBox.querySelector('.operator-showcase')?.remove();
+      overlay.querySelector('.operator-selection-backdrop')?.remove();
+    }
     // Ensure the overlay is always the top-most interactive layer.
     // (Some browsers create tricky stacking contexts with transformed elements.)
     const bf = document.getElementById("battlefield");
     if(bf) bf.classList.toggle("overlayOpen", !!show);
   }
   function setOverlayText(title, desc, hint){
+    overlayBox?.querySelector('.operator-showcase')?.remove();
+    overlay.querySelector('.operator-selection-backdrop')?.remove();
     overlay.classList.remove("mode-select-active", "defeat-active");
     if(overlayBox) overlayBox.classList.remove("defeat-card", "hearts-phase", "rankings-card");
     overlayTitle.textContent = title;
@@ -2974,31 +2982,126 @@ function showModeSelectScreen(){
     return button;
   };
 
-  // Compact operator picker; choices are limited to the signed-in player's owned roster.
-  const operatorPick=document.createElement('div');
-  operatorPick.className='adventure-operator-picker';
-  const operatorLabel=document.createElement('label');
-  operatorLabel.textContent='OPERATOR';
-  operatorLabel.htmlFor='selectedAdventureOperator';
-  const operatorSelect=document.createElement('select');
-  operatorSelect.id='selectedAdventureOperator';
-  for(const id of ownedOperatorIds()){
-    const option=document.createElement('option');option.value=id;
-    const title=id==='mc'?'Main Character':id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-    option.textContent=title;
-    operatorSelect.appendChild(option);
-  }
-  operatorSelect.value=getSelectedOperator();
-  const abilityInfo=document.createElement('small');
-  abilityInfo.className='adventure-operator-perk';
-  const refreshOperatorInfo=()=>{
-    const detail=window.RPG_OPERATOR_PASSIVES?.RULES[operatorSelect.value];
-    abilityInfo.textContent=detail?`${detail.title} — ${detail.description}`:'No passive ability yet';
+  // v86.35 — full-body operator is displayed to the LEFT of the mode menu.
+  // The same owned-only IDs and passive rules used by gameplay drive this UI.
+  overlayBox?.querySelector('.operator-showcase')?.remove();
+  overlay.querySelector('.operator-selection-backdrop')?.remove();
+  const operatorMeta=id=>{
+    const rule=window.RPG_OPERATOR_PASSIVES?.RULES?.[id];
+    return {id,name:rule?.name||(id==='mc'?'Main Character':id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())),
+      rarity:rule?.rarity||0,passive:rule?.title||'No passive',
+      description:rule?.description||'Main Character has no operator passive.',
+      fullArt:id==='mc'?'assets/characters/mc.webp':`assets/recruitment/${id}.webp`,
+      icon:`assets/profile-icons/${id}.webp`};
   };
-  operatorSelect.addEventListener('change',()=>{selectOperator(operatorSelect.value);refreshOperatorInfo();});
-  operatorPick.append(operatorLabel,operatorSelect,abilityInfo);
-  overlayChoices.appendChild(operatorPick);
-  refreshOperatorInfo();
+  const operatorImgSrc=path=>window.RPG_MEDIA?.url?.(path)||path;
+  const addOperatorImg=(element,path)=>{
+    element.src=operatorImgSrc(path);
+    element.onerror=()=>{
+      if(!element.dataset.fallback){element.dataset.fallback='1';element.src=operatorImgSrc(element.dataset.fallbackPath||'assets/characters/mc.webp');}
+    };
+  };
+  const hero=document.createElement('section');
+  hero.className='operator-showcase';
+  hero.setAttribute('aria-label','Equipped operator');
+  hero.innerHTML=`<div class="operator-hero-heading"><div class="operator-hero-kicker">EQUIPPED OPERATOR</div>
+      <div class="operator-hero-name"></div><div class="operator-hero-rarity"></div></div>
+    <button type="button" class="operator-hero-art" aria-label="Change operator"><img alt="" decoding="async"></button>
+    <div class="operator-hero-footer"><div class="operator-hero-passive"></div>
+      <button type="button" class="operator-hero-change">CHANGE OPERATOR <span aria-hidden="true">›</span></button></div>`;
+  overlayBox?.insertBefore(hero,overlayTitle);
+  const heroArt=hero.querySelector('.operator-hero-art');
+  const heroImg=hero.querySelector('.operator-hero-art img');
+  const heroChange=hero.querySelector('.operator-hero-change');
+  let shownId=null;
+  const refreshHero=()=>{
+    const info=operatorMeta(getSelectedOperator());
+    hero.querySelector('.operator-hero-name').textContent=info.name;
+    hero.querySelector('.operator-hero-rarity').textContent=info.rarity?'★'.repeat(info.rarity):'DEFAULT';
+    hero.querySelector('.operator-hero-passive').textContent=info.passive;
+    if(shownId!==info.id){
+      shownId=info.id;
+      heroImg.classList.remove('operator-art-visible');
+      heroImg.dataset.fallback='';
+      addOperatorImg(heroImg,info.fullArt);
+      // Reduced-motion preferences are handled in CSS.
+      requestAnimationFrame(()=>heroImg.classList.add('operator-art-visible'));
+    }
+  };
+  const openOperatorSelector=()=>{
+    if(overlay.querySelector('.operator-selection-backdrop'))return;
+    const ids=ownedOperatorIds();
+    let pending=getSelectedOperator();
+    const backdrop=document.createElement('div');
+    backdrop.className='operator-selection-backdrop';
+    backdrop.innerHTML=`<div class="operator-selection-dialog" role="dialog" aria-modal="true" aria-labelledby="operatorPickerTitle">
+      <div class="operator-selection-header"><h3 id="operatorPickerTitle">SELECT OPERATOR</h3>
+        <button type="button" class="operator-selection-close" aria-label="Close operator selection">✕</button></div>
+      <div class="operator-selection-body"><div class="operator-selection-list" aria-label="Owned operators"></div>
+        <div class="operator-selection-detail"><div class="operator-detail-art"><img alt="" decoding="async"></div>
+          <div class="operator-detail-name"></div><div class="operator-detail-rarity"></div>
+          <div class="operator-detail-passive"></div><p class="operator-detail-description"></p>
+          <button type="button" class="operator-selection-equip">EQUIP OPERATOR</button></div></div></div>`;
+    overlay.appendChild(backdrop);
+    const list=backdrop.querySelector('.operator-selection-list');
+    const detailImg=backdrop.querySelector('.operator-detail-art img');
+    const equip=backdrop.querySelector('.operator-selection-equip');
+    const close=()=>{
+      backdrop.removeEventListener('keydown',onKey);
+      backdrop.remove();
+      if(overlay.classList.contains('mode-select-active'))heroChange.focus();
+    };
+    const onKey=event=>{
+      if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();return;}
+      if(event.key==='Tab'){
+        const controls=[...backdrop.querySelectorAll('button:not([disabled])')];
+        const first=controls[0],last=controls[controls.length-1];
+        if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+        else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+      }
+    };
+    backdrop.addEventListener('keydown',onKey);
+    backdrop.addEventListener('click',event=>{if(event.target===backdrop)close();});
+    backdrop.querySelector('.operator-selection-close').addEventListener('click',close);
+    const buttons=[];
+    const updateDetail=()=>{
+      const info=operatorMeta(pending);
+      for(const button of buttons){
+        const selected=button.dataset.operatorId===pending;
+        button.classList.toggle('selected',selected);
+        button.setAttribute('aria-pressed',String(selected));
+      }
+      detailImg.dataset.fallback='';
+      addOperatorImg(detailImg,info.fullArt);
+      backdrop.querySelector('.operator-detail-name').textContent=info.name;
+      backdrop.querySelector('.operator-detail-rarity').textContent=info.rarity?'★'.repeat(info.rarity):'DEFAULT';
+      backdrop.querySelector('.operator-detail-passive').textContent=info.passive;
+      backdrop.querySelector('.operator-detail-description').textContent=info.description;
+    };
+    for(const id of ids){
+      const info=operatorMeta(id);
+      const button=document.createElement('button');
+      button.className='operator-selection-item';button.type='button';button.dataset.operatorId=id;
+      button.setAttribute('aria-label',`${info.name}, ${info.rarity?info.rarity+' stars':'default'}, ${info.passive}`);
+      const portrait=document.createElement('img');portrait.alt='';portrait.loading='lazy';
+      portrait.dataset.fallbackPath='assets/profile-icons/mc.webp';
+      addOperatorImg(portrait,info.icon);
+      const labels=document.createElement('span');labels.className='operator-selection-item-labels';
+      const name=document.createElement('strong');name.textContent=info.name;
+      const ability=document.createElement('small');ability.textContent=info.passive;
+      labels.append(name,ability);button.append(portrait,labels);
+      button.addEventListener('click',()=>{pending=id;updateDetail();});
+      buttons.push(button);list.appendChild(button);
+    }
+    equip.addEventListener('click',()=>{selectOperator(pending);refreshHero();close();});
+    updateDetail();
+    const selected=buttons.find(b=>b.dataset.operatorId===pending);
+    backdrop.querySelector('.operator-selection-close').focus();
+    selected?.scrollIntoView?.({block:'nearest'});
+  };
+  heroArt.addEventListener('click',openOperatorSelector);
+  heroChange.addEventListener('click',openOperatorSelector);
+  refreshHero();
 
   addMode('Story Mode', {onClick:()=>{
     if(!window.RPG_STORY){pushMsg('Story unavailable.',true);return;}
@@ -3356,11 +3459,17 @@ async function debugJumpTo(mode, idx){
   let operatorPassive=null;
   function getSelectedOperator(){
     const roster=ownedOperatorIds();
-    if(!roster.includes(selectedOperatorId))selectedOperatorId=roster.includes(window.ADVENTURE_PLAYER?.selected_character)?window.ADVENTURE_PLAYER.selected_character:'mc';
+    if(!roster.includes(selectedOperatorId)){
+      let saved='';
+      try{saved=localStorage.getItem(adventureKey('selectedOperator'))||'';}catch(_){}
+      const featured=window.ADVENTURE_PLAYER?.selected_character;
+      selectedOperatorId=roster.includes(saved)?saved:roster.includes(featured)?featured:'mc';
+    }
     return selectedOperatorId;
   }
   function selectOperator(id){
     selectedOperatorId=ownedOperatorIds().includes(id)?id:'mc';
+    try{localStorage.setItem(adventureKey('selectedOperator'),selectedOperatorId);}catch(_){}
   }
   function prepareOperatorForRun(){
     activeOperatorId=operatorModeEligible()?getSelectedOperator():'mc';

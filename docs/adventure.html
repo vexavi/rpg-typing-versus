@@ -1753,11 +1753,11 @@ width:min(600px, calc(100% - 30px));
   <link rel="preload" as="script" href="story-mode.js?v=73">
   <link rel="preload" as="script" href="adventure_rewards.js?v=73">
   <link rel="preload" as="script" href="guild-coins.js?v=73">
-  <link rel="preload" as="script" href="adventure_engine.js?v=86.34">
+  <link rel="preload" as="script" href="adventure_engine.js?v=86.35">
   <link rel="stylesheet" href="rpg-theme.css" />
   <link rel="stylesheet" href="adventure-ui.css?v=86.34" />
 <link rel="stylesheet" href="story-mode.css">
-<link rel="stylesheet" href="student-ui.css?v=86.2">
+<link rel="stylesheet" href="student-ui.css?v=86.35">
 <link rel="stylesheet" href="story-map-v54.css?v=54">
 <link rel="stylesheet" href="guild-coins.css?v=73">
 </head>
@@ -2022,9 +2022,9 @@ width:min(600px, calc(100% - 30px));
 // An old offline shell may cache old JavaScript even after GitHub Pages publishes new files.
 // Request the updated worker from fresh HTML before starting the application.
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./offline-sw.js?v=86.34',{scope:'./'}).catch(()=>{});
+  navigator.serviceWorker.register('./offline-sw.js?v=86.35',{scope:'./'}).catch(()=>{});
 }
 </script>
-<script type="module">await import("./online-boot-v66.js?v=86.34");</script>
+<script type="module">await import("./online-boot-v66.js?v=86.35");</script>
 </body>
 </html>
