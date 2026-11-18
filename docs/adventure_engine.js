@@ -3530,14 +3530,18 @@ async function debugJumpTo(mode, idx){
     for(const word of wordsOnField){
       if(!ids.has(word.id))continue;
       word.el?.classList?.add('operator-lupa-weakpoint');
-      if(word.el?.setAttribute)word.el.setAttribute('data-lupa-time',String(seconds));
+      if(word.el?.setAttribute)word.el.setAttribute('data-lupa-time',Number(seconds).toFixed(1));
     }
   }
   function operatorRefreshLupaVisuals(time=stageElapsedSec()){
     if(operatorPassive?.rule?.id!=='lupa')return;
     const debug=operatorPassive.debug?.();
-    if(!debug?.lupaActive){operatorClearLupaVisuals();return;}
-    const seconds=Math.max(1,Math.ceil((debug.lupaDeadline||0)-time));
+    if(!debug?.lupaActive){
+      if(document.body.classList.contains('operator-lupa-focus'))operatorClearLupaVisuals();
+      return;
+    }
+    // One shared 6-second deadline; refresh the visible badges every frame.
+    const seconds=(Math.max(0,Math.ceil(((debug.lupaDeadline||0)-time)*10)/10)).toFixed(1);
     const ids=new Set(debug.lupaTargets||[]);
     if(!ids.size){operatorClearLupaVisuals();return;}
     document.body.classList.add('operator-lupa-focus');
@@ -3545,7 +3549,7 @@ async function debugJumpTo(mode, idx){
     for(const word of wordsOnField){
       const active=ids.has(word.id);
       word?.el?.classList?.toggle('operator-lupa-weakpoint',active);
-      if(active && word.el?.setAttribute)word.el.setAttribute('data-lupa-time',String(seconds));
+      if(active && word.el?.setAttribute && word.el.getAttribute?.('data-lupa-time')!==seconds)word.el.setAttribute('data-lupa-time',seconds);
       else word?.el?.removeAttribute?.('data-lupa-time');
     }
   }
@@ -6931,6 +6935,9 @@ if(gameState === "paused"){
       // Operator effects advance after new spawns. Hidden Foxfire words cannot
       // be typed/moved until their turn, and Hound can force a chain target.
       const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed);
+      // Lupa's focus/6-second countdown must advance with the live stage clock.
+      // Do this AFTER updateField so a timeout removes the marks immediately.
+      operatorRefreshLupaVisuals(elapsed);
       if(fieldEffect?.type==='auto-eliminate'){
         const autoDamage=operatorAutoEliminate(fieldEffect.wordId,true);
         if(autoDamage>0)damageBoss(autoDamage);
