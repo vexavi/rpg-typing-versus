@@ -153,12 +153,12 @@ async function setClass(b){
  return {ok:true,grade};
 }
 async function rankIcon(b){const p=await currentPlayer(b);if(b.action==='set'){const icon=String(b.icon_id||'');if(!/^icon\d{2}$/.test(icon))err('Invalid profile icon.');await updateDoc(p.playerRef,{rankIconId:icon,rankIconUpdatedAt:Date.now()});
- for(const mode of ['normal','extra','shared']){const r=ref('rankEntries',p.id+'_'+mode),snap=await getDocFromServer(r);
+ for(const mode of ['normal','extra','challenge','shared']){const r=ref('rankEntries',p.id+'_'+mode),snap=await getDocFromServer(r);
   if(snap.exists())try{await updateDoc(r,{icon_id:icon,updatedAt:serverTimestamp()})}catch(e){console.warn('Ranking icon update deferred',e);}}
  return {ok:true,icon_id:icon,updated_at:Date.now()};}
  return {ok:true,icon_id:p.player.rankIconId||'icon01',updated_at:p.player.rankIconUpdatedAt||0};}
 let currentRun=null;
-async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','extra','shared'].includes(mode))err('Invalid ranking mode.');
+async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','extra','challenge','shared'].includes(mode))err('Invalid ranking mode.');
  const grade=mode==='shared'?'all':p.player.grade;if(!grade)err('Assign class before playing.');
  const v=await read('vocabPools',mode==='shared'?'all':poolOf(grade)),configVersion=await currentConfig();if(!v)err('Vocabulary is missing.');
  const revision=Number(v.revision)||1,token=crypto.randomUUID();
@@ -168,7 +168,7 @@ async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['nor
 }
 function rankQuery(mode,grade,revision,configRevision,n=20){return query(collection(db,'rankEntries'),where('mode','==',mode),where('grade','==',grade),where('vocabRevision','==',revision),where('configRevision','==',configRevision),orderBy('score','desc'),limit(n));}
 async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',grade=mode==='shared'?'all':b.grade||p.player.grade;
- if(!['normal','extra','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
+ if(!['normal','extra','challenge','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
  const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([read('vocabPools',pool),currentConfig()]);if(!v)err('Vocabulary pool missing.');
  const revision=Number(v.revision)||1,rule=`spark-${mode}-${grade}-v${revision}-c${c}`;
  const d=await getDocsFromServer(rankQuery(mode,grade,revision,c,Math.min(20,Number(b.limit)||20)));
@@ -178,7 +178,7 @@ async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',g
 async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Number.isInteger(b.score)||b.score<=0||b.score>2000000)err('Invalid score.');
  const snap=await getDocFromServer(ref('sparkRuns',uid()));const run=snap.data();if(!run||run.status!=='active'||run.token!==b.run_token)err('Run missing or already completed.');
  if(b.mode!==run.mode||b.grade!==run.grade||b.vocab_pool!==run.pool||b.vocab_revision!==run.vocabRevision)err('Run config mismatch.');
- if(!run.startedAt||Date.now()-run.startedAt.toMillis()<(run.mode==='shared'?115000:15000))err('Run completed too quickly.');
+ if(!run.startedAt||Date.now()-run.startedAt.toMillis()<(['shared','challenge'].includes(run.mode)?115000:15000))err('Run completed too quickly.');
  const [c,v]=await Promise.all([currentConfig(),read('vocabPools',run.pool)]);
  if(c!==run.configRevision||v?.revision!==run.vocabRevision)err('Difficulty or vocabulary changed. Run not ranked.');
  const id=p.id+'_'+run.mode,scoreRef=ref('rankEntries',id),runRef=ref('sparkRuns',uid());

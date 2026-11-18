@@ -941,6 +941,12 @@ width:min(600px, calc(100% - 30px));
     .overlayChoices.show{ display:grid; }
     /* Mode select has seven items. Keep every item visible by scrolling on short screens. */
     .overlayBox.modeSelectMenu .overlayChoices{ gap:7px; }
+    /* v86.31: a single compact picker above Mode Select. */
+    .adventure-operator-picker{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;padding:10px 12px;border:2px solid rgba(255,215,110,.55);background:rgba(19,17,38,.86);color:var(--ink);text-align:left}
+    .adventure-operator-picker label{font-size:12px;letter-spacing:.12em;font-weight:900;color:var(--gold)}
+    .adventure-operator-picker select{min-width:0;width:100%;padding:8px 10px;border:1px solid rgba(255,215,110,.65);border-radius:0;background:#242036;color:#f7f0d7;font:800 14px system-ui;cursor:pointer}
+    .adventure-operator-perk{grid-column:1/-1;font-size:11px;line-height:1.3;color:rgba(240,235,255,.8)}
+    .word.operator-shadow-hold{border-color:#c9afff;box-shadow:inset 0 0 0 2px #cabaffaa,0 0 15px #a588ff9c}
     .overlayBox.modeSelectMenu .choiceBtn{ padding:10px 12px; }
     .overlayBox.modeSelectMenu .choiceBtn .title{ margin:0; }
 
@@ -1747,7 +1753,7 @@ width:min(600px, calc(100% - 30px));
   <link rel="preload" as="script" href="story-mode.js?v=73">
   <link rel="preload" as="script" href="adventure_rewards.js?v=73">
   <link rel="preload" as="script" href="guild-coins.js?v=73">
-  <link rel="preload" as="script" href="adventure_engine.js?v=86.11">
+  <link rel="preload" as="script" href="adventure_engine.js?v=86.31">
   <link rel="stylesheet" href="rpg-theme.css" />
   <link rel="stylesheet" href="adventure-ui.css" />
 <link rel="stylesheet" href="story-mode.css">
@@ -2008,6 +2014,7 @@ width:min(600px, calc(100% - 30px));
 <script src="media-loader.js?v=69"></script>
 <script src="performance-meter.js?v=69"></script>
 <script src="game-mechanics.js"></script>
+<script src="operator-passives.js?v=86.31"></script>
 <script src="custom-mechanics.js"></script>
 <script src="game-balance-runtime.js?v=86.11"></script>
 <script type="module" src="game-balance-cloud.js"></script>
@@ -2015,9 +2022,9 @@ width:min(600px, calc(100% - 30px));
 // An old offline shell may cache old JavaScript even after GitHub Pages publishes new files.
 // Request the updated worker from fresh HTML before starting the application.
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./offline-sw.js?v=86.30',{scope:'./'}).catch(()=>{});
+  navigator.serviceWorker.register('./offline-sw.js?v=86.31',{scope:'./'}).catch(()=>{});
 }
 </script>
-<script type="module">await import("./online-boot-v66.js?v=86.30");</script>
+<script type="module">await import("./online-boot-v66.js?v=86.31");</script>
 </body>
 </html>

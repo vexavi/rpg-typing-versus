@@ -1703,8 +1703,9 @@ const achOverlay = document.getElementById("achOverlay");
       fixedStage5Ramp:true});
   }
   function startRankedRun(){
+    // Operator passives are allowed in ranked runs. Offline/locally cached runs remain unranked.
     if(runLocalOnly){rankedRun=null;window.RPG_V66_COMPETITIVE_ACTIVE=false;return;}
-    rankedRun=['normal','extra','shared'].includes(currentMode)
+    rankedRun=['normal','extra','challenge','shared'].includes(currentMode)
       ? {mode:currentMode,grade:currentMode==='shared'?'all':(assignedRankGrade||cleanClassYear(profile?.classYear)),
          vocabPool:currentMode==='shared'?'all':assignedVocabPool,
          vocabRevision:currentMode==='shared'?Number(SHARED_RULESET.match(/-r(\d+)-/)?.[1]||0):assignedVocabRevision,
@@ -1712,7 +1713,7 @@ const achOverlay = document.getElementById("achOverlay");
          stages:[],invalid:!!DEV_CHEATS_ENABLED||!vocabLastServerSuccess,
          submitted:false,lastAuditSec:-1,run_token:null,startPromise:null} : null;
     window.RPG_V66_COMPETITIVE_ACTIVE=!!rankedRun;
-    if(rankedRun){const target=rankedRun;target.startPromise=fetch('/api/rankings/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:target.mode})}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Run not registered.');target.run_token=d.token;if(d.revision!==target.vocabRevision||d.grade!==target.grade || (currentMode!=='shared'&&Number(d.configVersion)!==Number(window.RPG_V66_PREPARED_REVISION))){target.invalid=true;}return d;}).catch(e=>{target.invalid=true;console.error('Online ranked start failed:',e);});}
+    if(rankedRun){const target=rankedRun;target.startPromise=fetch('/api/rankings/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:target.mode})}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Run not registered.');target.run_token=d.token;if(d.revision!==target.vocabRevision||d.grade!==target.grade || (['normal','extra'].includes(currentMode)&&Number(d.configVersion)!==Number(window.RPG_V66_PREPARED_REVISION))){target.invalid=true;}return d;}).catch(e=>{target.invalid=true;console.error('Online ranked start failed:',e);});}
   }
   function recordRankedStage(){
     if(!rankedRun||rankedRun.mode!==currentMode)return;
@@ -1741,7 +1742,7 @@ const achOverlay = document.getElementById("achOverlay");
     await run.startPromise;
     window.RPG_V66_COMPETITIVE_ACTIVE=false;window.dispatchEvent(new Event('rpg-v66-unlock-settings'));
     if(runLocalOnly||run.invalid || window.RPG_V66_DISCONNECTED || !run.run_token || !ADVENTURE_CONTEXT.card_code || !ADVENTURE_CONTEXT.online)return;
-    if(run.stages.filter(Boolean).length!==(run.mode==='shared'?1:5))return;
+    if(run.stages.filter(Boolean).length!==(['shared','challenge'].includes(run.mode)?1:5))return;
     const score=getActiveScore();
     if(!Number.isInteger(score)||score<=0)return;
     const ruleset=run.mode==='shared'?run.sharedRuleset
@@ -1775,7 +1776,7 @@ const achOverlay = document.getElementById("achOverlay");
     return `<span class="ranking-identity"><img class="ranking-avatar" data-rank-icon src="${escapeHtml(rankingIconSrc(row.icon_id))}" alt="" loading="lazy"><span class="ranking-name">${escapeHtml(row.name||'Player')}${own?'<span class="ranking-you">YOU</span>':''}</span></span>`;
   }
   function rankingsView(mode,grade,data=null,message=''){
-    rankingMode=mode==='extra'?'extra':mode==='shared'?'shared':'normal';
+    rankingMode=mode==='extra'?'extra':mode==='challenge'?'challenge':mode==='shared'?'shared':'normal';
     rankingGrade=visibleRankingGrade(grade);
     if(rankingGrade!=='all')lastStandardRankingGrade=rankingGrade;
     gameState='rankings';setInputsEnabled(false);showOverlay(true);
@@ -1797,6 +1798,7 @@ const achOverlay = document.getElementById("achOverlay");
     overlayChoices.innerHTML=`<div class="ranking-tabs">
        <button class="ranking-tab${rankingMode==='normal'?' active':''}" aria-pressed="${rankingMode==='normal'}" data-mode="normal" type="button">NORMAL</button>
        <button class="ranking-tab${rankingMode==='extra'?' active':''}" aria-pressed="${rankingMode==='extra'}" data-mode="extra" type="button">EXTRA</button>
+       <button class="ranking-tab${rankingMode==='challenge'?' active':''}" aria-pressed="${rankingMode==='challenge'}" data-mode="challenge" type="button">CHALLENGE</button>
       </div>
       <div class="ranking-grades">${PUBLIC_RANKING_GRADES.map(y=>`<button type="button" class="ranking-grade${rankingGrade===y?' active':''}" aria-pressed="${rankingGrade===y}" data-grade="${y}">${y==='all'?'ALL GRADES':y+'年生'}</button>`).join('')}</div>
       <div class="ranking-meta">${description}${data?.ruleset?' · RULESET '+escapeHtml(data.ruleset.slice(-8)):''}</div>
@@ -1814,7 +1816,7 @@ const achOverlay = document.getElementById("achOverlay");
   }
   async function openRankings(mode='normal',grade=assignedRankGrade||cleanClassYear(profile?.classYear)){
     grade=visibleRankingGrade(grade);
-    mode=grade==='all'?'shared':mode==='extra'?'extra':'normal';
+    mode=grade==='all'?'shared':mode==='extra'?'extra':mode==='challenge'?'challenge':'normal';
     if(stopLiveRankings){stopLiveRankings();stopLiveRankings=null;}
     const req=++rankingRequest;rankingsView(mode,grade,null,'LOADING…');
     if(!rankIconInitialized)void initializeRankIcon();
@@ -2972,6 +2974,32 @@ function showModeSelectScreen(){
     return button;
   };
 
+  // Compact operator picker; choices are limited to the signed-in player's owned roster.
+  const operatorPick=document.createElement('div');
+  operatorPick.className='adventure-operator-picker';
+  const operatorLabel=document.createElement('label');
+  operatorLabel.textContent='OPERATOR';
+  operatorLabel.htmlFor='selectedAdventureOperator';
+  const operatorSelect=document.createElement('select');
+  operatorSelect.id='selectedAdventureOperator';
+  for(const id of ownedOperatorIds()){
+    const option=document.createElement('option');option.value=id;
+    const title=id==='mc'?'Main Character':id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    option.textContent=title;
+    operatorSelect.appendChild(option);
+  }
+  operatorSelect.value=getSelectedOperator();
+  const abilityInfo=document.createElement('small');
+  abilityInfo.className='adventure-operator-perk';
+  const refreshOperatorInfo=()=>{
+    const detail=window.RPG_OPERATOR_PASSIVES?.RULES[operatorSelect.value];
+    abilityInfo.textContent=detail?`${detail.title} — ${detail.description}`:'No passive ability yet';
+  };
+  operatorSelect.addEventListener('change',()=>{selectOperator(operatorSelect.value);refreshOperatorInfo();});
+  operatorPick.append(operatorLabel,operatorSelect,abilityInfo);
+  overlayChoices.appendChild(operatorPick);
+  refreshOperatorInfo();
+
   addMode('Story Mode', {onClick:()=>{
     if(!window.RPG_STORY){pushMsg('Story unavailable.',true);return;}
     window.RPG_STORY.openMap(launchStoryStage);
@@ -3308,6 +3336,55 @@ async function debugJumpTo(mode, idx){
   await startStage(idx);
 }
 
+
+  // v86.31 — choose an owned operator for this run; passive effects reset each stage.
+  const operatorModeEligible=()=>['normal','extra','practice','story','challenge','shared'].includes(currentMode);
+  const ownedOperatorIds=()=>{
+    const data=window.ADVENTURE_PLAYER?.recruitment?.owned||{};
+    const safe=Object.keys(data).filter(id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)&&!['mc','crimson_knight','silver_knight'].includes(id));
+    return ['mc',...safe.sort()];
+  };
+  let selectedOperatorId=null;
+  let activeOperatorId='mc';
+  let operatorPassive=null;
+  function getSelectedOperator(){
+    const roster=ownedOperatorIds();
+    if(!roster.includes(selectedOperatorId))selectedOperatorId=roster.includes(window.ADVENTURE_PLAYER?.selected_character)?window.ADVENTURE_PLAYER.selected_character:'mc';
+    return selectedOperatorId;
+  }
+  function selectOperator(id){
+    selectedOperatorId=ownedOperatorIds().includes(id)?id:'mc';
+  }
+  function prepareOperatorForRun(){
+    activeOperatorId=operatorModeEligible()?getSelectedOperator():'mc';
+    operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
+  }
+  function resetOperatorForStage(){operatorPassive?.reset();}
+  function operatorOnCorrect(){
+    if(!operatorPassive?.rule)return;
+    const effect=operatorPassive.onCorrect(wordsOnField,stageElapsedSec(),{hp:playerHp,maxHp:playerMaxHp});
+    if(!effect)return;
+    if(effect.type==='word-freeze')pushMsg('NORA · SHADOW HOLD (1.5s)',true);
+    else if(effect.type==='spawn-pause'){
+      // Discard prior spawn progress: this is a pause, not a delayed burst.
+      spawnAccMs=0;
+      pushMsg('MIRA · BREATHING ROOM (2s)',true);
+    }else if(effect.type==='slowdown'){
+      pushMsg('ELISE · QUICK RECOVERY (3s)',true);
+    }else if(effect.type==='heal'){
+      playerHp=Math.min(playerMaxHp,playerHp+effect.hp);
+      pushMsg('VEX · ENDURANCE (+1 HP)',true);
+      updateUI();
+    }
+  }
+  function operatorOnMistake(){
+    const effect=operatorPassive?.onMistake(stageElapsedSec());
+    if(effect?.type==='mistake-guard')pushMsg('KADE · TRICKSTER (NO HP LOSS)',true);
+    return !!effect?.preventHpLoss;
+  }
+  function operatorSpawnPaused(time=stageElapsedSec()){
+    return Boolean(operatorPassive?.isSpawnPaused(time));
+  }
 
   let nextWordId = 1;
 
@@ -4845,6 +4922,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
 
   function spawnOneWord(opts = {}){
     if(gameState !== "playing") return null;
+    if(operatorSpawnPaused() && (opts.state||'falling')==='falling')return null;
 
     const state = opts.state || "falling";
     const countSpawn = (opts.countSpawn !== false);
@@ -5270,6 +5348,7 @@ if(state === "landed"){
 
     if(currentMode !== 'shared') mechanicEvent('onCorrect',best);
     removeWord(best.id);
+    operatorOnCorrect();
     const dmg = baseHitDamage;
     damageBoss(dmg);
 
@@ -5527,7 +5606,10 @@ function damagePlayer(amount, reason){
     const scaled = Math.max(1, Math.round(amount));
     damageTakenThisStage += scaled;
     damageTakenThisRun += scaled;
+    const previousHp=playerHp;
     playerHp = Math.max(0, playerHp - scaled);
+    const passiveEffect=operatorPassive?.onPlayerDamage(previousHp,playerHp,stageElapsedSec());
+    if(passiveEffect?.type==='slowdown')pushMsg('ALDEN · SECOND WIND (5s)',true);
     if(currentMode !== 'shared') mechanicEvent('onPlayerDamage',null,{damage:scaled,reason});
     playPlayerHitSfx();
     flashPlayerDamage();
@@ -5834,6 +5916,7 @@ function damagePlayer(amount, reason){
     stageIndex = clamp(idx, 0, Math.max(0, STAGES.length - 1));
     resetGradedBuckets();
     resetField();
+    resetOperatorForStage();
     damageTakenThisStage = 0;
     hideBossBubble();
 
@@ -5970,7 +6053,7 @@ function damagePlayer(amount, reason){
     // The sign-in prefetch stores verified vocabulary but does not populate WORDS.
     // Restore it before deciding a recent server download can be reused.
     if(vocabLastServerSuccess && !assignedVocabPool && !restoreVerifiedVocab())vocabLastServerSuccess=false;
-    const modeNeedsRank=['normal','extra','shared'].includes(currentMode);
+    const modeNeedsRank=['normal','extra','challenge','shared'].includes(currentMode);
     const supportsCache=['practice','story','normal','extra'].includes(currentMode);
     const connectionOkay=Boolean(ADVENTURE_CONTEXT.online&&!window.RPG_V66_DISCONNECTED&&navigator.onLine);
     const needsRefresh=modeNeedsRank||vocabRefreshedForMode!=='normal'||!vocabLastServerSuccess||Date.now()-vocabRefreshedAt>VOCAB_REFRESH_INTERVAL_MS;
@@ -6020,9 +6103,9 @@ function damagePlayer(amount, reason){
     continuesLeft = (currentMode === "practice") ? Infinity : (currentMode === "shared" ? 0 : MAX_CONTINUES);
     resetRunScoring();
     if(currentMode === "shared") resetSharedBuckets();
+    prepareOperatorForRun();
     startRankedRun();
-
-    playerMaxHp = BASE_PLAYER_MAX_HP;
+    playerMaxHp = BASE_PLAYER_MAX_HP + (operatorPassive?.getMaxHpBonus()||0);
     playerHp = playerMaxHp;
 
 
@@ -6373,7 +6456,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
       mechanicEvent('onMistake',null,{input:raw});
       mistakes++;
       pushMsg(`MISS: ${raw || "(blank)"}`);
-      damagePlayer(1, "input miss");
+      if(!operatorOnMistake())damagePlayer(1, "input miss");
       updateUI();
     }
 
@@ -6434,8 +6517,10 @@ if(gameState === "paused"){
       ex4HandlePhaseTriggers(elapsed);
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
+      operatorPassive?.tick(elapsed);
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
-      if(!overflowSpawnPaused){
+      const operatorPause = operatorSpawnPaused(elapsed);
+      if(!overflowSpawnPaused && !operatorPause){
         spawnAccMs += dt * 1000;
       }else{
         spawnAccMs = 0;
@@ -6465,7 +6550,7 @@ if(gameState === "paused"){
         spawnMs = Math.max(220, Math.round(spawnMs / challengeRampMultiplier(elapsed)));
       }
         let loops = 0;
-        if(!overflowSpawnPaused){
+        if(!overflowSpawnPaused && !operatorPause){
           while(spawnAccMs >= spawnMs && loops < 6){
             spawnWord();
             spawnAccMs -= spawnMs;
@@ -6504,10 +6589,10 @@ if(gameState === "paused"){
         if(w.ex2Hacked) continue;
         if(w.state !== "falling") continue;
 
-        const v = Number.isFinite(w.fallSpeedOverride)
+        const v = (Number.isFinite(w.fallSpeedOverride)
           ? w.fallSpeedOverride
-          : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1));
-        w.y += v * dt;
+          : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
+        if(!operatorPassive?.isWordFrozen(w,elapsed))w.y += v * dt;
         mechanicEvent('onTick',w,{dt});
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
