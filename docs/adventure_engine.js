@@ -3513,9 +3513,39 @@ async function debugJumpTo(mode, idx){
     if(!valid.length)return null;
     return valid[Math.floor(Math.random()*valid.length)]||valid[0]||null;
   }
+  // Moonlit Ambush uses ONE stable countdown: all three Weak Points share the
+  // same deadline. Avoid changing a CSS pseudo-element on every animation frame.
+  let lupaTimerEl=null;
+  let lupaTimerValueEl=null;
+  let lupaTimerLastText='';
+  function operatorLupaTimer(seconds){
+    if(!wordLane)return;
+    if(!lupaTimerEl||!lupaTimerEl.isConnected){
+      lupaTimerEl=document.createElement('div');
+      lupaTimerEl.className='operator-lupa-timer';
+      lupaTimerEl.setAttribute('role','timer');
+      lupaTimerEl.setAttribute('aria-label','Moonlit Ambush seconds remaining');
+      lupaTimerEl.setAttribute('aria-live','off');
+      const title=document.createElement('span');
+      title.className='operator-lupa-timer-title';
+      title.textContent='MOONLIT AMBUSH';
+      lupaTimerValueEl=document.createElement('span');
+      lupaTimerValueEl.className='operator-lupa-timer-value';
+      lupaTimerEl.append(title,lupaTimerValueEl);
+      wordLane.appendChild(lupaTimerEl);
+      lupaTimerLastText='';
+    }
+    const display=Math.max(0,Math.ceil(Math.max(0,seconds)*10)/10).toFixed(1)+'s';
+    if(display!==lupaTimerLastText){
+      lupaTimerValueEl.textContent=display;
+      lupaTimerLastText=display;
+    }
+  }
   function operatorClearLupaVisuals(){
     document.body.classList.remove('operator-lupa-focus');
     wordLane?.classList?.remove('operator-lupa-focus');
+    lupaTimerEl?.remove();
+    lupaTimerEl=null;lupaTimerValueEl=null;lupaTimerLastText='';
     for(const word of wordsOnField){
       word?.el?.classList?.remove('operator-lupa-weakpoint');
       word?.el?.removeAttribute?.('data-lupa-time');
@@ -3528,10 +3558,9 @@ async function debugJumpTo(mode, idx){
     document.body.classList.add('operator-lupa-focus');
     wordLane?.classList?.add('operator-lupa-focus');
     for(const word of wordsOnField){
-      if(!ids.has(word.id))continue;
-      word.el?.classList?.add('operator-lupa-weakpoint');
-      if(word.el?.setAttribute)word.el.setAttribute('data-lupa-time',Number(seconds).toFixed(1));
+      if(ids.has(word.id))word.el?.classList?.add('operator-lupa-weakpoint');
     }
+    operatorLupaTimer(seconds);
   }
   function operatorRefreshLupaVisuals(time=stageElapsedSec()){
     if(operatorPassive?.rule?.id!=='lupa')return;
@@ -3540,17 +3569,17 @@ async function debugJumpTo(mode, idx){
       if(document.body.classList.contains('operator-lupa-focus'))operatorClearLupaVisuals();
       return;
     }
-    // One shared 6-second deadline; refresh the visible badges every frame.
-    const seconds=(Math.max(0,Math.ceil(((debug.lupaDeadline||0)-time)*10)/10)).toFixed(1);
     const ids=new Set(debug.lupaTargets||[]);
     if(!ids.size){operatorClearLupaVisuals();return;}
-    document.body.classList.add('operator-lupa-focus');
-    wordLane?.classList?.add('operator-lupa-focus');
+    if(!document.body.classList.contains('operator-lupa-focus'))document.body.classList.add('operator-lupa-focus');
+    if(!wordLane?.classList?.contains('operator-lupa-focus'))wordLane?.classList?.add('operator-lupa-focus');
+    // Update the single, large number only when its visible tenth changes.
+    operatorLupaTimer((debug.lupaDeadline||0)-time);
     for(const word of wordsOnField){
       const active=ids.has(word.id);
-      word?.el?.classList?.toggle('operator-lupa-weakpoint',active);
-      if(active && word.el?.setAttribute && word.el.getAttribute?.('data-lupa-time')!==seconds)word.el.setAttribute('data-lupa-time',seconds);
-      else word?.el?.removeAttribute?.('data-lupa-time');
+      if(word.el?.classList?.contains('operator-lupa-weakpoint')!==active){
+        word.el?.classList?.toggle('operator-lupa-weakpoint',active);
+      }
     }
   }
   function operatorPrepareLupaTargets(){
