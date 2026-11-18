@@ -3217,6 +3217,13 @@ function showModeSelectScreen(){
     const modeMult = scoreModeMultiplier();
     return Math.max(1, Math.round(base * posMult * pen * modeMult));
   }
+  function calcMinimumWordScore(word){
+    // Seraphine's automatically eliminated words use the LOW end (1.2x) of
+    // the existing length-based scoring range, with normal mode/continue modifiers.
+    // Example: 8 letters = 8 * 10 * 1.2 = 96 (Normal) or 192 (Extra).
+    return Math.max(1, Math.round(basePointsForAnswer(word?.answer || "") * 1.2
+      * scorePenaltyMultiplier() * scoreModeMultiplier()));
+  }
 
 
   let wordsOnField = [];
@@ -3359,11 +3366,23 @@ async function debugJumpTo(mode, idx){
     activeOperatorId=operatorModeEligible()?getSelectedOperator():'mc';
     operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
   }
-  function resetOperatorForStage(){operatorPassive?.reset();}
-  function operatorOnCorrect(){
-    if(!operatorPassive?.rule)return;
-    const effect=operatorPassive.onCorrect(wordsOnField,stageElapsedSec(),{hp:playerHp,maxHp:playerMaxHp});
-    if(!effect)return;
+  function resetOperatorForStage(){
+    operatorPassive?.reset();
+    bossHpText?.classList?.remove('operator-weak-point-ready');
+    wordLane?.classList?.remove('operator-frozen-domain');
+  }
+  function operatorStageWithoutBoss(){
+    // Survival/time trials have a visible boss HP bar but no boss to defeat.
+    const stage=STAGES[stageIndex];
+    return ['challenge','shared','practice'].includes(currentMode)
+      || !!stage?.bossInvulnerable || !!stage?.endStageOnBgmEnd || isExtraStage2();
+  }
+  function operatorOnCorrect(clearedWord){
+    if(!operatorPassive?.rule)return null;
+    const effect=operatorPassive.onCorrect(wordsOnField,stageElapsedSec(),{
+      hp:playerHp,maxHp:playerMaxHp,clearedWord,nonBoss:operatorStageWithoutBoss()
+    });
+    if(!effect)return null;
     if(effect.type==='word-freeze')pushMsg('NORA · SHADOW HOLD (1.5s)',true);
     else if(effect.type==='spawn-pause'){
       // Discard prior spawn progress: this is a pause, not a delayed burst.
@@ -3375,7 +3394,51 @@ async function debugJumpTo(mode, idx){
       playerHp=Math.min(playerMaxHp,playerHp+effect.hp);
       pushMsg('VEX · ENDURANCE (+1 HP)',true);
       updateUI();
+    }else if(effect.type==='charge'){
+      bossHpText?.classList?.add('operator-weak-point-ready');
+      pushMsg('AVELINE · WEAK POINT READY',true);
+    }else if(effect.type==='boss-bonus'){
+      bossHpText?.classList?.remove('operator-weak-point-ready');
+      pushMsg('AVELINE · WEAK POINT (+2 DAMAGE)',true);
+    }else if(effect.type==='domain-freeze'){
+      wordLane?.classList?.add('operator-frozen-domain');
+      spawnAccMs=0;
+      pushMsg('ISOLDE · FROZEN DOMAIN (2.5s)',true);
+    }else if(effect.type==='mark-word'){
+      pushMsg('SERAPHINE · TARGET MARKED',true);
+    }else if(effect.type==='execution-pending'){
+      pushMsg('SERAPHINE · NEXT TARGET (3s)',true);
     }
+    return effect;
+  }
+  function operatorAutoEliminate(wordId,grantRewards){
+    // This removes an existing falling word only. It never triggers onCorrect,
+    // another operator charge, typing streak, or server-side "correctWord" claim.
+    const word=wordsOnField.find(w=>w.id===wordId&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost);
+    if(!word)return 0;
+    const pts=grantRewards?calcMinimumWordScore(word):0;
+    const slash=grantRewards?document.createElement('span'):null;
+    if(slash){
+      slash.className='operator-phantom-slash';
+      slash.style.top=`${Math.max(0,word.y)}px`;
+      slash.setAttribute('aria-hidden','true');
+      wordLane.appendChild(slash);
+      setTimeout(()=>slash.remove(),500);
+    }
+    removeWord(word.id);
+    if(grantRewards){
+      addScore(pts); // addScore also awards regular score-linked coins where eligible.
+      if(currentMode!=='shared')addXp(1);
+      pushMsg(`SERAPHINE · PHANTOM EXECUTION (+${pts})`,true);
+      return baseHitDamage;
+    }
+    pushMsg('AVELINE · TACTICAL CLEAR',true);
+    return 0;
+  }
+  function operatorCleaveLowest(){
+    const next=wordsOnField.filter(w=>w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost)
+      .reduce((best,w)=>!best||w.y>best.y?w:best,null);
+    if(next)operatorAutoEliminate(next.id,false);
   }
   function operatorOnMistake(){
     const effect=operatorPassive?.onMistake(stageElapsedSec());
@@ -5348,8 +5411,17 @@ if(state === "landed"){
 
     if(currentMode !== 'shared') mechanicEvent('onCorrect',best);
     removeWord(best.id);
-    operatorOnCorrect();
-    const dmg = baseHitDamage;
+    const passiveEffect=operatorOnCorrect(best);
+    let bonusDamage=0;
+    if(passiveEffect?.type==='boss-bonus')bonusDamage+=passiveEffect.damage;
+    if(passiveEffect?.type==='aveline-cleave'){
+      bossHpText?.classList?.remove('operator-weak-point-ready');
+      operatorCleaveLowest();
+    }
+    if(passiveEffect?.type==='auto-eliminate')bonusDamage+=operatorAutoEliminate(passiveEffect.wordId,true);
+    // Combine manual and instant secondary damage into ONE boss hit. Otherwise
+    // the first hit could finish the stage before the automatic hit is awarded.
+    const dmg = baseHitDamage+bonusDamage;
     damageBoss(dmg);
 
     pushMsg(`HIT! 「${best.prompt}」→ ${best.answer} (+${pts})`);
@@ -6518,6 +6590,8 @@ if(gameState === "paused"){
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
       operatorPassive?.tick(elapsed);
+      // Low-cost arena status indication, cleared when the timed freeze expires.
+      wordLane?.classList?.toggle('operator-frozen-domain',!!operatorPassive?.isFieldFrozen(elapsed));
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
       if(!overflowSpawnPaused && !operatorPause){
@@ -6558,6 +6632,15 @@ if(gameState === "paused"){
           }
         }
 
+      // Seraphine can mark a new arrival or execute a queued secondary target
+      // (up to 3s). Neither operation is considered a manually completed word.
+      const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed);
+      if(fieldEffect?.type==='auto-eliminate'){
+        const autoDamage=operatorAutoEliminate(fieldEffect.wordId,true);
+        if(autoDamage>0)damageBoss(autoDamage);
+        if(gameState!=='playing'){scheduleTick(true);return;}
+      }
+
       const h = laneHeight();
       let fallSpeed = (stageIndex === 4)
         ? stage5CurrentFallSpeed(elapsed)
@@ -6593,7 +6676,8 @@ if(gameState === "paused"){
           ? w.fallSpeedOverride
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
         if(!operatorPassive?.isWordFrozen(w,elapsed))w.y += v * dt;
-        mechanicEvent('onTick',w,{dt});
+        // Isolde freezes the entire word field, including movement from custom mechanics.
+        if(!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt});
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
         const gIdx = (w.groupIndex || 0);
