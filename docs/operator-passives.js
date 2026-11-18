@@ -1,4 +1,4 @@
-/* v86.33 — 4★, 5★ and 6★ operator passives. Counters reset per stage.
+/* v86.34 — 4★, 5★ and 6★ operator passives. Counters reset per stage.
  * Automatic word clears are never counted as manually typed answers. */
 (() => {
   'use strict';
@@ -111,7 +111,11 @@
       if(executionPendingUntil&&t>=executionPendingUntil)executionPendingUntil=0;
       if(rule?.id==='hound'&&houndPhase!=='none'){
         if(houndMarked){
-          const valid=houndMarked.state==='falling'&&houndMarked.el?.isConnected!==false;
+          // Landing changes a word from 'falling' to 'landed', but it stays
+          // typable in the word stack. Prey must keep its mark and countdown
+          // until the player clears it, the timer expires, or it is removed.
+          const stillTypable=(houndMarked.state==='falling'||houndMarked.state==='landed');
+          const valid=stillTypable&&houndMarked.el?.isConnected!==false;
           if(!valid||t>=houndDeadline)endHound();
           else if(houndMarked.el?.setAttribute){
             const remaining=String(Math.max(1,Math.ceil(houndDeadline-t)));
