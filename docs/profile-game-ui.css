@@ -110,3 +110,256 @@ body.profile-client #app{min-height:0}
 body.profile-client .hero-area{border-bottom:0;padding-bottom:clamp(24px,3vw,36px)}
 body.profile-client .profile-inline-notice{margin:0 clamp(16px,3.8vw,42px) 18px}
 @media(max-width:600px){body.profile-client .page{min-height:0}body.profile-client .hero-area{border-bottom:0;padding-bottom:24px}}
+
+
+/* v86.24 — full-screen Adventure profile card; one unified arena panel. */
+body.profile-client{
+ padding:9px 12px;
+ background:radial-gradient(900px 520px at 50% 0%,rgba(100,120,255,.16),transparent 60%),
+ radial-gradient(1000px 600px at 10% 100%,rgba(255,140,100,.10),transparent 55%),var(--rpg-bg);
+}
+body.profile-client .page{
+ display:flex;flex-direction:column;
+ width:min(1150px,100%);max-width:1150px;
+ min-height:calc(100dvh - 18px);
+ border:6px solid var(--rpg-gold);
+ background:#0f1020;
+}
+body.profile-client .top{
+ flex:0 0 auto;min-height:55px;padding:8px 16px 8px 18px;
+ border-bottom:3px solid var(--rpg-gold);background:#19162e;
+}
+body.profile-client .topnav a{
+ min-height:34px;border:2px solid #51486a;background:#121122;
+}
+body.profile-client .topnav a:hover,
+body.profile-client .topnav a.current{background:#2c2641;border-color:var(--rpg-gold)}
+body.profile-client #app{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+body.profile-client .hero-area{
+ display:flex;flex-direction:column;flex:1 1 auto;
+ min-height:clamp(610px,calc(100dvh - 105px),1150px);
+ padding:22px clamp(17px,2.8vw,33px) 24px;
+ border:0;overflow:hidden;
+ background:radial-gradient(ellipse at 60% 47%,#33304b6e,transparent 52%),
+ linear-gradient(160deg,#201d34 0%,#161629 55%,#0e101d 100%);
+}
+body.profile-client .hero-area::before{
+ opacity:.21;background:repeating-linear-gradient(90deg,#f0dc9820 0 1px,transparent 1px 47px),
+ repeating-linear-gradient(0deg,#f0dc9815 0 1px,transparent 1px 47px);
+}
+body.profile-client .hero-area::after{
+ left:22%;width:47%;height:200px;bottom:-120px;opacity:.08;
+}
+body.profile-client .crumbs{
+ flex:0 0 auto;margin:0 0 18px;font-size:11px;letter-spacing:.17em;color:#d9c27a;
+}
+body.profile-client .hero-grid{
+ flex:1 1 auto;min-height:0;
+ display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.91fr) minmax(0,1.08fr);
+ gap:clamp(11px,1.4vw,20px);align-items:stretch;
+}
+body.profile-client .hero-left{
+ display:flex;flex-direction:column;min-width:0;
+ padding:clamp(6px,1.2vw,15px) 2px 6px;
+}
+body.profile-client .identity{display:flex;align-items:flex-start;gap:13px;min-height:0}
+body.profile-client .avatar{
+ width:88px;height:98px;flex-basis:88px;
+ border:3px solid var(--rpg-gold);box-shadow:0 0 0 2px #080910,0 6px 20px #0008;
+}
+body.profile-client .avatar img{height:129px}
+body.profile-client .player-name{
+ font-size:clamp(21px,2.25vw,32px);line-height:1.12;letter-spacing:-.035em;
+ text-shadow:0 2px 10px #0007;
+}
+body.profile-client .identity-text{min-width:0}
+body.profile-client .idline{font-size:10px;line-height:1.5;margin-top:8px;color:#c1c6e0}
+body.profile-client .motto{margin:10px 0 7px;max-width:100%;line-height:1.45}
+body.profile-client .meta{margin-top:12px;align-items:flex-start}
+body.profile-client .pill{font-size:10px;line-height:1.35;padding:8px 10px;border-left:3px solid var(--rpg-gold);border-top:1px solid #d9c27a6b;border-bottom:1px solid #d9c27a6b;background:#101020cc}
+body.profile-client .summary-row{
+ margin-top:auto;padding-top:22px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
+}
+body.profile-client .summary-num{
+ min-width:0;padding:15px 7px;border:2px solid #5d526f;
+ background:linear-gradient(180deg,#25203b,#151326);
+ text-align:center;box-shadow:inset 0 0 0 1px #0007;
+}
+body.profile-client .summary-num b{font-size:clamp(24px,2.5vw,36px);line-height:1.2;color:var(--rpg-gold)}
+body.profile-client .summary-num small{display:block;font-size:9px;margin-top:6px;line-height:1.4;color:#c8cbe5}
+body.profile-client .featured-stage{
+ position:relative;isolation:isolate;
+ display:flex;align-items:end;justify-content:center;
+ min-width:0;min-height:0;overflow:hidden;
+ border-left:1px solid #dfc98226;border-right:1px solid #dfc98226;
+ background:radial-gradient(ellipse at 45% 42%,#5950754d,transparent 60%),
+ linear-gradient(180deg,transparent 15%,#1d192d5c 72%,#0a0b18bd 100%);
+}
+body.profile-client .featured-stage-backdrop{
+ position:absolute;z-index:0;inset:0;
+ background:linear-gradient(125deg,transparent 33%,#d9c27a0d 34%,transparent 35%),
+ radial-gradient(ellipse at 50% 88%,#d9c27a3b,transparent 49%);
+}
+body.profile-client .featured-stage-art{
+ position:relative;z-index:1;width:100%;height:100%;max-height:900px;
+ object-fit:contain;object-position:center bottom;
+ filter:drop-shadow(0 16px 17px #000a);
+}
+body.profile-client .featured-stage-art.aura-outline-1{filter:drop-shadow(0 4px 8px #fff8) drop-shadow(0 12px 16px #0009)}
+body.profile-client .featured-stage-art.aura-outline-2{filter:drop-shadow(0 0 13px #46cfff) drop-shadow(0 15px 17px #0009)}
+body.profile-client .featured-stage-art.aura-outline-3{filter:drop-shadow(0 0 14px #a84cfc) drop-shadow(0 15px 17px #0009)}
+body.profile-client .featured-stage-art.aura-outline-4{filter:drop-shadow(0 0 15px #f5ad24) drop-shadow(0 15px 17px #0009)}
+body.profile-client .featured-stage-label{
+ position:absolute;z-index:2;left:0;right:0;bottom:0;
+ display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;
+ padding:48px 8px 19px;
+ background:linear-gradient(180deg,transparent,#080910e8 75%);
+}
+body.profile-client .featured-stage-label span{font-size:10px;font-weight:900;color:var(--rpg-gold);letter-spacing:.15em}
+body.profile-client .featured-stage-label strong{font-size:clamp(12px,1.55vw,18px);text-transform:uppercase;line-height:1.2}
+body.profile-client .hero-right{
+ display:flex;flex-direction:column;min-width:0;min-height:0;gap:12px;
+}
+body.profile-client .dark-card{
+ border:3px solid var(--rpg-gold);background:linear-gradient(145deg,#1d1a34,#111122);
+ padding:13px;box-shadow:inset 0 0 0 1px #0009;
+}
+body.profile-client .progress-card{flex:0 0 auto;padding:16px 15px}
+body.profile-client .progress-value{margin:12px 0 12px;color:var(--rpg-text);font-size:clamp(25px,3.1vw,38px);font-weight:900;line-height:1}
+body.profile-client .progress-value small{font-size:12px;color:var(--rpg-gold)}
+body.profile-client .xpbar{height:13px;border:1px solid #5d536d;background:#0a0a16}
+body.profile-client .xpbar>div{height:100%;background:linear-gradient(90deg,#b59d57,var(--rpg-gold))}
+body.profile-client .xp-line{gap:8px;font-size:10px}
+body.profile-client .hero-right .dark-card:nth-child(2){flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+body.profile-client .showcase-list{
+ flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ grid-template-rows:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px;
+}
+body.profile-client .showcase-tile{width:100%;height:100%;min-height:0;aspect-ratio:auto;border:2px solid #655a78;background:linear-gradient(145deg,#333047,#151223)}
+body.profile-client .showcase-tile img{width:100%;height:100%;object-fit:contain;object-position:center bottom}
+body.profile-client .showcase-tile.locked{border-style:solid;color:#79758b;background:#111024}
+body.profile-client .tile-label{font-size:10px;bottom:8px;left:8px}
+body.profile-client .editbtn{min-height:30px;min-width:30px}
+body.profile-client .profile-inline-notice{margin:10px clamp(17px,2.8vw,33px)}
+@media(max-width:1050px){
+ body.profile-client .hero-grid{grid-template-columns:minmax(0,1.02fr) minmax(0,.84fr) minmax(0,1fr)}
+ body.profile-client .hero-area{padding-left:19px;padding-right:19px}
+ body.profile-client .hero-right .dark-card:nth-child(2){min-height:300px}
+ body.profile-client .summary-row{gap:5px}
+ body.profile-client .summary-num{padding:11px 5px}
+}
+@media(max-width:830px){
+ body.profile-client .hero-area{min-height:0}
+ body.profile-client .hero-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto auto;gap:16px}
+ body.profile-client .hero-left{grid-column:1/-1;display:flex;flex-direction:row;align-items:center;gap:18px}
+ body.profile-client .identity{flex:1}
+ body.profile-client .summary-row{flex:0 0 40%;margin-top:0;align-self:center;padding-top:0}
+ body.profile-client .featured-stage{grid-column:1;min-height:500px}
+ body.profile-client .hero-right{grid-column:2;min-height:500px}
+ body.profile-client .showcase-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body.profile-client .page{min-height:calc(100dvh - 18px)}
+}
+@media(max-width:600px){
+ body.profile-client{padding:4px}
+ body.profile-client .page{min-height:calc(100dvh - 8px);border-width:4px}
+ body.profile-client .top{padding:9px 10px;gap:9px}
+ body.profile-client .brand{font-size:13px}
+ body.profile-client .topnav{gap:5px}
+ body.profile-client .topnav a{font-size:10px;padding:6px 8px;min-height:32px}
+ body.profile-client .hero-area{min-height:0;padding:17px 13px 24px}
+ body.profile-client .crumbs{margin-bottom:13px}
+ body.profile-client .hero-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;gap:14px}
+ body.profile-client .hero-left{grid-column:1;display:flex;flex-direction:column;align-items:stretch;gap:14px}
+ body.profile-client .identity{gap:10px}
+ body.profile-client .avatar{width:75px;height:86px;flex-basis:75px}
+ body.profile-client .avatar img{height:112px}
+ body.profile-client .player-name{font-size:clamp(20px,5.6vw,26px)}
+ body.profile-client .idline{font-size:9px}
+ body.profile-client .summary-row{flex-basis:auto;width:100%;gap:6px}
+ body.profile-client .summary-num{padding:10px 5px}
+ body.profile-client .summary-num b{font-size:24px}
+ body.profile-client .summary-num small{font-size:8px}
+ body.profile-client .featured-stage{grid-column:1;min-height:360px;height:53dvh;max-height:530px}
+ body.profile-client .hero-right{grid-column:1;min-height:0}
+ body.profile-client .progress-card{padding:13px}
+ body.profile-client .hero-right .dark-card:nth-child(2){min-height:330px}
+ body.profile-client .showcase-list{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));min-height:420px}
+ body.profile-client .tile-label{font-size:8px;left:3px;bottom:4px}
+}
+
+/* v86.25 — enlarge the featured operator on tall desktop cards.
+   The 768×1152 character artwork previously fitted to the narrow center
+   column, leaving a large empty region above the head. The scale is anchored
+   at the feet; small and two-column layouts retain contain sizing. */
+@media (min-width:1051px) and (min-height:680px){
+ body.profile-client .featured-stage-art{
+  transform:scale(1.47);
+  transform-origin:center bottom;
+ }
+}
+@media (min-width:831px) and (max-width:1050px) and (min-height:680px){
+ body.profile-client .featured-stage-art{
+  transform:scale(1.18);
+  transform-origin:center bottom;
+ }
+}
+@media (min-width:1051px) and (min-height:950px){
+ body.profile-client .featured-stage-art{transform:scale(1.62)}
+}
+
+/* v86.26 — One prominent Back control; no other header navigation buttons. */
+body.profile-client .top{justify-content:space-between;align-items:center;gap:14px}
+body.profile-client .topnav.profile-back-nav{margin-left:auto;flex:0 0 auto;justify-content:flex-end}
+body.profile-client .topnav.profile-back-nav .profile-back-link{
+ box-sizing:border-box;display:flex;align-items:center;justify-content:center;
+ min-width:200px;min-height:52px;padding:12px 25px;
+ border:3px solid var(--rpg-gold);border-radius:0;
+ background:linear-gradient(180deg,#3a3150,#262037);color:#fff2c4;
+ font:900 17px ui-monospace,monospace;letter-spacing:.15em;
+ box-shadow:inset 0 0 0 1px #0007,0 3px 0 #0a0812;
+ text-decoration:none;white-space:nowrap;
+}
+body.profile-client .topnav.profile-back-nav .profile-back-link:hover,
+body.profile-client .topnav.profile-back-nav .profile-back-link:focus-visible{
+ border-color:#ffe79a;color:#fff;background:#4a3d60;
+}
+@media(max-width:600px){
+ body.profile-client .topnav.profile-back-nav{width:100%;margin-left:0;justify-content:stretch}
+ body.profile-client .topnav.profile-back-nav .profile-back-link{width:100%;min-width:0;min-height:48px;font-size:15px}
+}
+
+
+/* v86.27 — Compact face-only Operator Showcase.
+   Preserves the 4 slots and editor, but eliminates the oversized portrait grid. */
+body.profile-client .hero-right .dark-card.profile-showcase-card{
+ flex:0 0 auto;min-height:0;padding:12px;
+}
+body.profile-client .profile-showcase-card .mini-kicker{font-size:10px;letter-spacing:.08em}
+body.profile-client .profile-showcase-card .showcase-list{
+ display:grid;flex:none;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:none;
+ min-height:0;gap:7px;margin-top:12px;
+}
+body.profile-client .profile-showcase-card .showcase-tile{
+ position:relative;flex:none;display:flex;align-items:center;justify-content:center;
+ box-sizing:border-box;width:100%;height:auto;min-height:0;aspect-ratio:1;
+ border:2px solid #6e6182;background:linear-gradient(150deg,#373049,#171523);
+ overflow:hidden;
+}
+body.profile-client .profile-showcase-card .showcase-tile.showcase-placeholder{border-color:#c2aa67;background:linear-gradient(150deg,#211d30,#11101d)}
+/* Unassigned portraits are deliberately blank; never crop full-body art into these slots. */
+body.profile-client .profile-showcase-card .showcase-tile.showcase-placeholder::before{display:none}
+body.profile-client .profile-showcase-card .showcase-tile::after{height:12%;opacity:.3}
+body.profile-client .profile-showcase-card .showcase-tile.locked{
+ border-style:solid;background:#171526;border-color:#5a4d6c;
+ font-size:clamp(16px,2vw,26px);color:#7a7289;opacity:.72;
+}
+@media(max-width:1050px){
+ body.profile-client .hero-right .dark-card.profile-showcase-card{min-height:0}
+ body.profile-client .profile-showcase-card .showcase-list{min-height:0;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:none}
+}
+@media(max-width:600px){
+ body.profile-client .hero-right .dark-card.profile-showcase-card{min-height:0;padding:12px}
+ body.profile-client .profile-showcase-card .showcase-list{
+  min-height:0;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:none;gap:8px;
+ }
+}
