@@ -335,7 +335,7 @@ async function recruitmentPull(b={}){
  const count=Number(b.count);if(![1,10].includes(count))err('Use single or ten pulls.');
  const mode=String(b.mode||'paid');if(!['paid','daily','tutorial'].includes(mode))err('Unknown recruitment mode.');
  if(mode!=='paid'&&count!==10)err('Only ten-pulls are free.');
- const roster=await fetch('gacha_catalog.json',{cache:'force-cache'}).then(r=>r.json());
+ const roster=await fetch('gacha_catalog.json',{cache:'no-cache'}).then(r=>r.json());
  const pool=(roster.characters||[]).filter(c=>[4,5,6].includes(c.rarity)&&/^[a-z][a-z0-9_]{0,39}$/.test(c.id));
  const config=await recruitmentBanners();
  const featured=String(config.banners?.[0]?.featured_character_id||roster.featured_character_id||'tavi');

@@ -228,7 +228,7 @@
  async function loadRoster(){
   try{
    if(window.RPG_GACHA_CATALOG){const data=window.RPG_GACHA_CATALOG;catalog=(data.characters||[]).filter(c=>c&&[4,5,6].includes(c.rarity)&&/^[a-z][a-z0-9_]{0,39}$/.test(c.id)&&safeRosterArt(c.art));window.RPG_RECRUITMENT_REVEAL?.configure?.(data);return;}
-   const response=await fetch('gacha_catalog.json',{cache:'default'});if(!response.ok)throw Error('Catalog unavailable');
+   const response=await fetch('gacha_catalog.json',{cache:'no-cache'});if(!response.ok)throw Error('Catalog unavailable');
    const data=await response.json();catalog=(data.characters||[]).filter(c=>c&&[4,5,6].includes(c.rarity)&&/^[a-z][a-z0-9_]{0,39}$/.test(c.id)&&safeRosterArt(c.art));
    window.RPG_RECRUITMENT_REVEAL?.configure?.(data);
   }catch(e){console.warn('Character roster unavailable:',e);}

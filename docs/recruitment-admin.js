@@ -8,7 +8,7 @@ let sixStars=[];
 function status(msg,kind=''){$('status').textContent=msg;$('status').className='status '+kind;}
 function current(){return banners[0];}
 async function loadFeaturedOptions(){
- const response=await fetch('gacha_catalog.json',{cache:'default'});
+ const response=await fetch('gacha_catalog.json',{cache:'no-cache'});
  if(!response.ok)throw Error('Character catalog missing. Upload the new GitHub files.');
  const data=await response.json();
  sixStars=(data.characters||[]).filter(c=>c&&c.rarity===6&&/^[a-z][a-z0-9_]{0,39}$/.test(c.id)&&/^assets\/recruitment\/[a-z0-9_-]+\.webp$/.test(c.art));

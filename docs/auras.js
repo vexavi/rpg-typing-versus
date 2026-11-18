@@ -49,7 +49,7 @@
   $('auraAction').disabled=working||preview===state.equipped||upgrade&&shards()<cost;
   $('auraAction').dataset.action=upgrade?'upgrade':'equip';
  }
- async function loadCatalog(){try{const d=window.RPG_GACHA_CATALOG||await fetch('gacha_catalog.json',{cache:'default'}).then(r=>{if(!r.ok)throw Error('Missing catalog');return r.json()});if(!Array.isArray(d.characters))return;
+ async function loadCatalog(){try{const d=window.RPG_GACHA_CATALOG||await fetch('gacha_catalog.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error('Missing catalog');return r.json()});if(!Array.isArray(d.characters))return;
    catalog=d.characters.filter(x=>safeId(x?.id)&&[4,5,6].includes(x.rarity)).map(x=>({id:x.id,name:String(x.name||x.id).slice(0,70),rarity:`${x.rarity}★`,img:/^assets\/recruitment\/[a-z0-9_-]+\.(?:png|webp|jpg|avif)$/.test(x.art||'')?x.art:null}));
   }catch(e){console.warn('Operator catalog unavailable:',e);}}
  async function refresh(){const result=await cloud.call('/api/profile',{card_code:code});player=result;render();}

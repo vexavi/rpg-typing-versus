@@ -31,7 +31,7 @@
   if(!player)return;
   const keys=new Set(Object.keys(player.recruitment?.owned||{}).filter(id=>!retired.has(id)));
   try{
-   const response=await fetch('gacha_catalog.json',{cache:'default'});
+   const response=await fetch('gacha_catalog.json',{cache:'no-cache'});
    if(!response.ok)return;
    const catalog=(await response.json()).characters||[];
    const starters=chars.filter(x=>x.id==='mc');

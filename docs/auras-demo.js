@@ -1,6 +1,9 @@
 /* Local design/test preview; NEVER reads/writes Firebase or real student balances. */
 window.RPG_AURA_DEMO=true;
-const example={ok:true,public_id:'DEMO',name:'Preview',collection:{owned:['mc']},recruitment:{shards:160,auras:{},owned:{alden:1,elise:1,kade:1,livia:1,mira:1,nora:1,vern:1,vex:1,aveline:1,isolde:1,seraphine:1,cassian:1,hound:1,tavi:1}}};
+// Pull the demo-owned list from the same catalog as Recruitment and Profile.
+// New operators appear here automatically (including Lupa); real saves are never touched.
+const demoOwned=Object.fromEntries((window.RPG_GACHA_CATALOG?.characters||[]).filter(c=>/^[a-z][a-z0-9_]{0,39}$/.test(c.id)).map(c=>[c.id,1]));
+const example={ok:true,public_id:'DEMO',name:'Preview',collection:{owned:['mc']},recruitment:{shards:160,auras:{},owned:demoOwned}};
 window.RPG_V66={ready:Promise.resolve(true),call:async(path,data)=>{
  if(path==='/api/profile')return structuredClone(example);
  if(path==='/api/aura/change'){
