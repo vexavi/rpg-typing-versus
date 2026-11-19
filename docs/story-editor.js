@@ -7,13 +7,15 @@ import {getFirestore,doc,runTransaction,serverTimestamp,getDocFromServer} from '
 import {loadPublishedStory,missingStoryRule} from './story-content-cloud.js';
 import {cleanStory,safeStoryImage} from './story-format.mjs';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
-import {planImageRepairs,applyImageRepairs,stablePhotoName,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
+import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
+import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath} from './story-asset-names.mjs';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const DRAFT_KEY='rpg_story_teacher_draft_v87';
 const STAGE_BASE=[{fallSpeedPxPerSec:41,spawnEveryMs:2950,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,hitDamage:1}];
 const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Boss damage per word',1,100,1]};
 const stagedPhotos=new Map();let liveBalance={},liveRequestId=0;
 const REPO_KEY='rpg_story_github_repo_v90';
+let onlineImageNames=[],selectedLocalFiles=new Map();
 let repairChoices=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -43,6 +45,11 @@ function writeDraft(){
 }
 function swap(arr,i,j){if(j<0||j>=arr.length)return false;[arr[i],arr[j]]=[arr[j],arr[i]];return true;}
 function scenePreview(scene){return stagedPhotos.get(scene.image)?.url||(safeStoryImage(scene.image)?scene.image:'story/images/placeholder-01.svg');}
+function assetOptions(current=''){const options=sharedOptions(chapters,onlineImageNames,[...stagedPhotos.keys()]);if(current&&!options.includes(current)&&safeStoryImage(current))options.unshift(current);return options;}
+function optionMarkup(selected=''){return `<option value="">None</option>`+assetOptions(selected).map(path=>`<option value="${esc(path)}" ${path===selected?'selected':''}>${esc(path.slice('story/images/'.length))}</option>`).join('');}
+function stageArtPath(key){return currentStage()?.battle?.[key]||'';}
+function assetPreview(path){return stagedPhotos.get(path)?.url||(safeStoryImage(path)?path:'');}
+function updateStaged(path,blob){const old=stagedPhotos.get(path);if(old)URL.revokeObjectURL(old.url);stagedPhotos.set(path,{blob,url:URL.createObjectURL(blob)});}
 function catalog(){return (window.RPG_MECHANICS?.list()||[]).filter(m=>!m.modes?.length||m.modes.includes('story'));}
 function inherited(key,st=currentStage()){
  const base=STAGE_BASE[Math.min(4,Math.max(0,(Number(st?.battle?.template)||1)-1))]||STAGE_BASE[0];
@@ -91,7 +98,7 @@ function mechanicMarkup(st){
  }).join('');
 }
 function clearPhotoSelection(){for(const data of stagedPhotos.values())URL.revokeObjectURL(data.url);stagedPhotos.clear();updateAuth()}
-function dropUnusedPhotos(){const names=new Set(chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image).concat(st.battle?.bossSprite?[st.battle.bossSprite]:[]))));for(const [key,item] of stagedPhotos)if(!names.has(key)){URL.revokeObjectURL(item.url);stagedPhotos.delete(key)}updateAuth()}
+function dropUnusedPhotos(){const names=new Set(referencedImages(chapters));for(const [key,item] of stagedPhotos)if(!names.has(key)){URL.revokeObjectURL(item.url);stagedPhotos.delete(key)}updateAuth()}
 async function addPhoto(event){
  const file=event.target.files?.[0];event.target.value='';if(!file)return;
  const st=currentStage(),phase=event.target.dataset.photoPhase,i=Number(event.target.dataset.photoIndex);
@@ -102,29 +109,31 @@ async function addPhoto(event){
   if(stagedPhotos.size>=250)throw Error('At most 250 photos can be staged. Download your current pack first.');
   const ext=blob.type==='image/webp'?'webp':blob.type==='image/jpeg'?'jpg':blob.type==='image/png'?'png':null;
   if(!ext)throw Error('Browser could not make a compatible photo.');
-  const name=await stablePhotoName(currentChapter().id,st.id,phase,i,blob);
-  scene.image='story/images/'+name;
-  stagedPhotos.set(scene.image,{blob,url:URL.createObjectURL(blob)});dropUnusedPhotos();markDirty();renderFields();
-  status('Photo selected. The filename is now stable even if you select it again. Download the Photo Pack once, then push to GitHub.',false,true);
+  const name=shortSlideName(st.id,phase,i,ext);
+  scene.image=storyPath(name);
+  updateStaged(scene.image,blob);dropUnusedPhotos();markDirty();renderFields();
+  status(`Photo ready as ${name}. Download Photo Pack once, push to GitHub, then publish.`,false,true);
  }catch(error){status('Photo failed: '+error.message,true)}
 }
-async function addBossSprite(event){
+// Uploaded boss/background images are shared assets, never stage-owned files.
+// Select "Use Existing" in another stage to reference exactly the same path.
+async function addSharedArt(event,kind){
  const file=event.target.files?.[0];event.target.value='';if(!file)return;
- const st=currentStage(),ch=currentChapter();if(!st||!ch)return;
+ const st=currentStage();if(!st)return;
+ const key=kind==='boss'?'bossSprite':'battleBackground';
  try{
-  status('Optimizing boss sprite…');const blob=await optimizePhoto(file);
-  if(currentStage()!==st)throw Error('Stage changed. Select the boss sprite again.');
-  if(stagedPhotos.size>=250)throw Error('At most 250 images can be staged. Download your current pack first.');
-  const ext=blob.type==='image/webp'?'webp':blob.type==='image/jpeg'?'jpg':blob.type==='image/png'?'png':null;
-  if(!ext)throw Error('Browser could not make a compatible boss sprite.');
-  const name=await stablePhotoName(ch.id,st.id,'boss',0,blob);
-  const path='story/images/'+name;
-  st.battle.bossSprite=path;
-  stagedPhotos.set(path,{blob,url:URL.createObjectURL(blob)});
-  dropUnusedPhotos();markDirty();renderFields();
-  status('Boss sprite selected with a stable filename. Download the Photo Pack once, then push to GitHub.',false,true);
- }catch(error){status('Boss sprite failed: '+error.message,true)}
+  status('Optimizing image…');const blob=await optimizePhoto(file);
+  if(currentStage()!==st)throw Error('Stage changed while selecting artwork.');
+  if(stagedPhotos.size>=250)throw Error('Photo pack limit reached. Download the current pack first.');
+  const ext=imageExt(blob);if(!ext)throw Error('Unsupported image format.');
+  const name=nextSharedName(kind,assetOptions().concat(onlineImageNames),ext);
+  const path=storyPath(name);st.battle[key]=path;
+  updateStaged(path,blob);dropUnusedPhotos();markDirty();renderFields();
+  status(`${name} added as shared artwork. Other stages can choose it under Use Existing, with no second upload.`,false,true);
+ }catch(error){status('Image failed: '+error.message,true)}
 }
+async function addBossSprite(event){return addSharedArt(event,'boss');}
+async function addBattleBackground(event){return addSharedArt(event,'bg');}
 async function downloadPhotos(){
  if(!stagedPhotos.size)return;
  try{busy=true;updateAuth();status('Building photo ZIP…');
@@ -135,7 +144,7 @@ async function downloadPhotos(){
 }
 // A missing photo can be repaired from the filenames already in the GitHub repository.
 // This only edits the local draft; Firestore is never written by a repair operation.
-function photoPaths(){return [...new Set(imageSlots(chapters).map(slot=>slot.from).filter(Boolean))];}
+function photoPaths(){return referencedImages(chapters);}
 async function photoOnline(path){
  try{
   const url=new URL(path,document.baseURI);
@@ -194,7 +203,9 @@ async function repairFromGithub(){
   const response=await fetch(`https://api.github.com/repos/${repo}/contents/docs/story/images`,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});
   if(!response.ok)throw Error(response.status===404?'Cannot find a public docs/story/images folder in this repository. Check the repository name, or choose the local folder.':`GitHub returned HTTP ${response.status}. Choose the local image folder instead.`);
   const data=await response.json();if(!Array.isArray(data))throw Error('GitHub did not return an image directory.');
-  repairUsingNames(data.filter(x=>x.type==='file').map(x=>x.name),'GitHub scan');
+  onlineImageNames=data.filter(x=>x.type==='file').map(x=>x.name);
+  repairUsingNames(onlineImageNames,'GitHub scan');
+  renderFields();
  }catch(error){status('Could not scan GitHub: '+error.message+' You can use Choose Local Images Folder below.',true);}
  finally{busy=false;updateAuth();}
 }
@@ -202,13 +213,67 @@ function repairFromLocalFolder(event){
  const files=[...(event.target.files||[])];event.target.value='';
  if(!files.length)return;
  const candidates=files.filter(f=>/\.(?:png|webp|jpg|jpeg|svg)$/i.test(f.name));
- const plan=repairUsingNames(candidates.map(f=>f.name),'Local folder scan');
+ selectedLocalFiles=new Map(candidates.map(f=>[f.name,f]));onlineImageNames=[...new Set([...onlineImageNames,...selectedLocalFiles.keys()])];
+ const plan=repairUsingNames(candidates.map(f=>f.name),'Local folder scan');renderFields();
  // Do not stage or rename these files; they already have their existing filename.
  // If a candidate isn't on GitHub Pages, the checker will clearly report it.
  if(!plan.repairs.length && !plan.unchanged.length && !plan.ambiguous.length)status('No matching photos found in that folder. Please select your actual docs/story/images folder.',true);
 }
+// Repackage the existing photos with short names and update the draft only after
+// every source image has been acquired successfully. Shared sprites remain shared.
+async function shortenExistingImages(){
+ if(busy)return;
+ // Look up files already on GitHub when the teacher starts with this button.
+ // A failed scan does not discard any draft or prevent local-folder fallback.
+ if(!onlineImageNames.length){
+  const repo=$('repoName').value.trim();
+  if(validGithubRepo(repo)){
+   try{const r=await fetch(`https://api.github.com/repos/${repo}/contents/docs/story/images`,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});
+    if(r.ok){const files=await r.json();if(Array.isArray(files))onlineImageNames=files.filter(x=>x.type==='file').map(x=>x.name);}
+   }catch{}
+  }
+ }
+ const plan=shortRenamePlan(chapters,[...onlineImageNames,...selectedLocalFiles.keys()]);
+ if(!plan.length){status('Your chapter images already have short names.',false,true);return;}
+ if(!confirm(`Prepare ${plan.length} short filenames from the pictures already referenced? This creates one ZIP and changes your unpublished draft after the ZIP is ready.`))return;
+ busy=true;updateAuth();status(`Preparing ${plan.length} short-name images…`);
+ try{
+  const entries=[];let failures=[];
+  const candidates=[...new Set([...onlineImageNames,...selectedLocalFiles.keys()])];
+  const repair=planImageRepairs(chapters,candidates,[]);
+  const corrected=new Map(repair.repairs.map(item=>[item.from,item.to]));
+  for(const item of plan){
+   const sourcePath=corrected.get(item.from)||item.from;
+   const basename=sourcePath.split('/').at(-1);
+   let blob=stagedPhotos.get(item.from)?.blob||stagedPhotos.get(sourcePath)?.blob||selectedLocalFiles.get(basename);
+   if(!blob){
+    // Existing files already deployed to GitHub Pages can be copied without
+    // reselecting them. Do not fetch from unknown external sites.
+    try{
+     if(!safeStoryImage(sourcePath))throw Error('Unsafe path');
+     const url=new URL(sourcePath,document.baseURI);const res=await fetch(url.href,{cache:'no-store'});
+     if(!res.ok||!/^image\//.test(res.headers.get('content-type')||''))throw Error(`HTTP ${res.status}`);
+     blob=await res.blob();
+    }catch{failures.push(basename);continue;}
+   }
+   entries.push({name:'docs/'+item.to,blob});
+  }
+  if(failures.length)throw Error(`${failures.length} pictures could not be read from GitHub (${failures.slice(0,3).join(', ')}). Click Choose Local Images Folder to select the images you already uploaded, then try again.`);
+  const zip=await photoPackZip(entries);
+  // Only update draft after a successful ZIP build; leave old references intact on failure.
+  const url=URL.createObjectURL(zip),link=document.createElement('a');link.href=url;link.download='RPG_Story_Short_Images.zip';link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+  applyShortRename(chapters,plan);
+  for(const item of plan){
+   const old=stagedPhotos.get(item.from);
+   if(old){stagedPhotos.delete(item.from);updateStaged(item.to,old.blob);URL.revokeObjectURL(old.url);}
+  }
+  dropUnusedPhotos();markDirty();render();writeDraft();
+  status(`${plan.length} images renamed in the draft and saved locally. Extract RPG_Story_Short_Images.zip into the GitHub repository root, push once, then Check Images and Publish. Keep your old files until publishing succeeds.`,false,true);
+ }catch(error){status('Short-name export stopped without changing your draft: '+error.message,true)}
+ finally{busy=false;updateAuth()}
+}
 async function verifyImageFiles(payload){
- const paths=[...new Set(payload.chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image).concat(st.battle?.bossSprite?[st.battle.bossSprite]:[]).filter(Boolean))))];
+ const paths=referencedImages(payload.chapters);
  if(!paths.length)return;
  const missing=[];
  for(let i=0;i<paths.length;i+=6){
@@ -226,7 +291,17 @@ function renderNav(){
  $('stageList').innerHTML=(ch?.stages||[]).map((st,i)=>`<div class="navrow"><button class="navitem" data-action="select-stage" data-i="${i}" aria-current="${i===stageIndex}">${esc(st.id)} · ${esc(st.title)}</button><div class="navcontrols"><button data-action="stage-up" data-i="${i}" ${i===0?'disabled':''} aria-label="Move stage up">▲</button><button data-action="stage-down" data-i="${i}" ${i===ch.stages.length-1?'disabled':''} aria-label="Move stage down">▼</button></div></div>`).join('');
  $('addStage').disabled=!ch||busy;$('addChapter').disabled=busy;
 }
-function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${esc(scenePreview(scene))}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image path</label><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><label class="filebutton small">Select Photo<input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-photo-phase="${phase}" data-photo-index="${i}" hidden></label><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
+function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${esc(scenePreview(scene))}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image file</label><details class="advanced-image-path"><summary>${esc(scene.image?.split('/').at(-1)||'No image selected')}</summary><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></details></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><label class="filebutton small">Select Photo<input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-photo-phase="${phase}" data-photo-index="${i}" hidden></label><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
+function artEditor(st,key,title,kind,help){
+ const value=st.battle?.[key]||'';
+ return `<div class="boss-sprite-panel"><h4>${esc(title)}</h4><p class="muted">${esc(help)}</p><div class="boss-sprite-row">
+ <img id="${kind}-preview" ${value?`src="${esc(assetPreview(value))}"`:''} alt="${esc(title)} preview" class="${kind==='bg'?'background-preview':''}">
+ <div class="boss-sprite-controls">
+ <div class="field"><label>Use Existing Image (reusable across stages)</label><select data-asset-select="${key}">${optionMarkup(value)}</select></div>
+ <div class="field"><details class="advanced-image-path"><summary>Advanced image path</summary><input aria-label="${esc(title)} image path" data-battle-field="${key}" value="${esc(value)}" placeholder="story/images/${kind}-1.webp" maxlength="180"></details></div>
+ <div class="boss-sprite-actions"><label class="filebutton">Upload New ${esc(title)}<input type="file" data-art-photo="${kind}" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden></label><button type="button" data-action="remove-art" data-art-key="${key}" class="danger" ${!value?'disabled':''}>Remove from Stage</button></div>
+ <p class="muted">Using an existing image does not upload, rename, or copy it. Removing it from this stage won't delete the shared file.</p></div></div></div>`;
+}
 function renderFields(){
  const ch=currentChapter(),st=currentStage();
  if(!ch||!st){$('chapterFields').textContent='Select a chapter and stage.';$('stageFields').textContent='';$('slidesEditor').textContent='';return;}
@@ -240,11 +315,8 @@ function renderFields(){
  <div class="field"><label for="st-desc">Stage description</label><textarea id="st-desc" data-stage-field="description" maxlength="600" rows="2">${esc(st.description||'')}</textarea></div>
  <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status">Current values shown below. Stage overrides are saved with this chapter.</p>
  <div class="grid"><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"><span class="muted">Current: ${esc(st.battle?.bossHp??20)} HP</span></div>${numericFields}</div>
- <div class="boss-sprite-panel"><div><h4>Boss Sprite</h4><p class="muted">This sprite appears during this stage's battle. It does not change Normal or Extra Mode bosses.</p></div>
- <div class="boss-sprite-row"><img id="boss-sprite-preview" ${st.battle?.bossSprite?`src="${esc(stagedPhotos.get(st.battle.bossSprite)?.url||(safeStoryImage(st.battle.bossSprite)?st.battle.bossSprite:''))}"`: ''} alt="${st.battle?.bossSprite?'Boss sprite preview':'No boss sprite selected'}">
- <div class="boss-sprite-controls"><div class="field"><label for="st-bosssprite">Boss sprite image path</label><input id="st-bosssprite" data-battle-field="bossSprite" maxlength="180" value="${esc(st.battle?.bossSprite||'')}" placeholder="story/images/boss.webp"></div>
- <div class="boss-sprite-actions"><label class="filebutton">Select Sprite<input type="file" data-boss-photo accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden></label><button type="button" data-action="remove-boss-sprite" class="danger" ${!st.battle?.bossSprite?'disabled':''}>Remove Sprite</button></div>
- <p class="muted">Select Sprite → Download Photo Pack → upload to GitHub → Publish to Students.</p></div></div></div></div>
+ ${artEditor(st,'bossSprite','Boss Sprite','boss','Boss art for this stage. Select the same existing image in any other stage to reuse it.')} 
+ ${artEditor(st,'battleBackground','Battle Background','bg','Background shown behind the fight in this stage. Backgrounds can also be reused.')} </div>
  <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Story-specific settings are published with the chapter; no code comes from Firebase.</p></div>
  <p class="muted">Stage ID ${esc(st.id)} is fixed because it identifies student progress. Chapter changes take effect the next time a student starts Story Mode.</p></section>`;
  fillLiveValues()
@@ -253,7 +325,7 @@ function renderFields(){
  const choices=preceding.map(x=>`<option value="${esc(x.id)}" ${unlock.stageId===x.id?'selected':''}>${esc(x.id)} — ${esc(x.title)}</option>`).join('');
  $('stageFields').insertAdjacentHTML('beforeend',`<section class="section"><h3>Stage Conditions</h3><div class="grid"><div class="field"><label for="unlockStage">Unlock after</label><select id="unlockStage" data-unlock-field="stageId"><option value="" ${!unlock.stageId?'selected':''}>Previous stage (default)</option>${choices}</select></div><div class="field"><label for="unlockStars">Stars needed on prerequisite</label><select id="unlockStars" data-unlock-field="minStars">${[0,1,2,3,4].map(n=>`<option value="${n}" ${Number(unlock.minStars)===n?'selected':''}>${n===0?'Clear only':n+' stars'}</option>`).join('')}</select></div></div><h3>Star Rating · Maximum Damage Taken</h3><div class="grid">${limits.map((n,i)=>`<div class="field"><label>${4-i}★ maximum damage</label><input type="number" min="0" max="99" step="1" data-star-index="${i}" value="${esc(n)}"></div>`).join('')}</div><p class="muted">Defaults: 4★ ≤0, 3★ ≤1, 2★ ≤2, 1★ ≤3. Lower ratings require larger damage limits. Star-gated stages must follow a battle stage.</p></section>`);
  $('slidesEditor').innerHTML=slideMarkup(st,'intro')+slideMarkup(st,'outro');
- const bossPreview=$('boss-sprite-preview');if(bossPreview)bossPreview.addEventListener('error',()=>{bossPreview.removeAttribute('src');bossPreview.alt='Boss sprite not found. Upload it to docs/story/images/.';});
+ for(const [id,title] of [['boss-preview','Boss sprite'],['bg-preview','Battle background']]){const img=$(id);if(img)img.addEventListener('error',()=>{img.removeAttribute('src');img.alt=title+' not found on website.';});}
  for(const img of $('slidesEditor').querySelectorAll('img[data-scene-preview]'))img.addEventListener('error',()=>{img.removeAttribute('src');img.alt='Image not found. Add it to docs/story/images/ first.';});
 }
 function render(){renderNav();renderFields();updateAuth();void loadLiveValues();}
@@ -269,7 +341,8 @@ function handleNavClick(event){const btn=event.target.closest('button[data-actio
 function handleEditorInput(event){const t=event.target,st=currentStage(),ch=currentChapter();if(!ch||!st)return;
  if(t.dataset.chapterField)ch[t.dataset.chapterField]=t.value;
  else if(t.dataset.stageField)st[t.dataset.stageField]=t.value;
- else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(t.dataset.battleField==='bossSprite'){dropUnusedPhotos();const img=$('boss-sprite-preview');if(img){if(safeStoryImage(t.value)){img.src=stagedPhotos.get(t.value)?.url||t.value}else img.removeAttribute('src');}}else fillLiveValues();}
+ else if(t.dataset.assetSelect){st.battle[t.dataset.assetSelect]=t.value;dropUnusedPhotos();markDirty();renderFields();return;}
+ else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else fillLiveValues();}
  else if(t.dataset.mechanicId){
   const m=catalog().find(x=>x.id===t.dataset.mechanicId),field=m?.fields.find(x=>x.key===t.dataset.mechanicKey);if(!field)return;
   const value=field.type==='boolean'?t.value==='true':Number(t.value);
@@ -293,7 +366,7 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
   if(ch.stages.length===1){status('Every chapter needs at least one stage.',true);return;}
   if(!confirm(`Delete stage ${st.id} from the next publication? Existing progress for this stage will remain in student records.`))return;
   retiredStages.add(st.id);ch.stages.splice(stageIndex,1);stageIndex=Math.min(stageIndex,ch.stages.length-1);
- }else if(a==='remove-boss-sprite'){st.battle.bossSprite='';
+ }else if(a==='remove-art'&&['bossSprite','battleBackground'].includes(btn.dataset.artKey)){st.battle[btn.dataset.artKey]='';
  }else if(a==='add-slide'){st[phase].push({image:'',caption:''});
  }else if(a==='delete-slide'){st[phase].splice(i,1);
  }else if(a==='slide-up'){if(!swap(st[phase],i,i-1))return;
@@ -361,7 +434,7 @@ async function importFile(event){const file=event.target.files?.[0];event.target
 async function boot(){
  $('chapterList').addEventListener('click',handleNavClick);$('stageList').addEventListener('click',handleNavClick);
  $('chapterFields').addEventListener('input',handleEditorInput);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
- $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-boss-photo]'))void addBossSprite(event);});
+ $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('select[data-asset-select]'))handleEditorInput(event);});
  $('slidesEditor').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-photo-phase]'))void addPhoto(event);});
  $('chapterFields').addEventListener('click',editorAction);$('stageFields').addEventListener('click',editorAction);$('slidesEditor').addEventListener('click',editorAction);
  $('addChapter').onclick=()=>{const id=nextChapterId(),ch={id,title:`Chapter ${id}`,subtitle:'',stages:[]};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();};
@@ -371,6 +444,7 @@ async function boot(){
  $('checkPhotos').onclick=()=>void checkPhotos();
  $('repairGithub').onclick=()=>void repairFromGithub();
  $('repairFolder').onchange=repairFromLocalFolder;
+ $('shortenNames').onclick=()=>void shortenExistingImages();
  $('photoReport').addEventListener('change',e=>{
   if(e.target.matches('select[data-repair-index]')){
    const preview=e.target.closest('.choice-row')?.querySelector('img');

@@ -24,6 +24,9 @@ export function cleanStory(raw){
    const bossSprite=String(st.battle?.bossSprite||'').trim();
    if(bossSprite&&!safeStoryImage(bossSprite))throw Error(`Stage ${id}: boss sprite must be a static story/images/... image path.`);
    if(bossSprite)battle.bossSprite=bossSprite;
+   const battleBackground=String(st.battle?.battleBackground||'').trim();
+   if(battleBackground&&!safeStoryImage(battleBackground))throw Error(`Stage ${id}: battle background must be a static story/images/... image path.`);
+   if(battleBackground)battle.battleBackground=battleBackground;
    const numericRanges={fallSpeedPxPerSec:[5,250],spawnEveryMs:[180,15000],hitDamage:[1,100]};
    for(const [key,[min,max]] of Object.entries(numericRanges)){
     const rawValue=st.battle?.[key];

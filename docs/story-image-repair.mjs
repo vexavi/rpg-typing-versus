@@ -8,6 +8,7 @@ export const imageSlots = chapters => chapters.flatMap(ch => ch.stages.flatMap(s
   stage:st,kind:phase,index,from:scene.image||'',stem:`${stem}${phase}-${index+1}-`,label:`Stage ${st.id} · ${phase} ${index+1}`
  })));
  if(st.battle?.bossSprite)slides.push({stage:st,kind:'boss',index:0,from:st.battle.bossSprite,stem:`${stem}boss-1-`,label:`Stage ${st.id} · boss`});
+ if(st.battle?.battleBackground)slides.push({stage:st,kind:'bg',index:0,from:st.battle.battleBackground,stem:`${stem}bg-1-`,label:`Stage ${st.id} · background`});
  return slides;
 }));
 export function planImageRepairs(chapters, filenames, skipPaths=[]){
@@ -27,6 +28,7 @@ export function planImageRepairs(chapters, filenames, skipPaths=[]){
 export function applyImageRepairs(plan){
  for(const fix of plan.repairs){
   if(fix.kind==='boss')fix.stage.battle.bossSprite=fix.to;
+  else if(fix.kind==='bg')fix.stage.battle.battleBackground=fix.to;
   else fix.stage[fix.kind][fix.index].image=fix.to;
  }
  return plan.repairs.length;
