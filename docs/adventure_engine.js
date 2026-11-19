@@ -2890,9 +2890,17 @@ async function launchStoryStage(stage){
       stageName:String(stage.id),bossName:String(stage.battle?.bossName||"Story Boss"),
       bossDialogue:"Ready for battle?",midFightDialogue:"",
       bossMaxHp:Math.max(1,Math.min(999,Math.floor(Number(stage.battle?.bossHp)||20))),
+      ...Object.fromEntries(['fallSpeedPxPerSec','spawnEveryMs','hitDamage'].filter(k=>typeof stage.battle?.[k]==='number'&&Number.isFinite(stage.battle[k])).map(k=>[k,stage.battle[k]])),
       bossFile:"",bossFile2:"",bgFile:"",playBgmFile:"",dialogueBgmFile:"",
       words:WORDS};
   }else storyBattleStage=null;
+  // Per-stage Story Editor values take priority over inherited Game Settings.
+  // Behavior remains defined by static game modules; Firestore supplies only numeric/boolean options.
+  try{
+    const battle=stage.battle||{};
+    const overrides={...Object.fromEntries(['fallSpeedPxPerSec','spawnEveryMs','hitDamage'].filter(k=>typeof battle[k]==='number'&&Number.isFinite(battle[k])).map(k=>[k,battle[k]])),bossMaxHp:Math.max(1,Math.min(999,Math.floor(Number(battle.bossHp)||20)))};
+    window.RPG_BALANCE?.setStoryOverrides?.(stage.id,overrides,battle.mechanics||{});
+  }catch(error){console.warn('Story battle settings:',error)}
   // Show pictures first. The scene overlay is independent of the battle engine.
   const scenesOk = await window.RPG_STORY.showSlides(stage.intro,stage.id,'intro');
   if(!scenesOk){ window.RPG_STORY.openMap(launchStoryStage); return }

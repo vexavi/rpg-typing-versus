@@ -3,7 +3,7 @@
 (function(){
  'use strict';
  const allowed=['normal','extra','story','practice','challenge'];
- const cache=new Map();let effective=null;let active={mode:'normal',stage:'1',chapter:null};
+ const cache=new Map();let effective=null;let storyOverride=null;let active={mode:'normal',stage:'1',chapter:null};
  const STORAGE='rpgTeacherBalance_v869';
  const saved=(()=>{try{const x=JSON.parse(localStorage.getItem(STORAGE)||'null');return x?.v===1&&Number.isFinite(x.updatedAt)&&x.updatedAt<=Date.now()+60000&&Date.now()-x.updatedAt<30*86400000&&Array.isArray(x.items)?x.items:[]}catch{return []}})();
  // Firestore data is never restored as proof that a run can be ranked.
@@ -19,6 +19,7 @@
   const next={mode,stage:String(stage||'1'),chapter:chapter?String(chapter):null};
   if(scopeList(next).join('|')===scopeList(active).join('|'))return;
   active=next;effective=null;
+  if(next.mode!=='story'||(storyOverride&&storyOverride.stage!==next.stage))storyOverride=null;
   window.dispatchEvent(new CustomEvent('rpg-balance-scopes',{detail:scopeList(active)}));
   window.dispatchEvent(new Event('rpg-balance-update'));
  }
@@ -55,11 +56,21 @@
    Object.assign(out.values,v.values);
    for(const [key,fields] of Object.entries(v.mechanics))out.mechanics[key]={...(out.mechanics[key]||{}),...fields};
   }
+  if(active.mode==='story'&&storyOverride&&storyOverride.stage===active.stage){
+   Object.assign(out.values,storyOverride.values);
+   for(const [key,fields] of Object.entries(storyOverride.mechanics))out.mechanics[key]={...(out.mechanics[key]||{}),...fields};
+  }
   effective=out;return effective;
  }
  // Load the last known validated teacher values without generating a cloud read.
  for(const item of saved){if(Array.isArray(item)&&item.length===2&&typeof item[0]==='string')apply(item[0],item[1]);}
- const api={setActive,apply,get:(key,fallback)=>merged().values[key]??fallback,
+ function setStoryOverrides(stage,values={},mechanics={}){
+  if(active.mode!=='story'||active.stage!==String(stage))return;
+  const settings=clean({values,mechanics});
+  storyOverride={stage:String(stage),...settings};effective=null;
+  window.dispatchEvent(new Event('rpg-balance-update'));
+ }
+ const api={setActive,setStoryOverrides,apply,get:(key,fallback)=>merged().values[key]??fallback,
   mechanic:(id,key,fallback)=>merged().mechanics?.[id]?.[key]??fallback,
   configSnapshot:()=>JSON.parse(JSON.stringify(merged())),
   scopes:()=>scopeList(active),snapshot:()=>({...active}),clear:scope=>{cache.delete(scope);effective=null;persist();window.dispatchEvent(new Event('rpg-balance-update'))}};

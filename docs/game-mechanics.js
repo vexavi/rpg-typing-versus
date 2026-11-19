@@ -19,16 +19,16 @@
   }
   modules.set(spec.id,Object.freeze({...spec,fields:Object.freeze(fields.map(f=>Object.freeze({...f}))) }));
  }
- function list(){return [...modules.values()].map(m=>({id:m.id,label:m.label,description:m.description||'',modes:m.modes||[],fields:m.fields.map(f=>({...f}))}));}
+ function list(){return [...modules.values()].map(m=>({id:m.id,label:m.label,description:m.description||'',modes:m.modes||[],defaultEnabled:m.defaultEnabled!==false,fields:m.fields.map(f=>({...f}))}));}
  function hasHook(kind){for(const m of modules.values())if(typeof m[kind]==='function')return true;return false;}
  function dispatch(kind,ctx){
   for(const m of modules.values()){
    if(typeof m[kind]!=='function')continue;
    if(Array.isArray(m.modes)&&!m.modes.includes(ctx.mode))continue;
-   if(window.RPG_BALANCE?.mechanic(m.id,'enabled',true)===false)continue;
+   if((window.RPG_BALANCE?.mechanic(m.id,'enabled',m.defaultEnabled!==false)??(m.defaultEnabled!==false))===false)continue;
    try{m[kind](ctx,{
      get:(key,otherwise)=>window.RPG_BALANCE?.mechanic(m.id,key,otherwise)??otherwise,
-     enabled:()=>window.RPG_BALANCE?.mechanic(m.id,'enabled',true)!==false
+     enabled:()=>(window.RPG_BALANCE?.mechanic(m.id,'enabled',m.defaultEnabled!==false)??(m.defaultEnabled!==false))!==false
    });}catch(error){console.warn('Mechanic failed:',m.id,error)}
   }
  }

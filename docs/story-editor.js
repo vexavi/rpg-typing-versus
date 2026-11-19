@@ -3,11 +3,15 @@
  */
 import {currentTeacher,googleTeacher,teacherSignOut,errorMessage} from './cloud-api.js';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
-import {getFirestore,doc,runTransaction,serverTimestamp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
+import {getFirestore,doc,runTransaction,serverTimestamp,getDocFromServer} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 import {loadPublishedStory,missingStoryRule} from './story-content-cloud.js';
 import {cleanStory,safeStoryImage} from './story-format.mjs';
+import {photoName,optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const DRAFT_KEY='rpg_story_teacher_draft_v87';
+const STAGE_BASE=[{fallSpeedPxPerSec:41,spawnEveryMs:2950,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,hitDamage:1}];
+const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Boss damage per word',1,100,1]};
+const stagedPhotos=new Map();let photoSerial=0,liveBalance={},liveRequestId=0;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=obj=>JSON.parse(JSON.stringify(obj));
@@ -20,6 +24,7 @@ function updateAuth(){
  $('publish').disabled=busy||!checkAuth()||!chapters.length;
  $('saveDraft').disabled=busy||!chapters.length;
  $('reload').disabled=busy;$('import').disabled=busy;
+ $('downloadPhotos').disabled=busy||stagedPhotos.size===0;$('downloadPhotos').textContent=`Download Photo Pack (${stagedPhotos.size})`;
 }
 function markDirty(){dirty=true;status('Changes are not published. Save Draft or Publish when ready.');}
 function currentChapter(){return chapters[chapterIndex]||null;}
@@ -34,18 +39,115 @@ function writeDraft(){
  localStorage.setItem(DRAFT_KEY,JSON.stringify(payload));dirty=false;status('Draft saved in this browser. Students have not received these changes.',false,true);
 }
 function swap(arr,i,j){if(j<0||j>=arr.length)return false;[arr[i],arr[j]]=[arr[j],arr[i]];return true;}
+function scenePreview(scene){return stagedPhotos.get(scene.image)?.url||(safeStoryImage(scene.image)?scene.image:'story/images/placeholder-01.svg');}
+function catalog(){return (window.RPG_MECHANICS?.list()||[]).filter(m=>!m.modes?.length||m.modes.includes('story'));}
+function inherited(key,st=currentStage()){
+ const base=STAGE_BASE[Math.min(4,Math.max(0,(Number(st?.battle?.template)||1)-1))]||STAGE_BASE[0];
+ let value=base[key],source='built-in';
+ for(const scope of [`mode:story`,`chapter:${currentChapter()?.id}`,`stage:story:${st?.id}`]){
+  if(liveBalance[scope]?.values?.[key]!==undefined){value=liveBalance[scope].values[key];source=scope}
+ }
+ return {value,source};
+}
+function fillLiveValues(){
+ const st=currentStage();if(!st)return;
+ for(const key of Object.keys(STAGE_FIELDS)){
+  const input=$('stageFields').querySelector(`[data-battle-field="${key}"]`);
+  const label=$('stageFields').querySelector(`[data-current-field="${key}"]`);
+  if(!input||!label)continue;
+  const data=inherited(key,st),own=st.battle[key];
+  if(own===undefined||own===null){if(document.activeElement!==input)input.value=String(data.value)}
+  label.textContent=`Current: ${own??data.value} · ${own!==undefined&&own!==null?'Story stage override':data.source}`;
+ }
+ const info=$('current-status');if(info)info.textContent=checkAuth()?'Current values loaded from Game Settings when this stage opened.':'Showing built-in defaults; sign in to read live Game Settings overrides.';
+}
+async function loadLiveValues(){
+ const st=currentStage();if(!st)return;
+ const stage=st.id,chapter=currentChapter().id,token=++liveRequestId;
+ liveBalance={};fillLiveValues();
+ if(!checkAuth())return;
+ try{
+  const scopes=[`mode:story`,`chapter:${chapter}`,`stage:story:${stage}`];
+  const snaps=await Promise.all(scopes.map(id=>getDocFromServer(doc(db,'gameBalance',id))));
+  if(token!==liveRequestId||currentStage()?.id!==stage)return;
+  liveBalance=Object.fromEntries(scopes.map((id,i)=>[id,snaps[i].exists()?snaps[i].data():{}]));
+  fillLiveValues();
+ }catch(error){if(token===liveRequestId)status('Could not read existing Game Settings: '+errorMessage(error),true)}
+}
+function mechanicMarkup(st){
+ const plugins=catalog();if(!plugins.length)return '<p class="muted">No Story mechanics installed. New behaviors require a static code module; they appear here automatically once installed.</p>';
+ return plugins.map(m=>{
+  const settings=st.battle?.mechanics?.[m.id]||{};
+  const controls=m.fields.map(field=>{
+   const current=settings[field.key]??field.default??(field.type==='boolean'?false:field.min);
+   const attr=`data-mechanic-id="${esc(m.id)}" data-mechanic-key="${esc(field.key)}"`;
+   const input=field.type==='boolean'?`<select ${attr}><option value="true" ${current===true?'selected':''}>Enabled</option><option value="false" ${current!==true?'selected':''}>Disabled</option></select>`:`<input type="number" ${attr} min="${field.min}" max="${field.max}" step="${field.step||1}" value="${esc(current)}">`;
+   return `<div class="field"><label>${esc(field.label)}</label>${input}</div>`;
+  }).join('');
+  return `<div class="mechanicgroup"><h4>${esc(m.label)}</h4><p class="muted">${esc(m.description||'')}</p><div class="grid">${controls}</div></div>`;
+ }).join('');
+}
+function clearPhotoSelection(){for(const data of stagedPhotos.values())URL.revokeObjectURL(data.url);stagedPhotos.clear();updateAuth()}
+function dropUnusedPhotos(){const names=new Set(chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image))));for(const [key,item] of stagedPhotos)if(!names.has(key)){URL.revokeObjectURL(item.url);stagedPhotos.delete(key)}updateAuth()}
+async function addPhoto(event){
+ const file=event.target.files?.[0];event.target.value='';if(!file)return;
+ const st=currentStage(),phase=event.target.dataset.photoPhase,i=Number(event.target.dataset.photoIndex);
+ const scene=st?.[phase]?.[i];if(!scene)return;
+ try{
+  status('Optimizing photo…');const blob=await optimizePhoto(file);
+  if(!currentStage()||currentStage().id!==st.id||st[phase]?.[i]!==scene)throw Error('Slide changed. Select the photo again.');
+  if(stagedPhotos.size>=250)throw Error('At most 250 photos can be staged. Download your current pack first.');
+  const ext=blob.type==='image/webp'?'webp':blob.type==='image/jpeg'?'jpg':blob.type==='image/png'?'png':null;
+  if(!ext)throw Error('Browser could not make a compatible photo.');
+  const name=photoName(currentChapter().id,st.id,phase,i,file.name,Date.now().toString(36)+'-'+(++photoSerial)).replace(/\.webp$/,'.'+ext);
+  scene.image='story/images/'+name;
+  stagedPhotos.set(scene.image,{blob,url:URL.createObjectURL(blob)});dropUnusedPhotos();markDirty();renderFields();
+  status('Photo added to slide preview. Download the Photo Pack and copy it into GitHub before publishing.',false,true);
+ }catch(error){status('Photo failed: '+error.message,true)}
+}
+async function downloadPhotos(){
+ if(!stagedPhotos.size)return;
+ try{busy=true;updateAuth();status('Building photo ZIP…');
+  const zip=await photoPackZip([...stagedPhotos].map(([name,item])=>({name:'docs/'+name,blob:item.blob})));
+  const url=URL.createObjectURL(zip),link=document.createElement('a');link.href=url;link.download='RPG_Story_Chapter_Photos.zip';link.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+  status('Photo Pack downloaded. Extract into the GitHub repository root, commit and push, then Publish to Students.',false,true);
+ }catch(error){status(error.message,true)}finally{busy=false;updateAuth()}
+}
+async function verifyImageFiles(payload){
+ const paths=[...new Set(payload.chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image).filter(Boolean))))];
+ if(!paths.length)return;
+ const missing=[];
+ // Limit concurrent requests to avoid a burst of classroom bandwidth use.
+ for(let i=0;i<paths.length;i+=6){await Promise.all(paths.slice(i,i+6).map(async img=>{
+  try{const response=await fetch(img+'?story-photo-check='+Date.now(),{cache:'no-store'});
+   if(!response.ok||!/^image\//i.test(response.headers.get('content-type')||''))missing.push(img);
+  }catch{missing.push(img)}
+ }));if(missing.length>0)break;}
+ if(missing.length)throw Error(`Some chapter photos are not available on this website yet: ${missing.slice(0,3).join(', ')}. Upload the Photo Pack to GitHub and push first.`);
+}
 function renderNav(){
  $('chapterList').innerHTML=chapters.map((c,i)=>`<div class="navrow"><button class="navitem" data-action="select-chapter" data-i="${i}" aria-current="${i===chapterIndex}">${esc(c.id)} · ${esc(c.title)}</button><div class="navcontrols"><button data-action="chapter-up" data-i="${i}" ${i===0?'disabled':''} aria-label="Move chapter up">▲</button><button data-action="chapter-down" data-i="${i}" ${i===chapters.length-1?'disabled':''} aria-label="Move chapter down">▼</button></div></div>`).join('');
  const ch=currentChapter();
  $('stageList').innerHTML=(ch?.stages||[]).map((st,i)=>`<div class="navrow"><button class="navitem" data-action="select-stage" data-i="${i}" aria-current="${i===stageIndex}">${esc(st.id)} · ${esc(st.title)}</button><div class="navcontrols"><button data-action="stage-up" data-i="${i}" ${i===0?'disabled':''} aria-label="Move stage up">▲</button><button data-action="stage-down" data-i="${i}" ${i===ch.stages.length-1?'disabled':''} aria-label="Move stage down">▼</button></div></div>`).join('');
  $('addStage').disabled=!ch||busy;$('addChapter').disabled=busy;
 }
-function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${safeStoryImage(scene.image)?esc(scene.image):'story/images/placeholder-01.svg'}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image path</label><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
+function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${esc(scenePreview(scene))}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image path</label><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><label class="filebutton small">Select Photo<input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-photo-phase="${phase}" data-photo-index="${i}" hidden></label><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
 function renderFields(){
  const ch=currentChapter(),st=currentStage();
  if(!ch||!st){$('chapterFields').textContent='Select a chapter and stage.';$('stageFields').textContent='';$('slidesEditor').textContent='';return;}
  $('chapterFields').innerHTML=`<div class="editheading"><h2>Chapter ${esc(ch.id)}</h2><button class="danger" data-action="delete-chapter">Delete Chapter</button></div><div class="grid"><div class="field"><label for="ch-title">Chapter title</label><input id="ch-title" data-chapter-field="title" maxlength="80" value="${esc(ch.title)}"></div><div class="field"><label for="ch-subtitle">Subtitle</label><input id="ch-subtitle" data-chapter-field="subtitle" maxlength="150" value="${esc(ch.subtitle||'')}"></div></div>`;
- $('stageFields').innerHTML=`<section class="section"><div class="editheading"><h2>Stage ${esc(st.id)}</h2><div class="row"><a href="game-settings.html?mode=story&amp;stage=${encodeURIComponent(st.id)}">Stage difficulty / mechanics</a><button class="danger" data-action="delete-stage">Delete Stage</button></div></div><div class="grid"><div class="field"><label for="st-title">Stage title</label><input id="st-title" data-stage-field="title" maxlength="85" value="${esc(st.title)}"></div><div class="field"><label for="st-type">Stage type</label><select id="st-type" data-stage-field="type"><option value="story-battle" ${st.type==='story-battle'?'selected':''}>Story + Battle</option><option value="story-only" ${st.type==='story-only'?'selected':''}>Story Only</option><option value="battle-only" ${st.type==='battle-only'?'selected':''}>Battle Only</option></select></div></div><div class="field"><label for="st-desc">Stage description</label><textarea id="st-desc" data-stage-field="description" maxlength="600" rows="2">${esc(st.description||'')}</textarea></div><div class="grid"><div class="field"><label for="st-template">Battle template (1–5)</label><input id="st-template" type="number" min="1" max="5" step="1" data-battle-field="template" value="${esc(st.battle?.template??1)}"></div><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP (1–999)</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"></div></div><p class="muted">Advanced falling speed, spawn rate, and mechanics are in Game Settings. Stage ID ${esc(st.id)} cannot be edited because it identifies existing player progress.</p></section>`;
+ const numericFields=Object.entries(STAGE_FIELDS).map(([key,[label,min,max,step]])=>{
+  const own=st.battle?.[key];const actual=own??inherited(key,st).value;
+  return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${esc(actual)}"><span class="muted" data-current-field="${key}">Current: ${esc(actual)}</span></div>`;
+ }).join('');
+ $('stageFields').innerHTML=`<section class="section"><div class="editheading"><h2>Stage ${esc(st.id)}</h2><button class="danger" data-action="delete-stage">Delete Stage</button></div>
+ <div class="grid"><div class="field"><label for="st-title">Stage title</label><input id="st-title" data-stage-field="title" maxlength="85" value="${esc(st.title)}"></div><div class="field"><label for="st-type">Stage type</label><select id="st-type" data-stage-field="type"><option value="story-battle" ${st.type==='story-battle'?'selected':''}>Story + Battle</option><option value="story-only" ${st.type==='story-only'?'selected':''}>Story Only</option><option value="battle-only" ${st.type==='battle-only'?'selected':''}>Battle Only</option></select></div></div>
+ <div class="field"><label for="st-desc">Stage description</label><textarea id="st-desc" data-stage-field="description" maxlength="600" rows="2">${esc(st.description||'')}</textarea></div>
+ <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status">Current values shown below. Stage overrides are saved with this chapter.</p>
+ <div class="grid"><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"><span class="muted">Current: ${esc(st.battle?.bossHp??20)} HP</span></div>${numericFields}</div></div>
+ <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Story-specific settings are published with the chapter; no code comes from Firebase.</p></div>
+ <p class="muted">Stage ID ${esc(st.id)} is fixed because it identifies student progress. Chapter changes take effect the next time a student starts Story Mode.</p></section>`;
+ fillLiveValues()
  const preceding=chapters.flatMap(x=>x.stages).slice(0,chapters.flatMap(x=>x.stages).findIndex(x=>x.id===st.id));
  const unlock=st.unlock||{stageId:'',minStars:0},limits=st.stars?.damageMax||[0,1,2,3];
  const choices=preceding.map(x=>`<option value="${esc(x.id)}" ${unlock.stageId===x.id?'selected':''}>${esc(x.id)} — ${esc(x.title)}</option>`).join('');
@@ -53,11 +155,11 @@ function renderFields(){
  $('slidesEditor').innerHTML=slideMarkup(st,'intro')+slideMarkup(st,'outro');
  for(const img of $('slidesEditor').querySelectorAll('img[data-scene-preview]'))img.addEventListener('error',()=>{img.removeAttribute('src');img.alt='Image not found. Add it to docs/story/images/ first.';});
 }
-function render(){renderNav();renderFields();updateAuth();}
+function render(){renderNav();renderFields();updateAuth();void loadLiveValues();}
 function moveSelection(kind,index,d){const arr=kind==='chapter'?chapters:currentChapter()?.stages;if(!arr||!swap(arr,index,index+d))return;if(kind==='chapter')chapterIndex=index+d;else stageIndex=index+d;markDirty();render();}
 function handleNavClick(event){const btn=event.target.closest('button[data-action]');if(!btn||busy)return;const a=btn.dataset.action,i=Number(btn.dataset.i);
  if(a==='select-chapter'){chapterIndex=i;stageIndex=0;render();return;}
- if(a==='select-stage'){stageIndex=i;renderFields();renderNav();return;}
+ if(a==='select-stage'){stageIndex=i;renderFields();renderNav();void loadLiveValues();return;}
  if(a==='chapter-up')moveSelection('chapter',i,-1);
  if(a==='chapter-down')moveSelection('chapter',i,1);
  if(a==='stage-up')moveSelection('stage',i,-1);
@@ -66,11 +168,17 @@ function handleNavClick(event){const btn=event.target.closest('button[data-actio
 function handleEditorInput(event){const t=event.target,st=currentStage(),ch=currentChapter();if(!ch||!st)return;
  if(t.dataset.chapterField)ch[t.dataset.chapterField]=t.value;
  else if(t.dataset.stageField)st[t.dataset.stageField]=t.value;
- else if(t.dataset.battleField)st.battle[t.dataset.battleField]=t.type==='number'?(t.value===''?null:Number(t.value)):t.value;
+ else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='number'?(t.value===''?null:Number(t.value)):t.value;fillLiveValues();}
+ else if(t.dataset.mechanicId){
+  const m=catalog().find(x=>x.id===t.dataset.mechanicId),field=m?.fields.find(x=>x.key===t.dataset.mechanicKey);if(!field)return;
+  const value=field.type==='boolean'?t.value==='true':Number(t.value);
+  if(field.type==='number'&&(!Number.isFinite(value)||value<field.min||value>field.max)){status('Mechanic field must be within its allowed range.',true);return}
+  st.battle.mechanics ||= {};st.battle.mechanics[m.id] ||= {};st.battle.mechanics[m.id][field.key]=value;
+ }
  else if(t.dataset.unlockField){st.unlock ||= {stageId:'',minStars:0};st.unlock[t.dataset.unlockField]=t.dataset.unlockField==='minStars'?Number(t.value):t.value;
  }else if(t.dataset.starIndex!==undefined){st.stars ||= {damageMax:[0,1,2,3]};st.stars.damageMax[Number(t.dataset.starIndex)]=t.value===''?null:Number(t.value);
  }else if(t.dataset.scenePhase){const scene=st[t.dataset.scenePhase]?.[Number(t.dataset.sceneIndex)];if(!scene)return;scene[t.dataset.sceneKey]=t.value;
-  if(t.dataset.sceneKey==='image'){const img=$('slidesEditor').querySelector(`img[data-scene-preview="${t.dataset.scenePhase}:${t.dataset.sceneIndex}"]`);if(img){if(safeStoryImage(t.value)){img.src=t.value;}else img.removeAttribute('src');}}
+  if(t.dataset.sceneKey==='image'){dropUnusedPhotos();const img=$('slidesEditor').querySelector(`img[data-scene-preview="${t.dataset.scenePhase}:${t.dataset.sceneIndex}"]`);if(img){if(safeStoryImage(t.value)){img.src=t.value;}else img.removeAttribute('src');}}
  }else return;
  markDirty();
  if(t.dataset.chapterField==='title'||t.dataset.stageField==='title')renderNav();
@@ -89,7 +197,7 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
  }else if(a==='slide-up'){if(!swap(st[phase],i,i-1))return;
  }else if(a==='slide-down'){if(!swap(st[phase],i,i+1))return;
  }else return;
- markDirty();render();
+ dropUnusedPhotos();markDirty();render();
 }
 function setLoaded(manifest,revision=0){const normalized=cleanStory(manifest);chapters=normalized.chapters;loadedRevision=revision;chapterIndex=0;stageIndex=0;dirty=false;}
 function restoreRetired(source){retiredStages=new Set((source.retiredStageIds||[]).filter(s=>/^[1-9]\d{0,3}-[1-9]\d{0,3}$/.test(String(s))));retiredChapters=new Set((source.retiredChapterIds||[]).filter(s=>/^[1-9]\d{0,3}$/.test(String(s))));}
@@ -114,7 +222,7 @@ async function loadRemote(useDraft=false){
  }catch(e){status('Story failed to load: '+errorMessage(e),true);}
  finally{busy=false;updateAuth();}
 }
-async function signIn(){try{teacher=await googleTeacher();if(!checkAuth())throw Error('This Google account is not the authorized teacher.');status('Authorized teacher signed in.',false,true);updateAuth();}
+async function signIn(){try{teacher=await googleTeacher();if(!checkAuth())throw Error('This Google account is not the authorized teacher.');status('Authorized teacher signed in.',false,true);updateAuth();void loadLiveValues();}
  catch(e){status(errorMessage(e),true);teacher=await currentTeacher();updateAuth();}}
 async function publish(){
  if(!checkAuth()){status('Sign in using the authorized teacher Google account.',true);return;}
@@ -122,8 +230,10 @@ async function publish(){
  const previous=publishedOrder.join('|'),newOrder=currentOrder().join('|');
  if(previous!==newOrder&&loadedRevision>0&&!confirm('You changed or deleted published stage order. Unlock progression may change for existing students. Publish anyway?'))return;
  if(!confirm(`Publish ${chapters.length} chapters / ${newOrder.split('|').length} stages to students?`))return;
- busy=true;updateAuth();status('Publishing to Firebase…');
+ busy=true;updateAuth();status('Checking chapter photos…');
  try{
+  await verifyImageFiles(payload);
+  status('Publishing to Firebase…');
   const reference=doc(db,'storyContent','published');let next;
   if(currentOrder().some(id=>retiredStages.has(id)))throw Error('The story contains a retired stage ID. Change the imported file to use a new ID, or undo the deletion.');
   if(chapters.some(ch=>retiredChapters.has(ch.id)))throw Error('The story contains a retired chapter ID. Change the imported file to use a new ID.');
@@ -144,18 +254,20 @@ function exportFile(){try{const payload=cleanStory({chapters});const output={...
 async function importFile(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;
  try{if(file.size>750000)throw Error('JSON file exceeds 750 KB.');const incoming=JSON.parse(await file.text());const normalized=cleanStory(incoming);
   if(!confirm(`Replace the editor draft with ${normalized.chapters.length} imported chapters? Nothing is published yet.`))return;
-  chapters=normalized.chapters;restoreRetired(incoming);chapterIndex=0;stageIndex=0;markDirty();render();
+  clearPhotoSelection();chapters=normalized.chapters;restoreRetired(incoming);chapterIndex=0;stageIndex=0;markDirty();render();
  }catch(e){status('Import failed: '+e.message,true);}}
 async function boot(){
  $('chapterList').addEventListener('click',handleNavClick);$('stageList').addEventListener('click',handleNavClick);
  $('chapterFields').addEventListener('input',handleEditorInput);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
+ $('slidesEditor').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-photo-phase]'))void addPhoto(event);});
  $('chapterFields').addEventListener('click',editorAction);$('stageFields').addEventListener('click',editorAction);$('slidesEditor').addEventListener('click',editorAction);
  $('addChapter').onclick=()=>{const id=nextChapterId(),ch={id,title:`Chapter ${id}`,subtitle:'',stages:[]};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();};
  $('addStage').onclick=()=>{const ch=currentChapter();if(!ch)return;if(ch.stages.length>=60){status('Maximum 60 stages per chapter.',true);return;}ch.stages.push(newStage(ch));stageIndex=ch.stages.length-1;markDirty();render();};
  $('saveDraft').onclick=()=>{try{writeDraft()}catch(e){status('Could not save local draft: '+e.message,true)}};
+ $('downloadPhotos').onclick=downloadPhotos;
  $('export').onclick=exportFile;$('import').onchange=importFile;$('publish').onclick=publish;
- $('google').onclick=signIn;$('signout').onclick=async()=>{try{await teacherSignOut();teacher=null;updateAuth();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
- $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard local edits and the saved draft, then reload published chapters?'))return;}localStorage.removeItem(DRAFT_KEY);await loadRemote(false);};
+ $('google').onclick=signIn;$('signout').onclick=async()=>{try{await teacherSignOut();teacher=null;liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
+ $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard local edits and the saved draft, then reload published chapters?'))return;}localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();await loadRemote(false);};
  try{teacher=await currentTeacher();}catch(e){status(errorMessage(e),true)}
  updateAuth();await loadRemote(true);
  if(teacher&&!checkAuth())status('The current Google account is not authorized to publish. Sign out, then use the teacher account.',true);

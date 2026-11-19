@@ -21,6 +21,25 @@ export function cleanStory(raw){
    if(!title||title.length>85||description.length>600)throw Error(`Stage ${id}: title required (max 85), description max 600.`);
    if(!['story-only','battle-only','story-battle'].includes(st.type))throw Error(`Stage ${id}: invalid type.`);
    const battle={template:Number(st.battle?.template??1),bossName:String(st.battle?.bossName??'Story Boss').trim(),bossHp:Number(st.battle?.bossHp??20)};
+   const numericRanges={fallSpeedPxPerSec:[5,250],spawnEveryMs:[180,15000],hitDamage:[1,100]};
+   for(const [key,[min,max]] of Object.entries(numericRanges)){
+    const rawValue=st.battle?.[key];
+    if(rawValue===undefined||rawValue===null)continue;
+    if(typeof rawValue!=='number'||!Number.isFinite(rawValue)||rawValue<min||rawValue>max)throw Error(`Stage ${id}: invalid ${key} (${min}–${max}).`);
+    battle[key]=rawValue;
+   }
+   const rawMechanics=st.battle?.mechanics||{};
+   if(typeof rawMechanics!=='object'||Array.isArray(rawMechanics)||rawMechanics===null||Object.keys(rawMechanics).length>24)throw Error(`Stage ${id}: invalid word mechanics.`);
+   battle.mechanics={};
+   for(const [mechanicId,settings] of Object.entries(rawMechanics)){
+    if(!/^[a-z][a-z0-9_]{0,47}$/.test(mechanicId)||!settings||typeof settings!=='object'||Array.isArray(settings)||Object.keys(settings).length>32)throw Error(`Stage ${id}: invalid word mechanic ${mechanicId}.`);
+    const clean={};
+    for(const [key,value] of Object.entries(settings)){
+     if(!/^[a-zA-Z][a-zA-Z0-9_]{0,47}$/.test(key)||!(typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value)&&value>=-100000&&value<=100000))throw Error(`Stage ${id}: unsafe mechanic setting ${key}.`);
+     clean[key]=value;
+    }
+    battle.mechanics[mechanicId]=clean;
+   }
    if(!Number.isInteger(battle.template)||battle.template<1||battle.template>5||!battle.bossName||battle.bossName.length>40||!Number.isInteger(battle.bossHp)||battle.bossHp<1||battle.bossHp>999)throw Error(`Stage ${id}: invalid battle template, boss name or HP.`);
    function scenes(items,phase){
     if(!Array.isArray(items)||items.length>50)throw Error(`Stage ${id}: too many ${phase} slides (max 50).`);

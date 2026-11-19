@@ -512,3 +512,6 @@ body.adventure-client .operator-lupa-timer-value {
 
 /* v86.45 — clear indication that Anodyne medicine can exceed base maximum HP. */
 #playerHpText.operator-anodyne-overheal{color:#a6f5db!important;text-shadow:0 0 7px rgba(64,255,173,.55)}
+
+/* Story Editor example mechanic: visibly mark slowed or sped-up words. */
+.word.story-drifting-word{outline:2px dashed #9a70d2;outline-offset:2px}
