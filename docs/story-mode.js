@@ -1,5 +1,5 @@
 /* RPG Typing Versus — progressive Story Map & damage-based stars.
-   Content remains in story/chapters.json. Ratings are never currency/rewards. */
+   Published chapters load from Firestore; static JSON is the initial fallback. Ratings are never currency/rewards. */
 (function(){
 'use strict';
 const identity=window.ADVENTURE_PLAYER||{};
@@ -9,7 +9,13 @@ const STAR_STORAGE='rpg_story_best_stars_v1__'+scope;
 const validId=id=>/^[1-9]\d{0,3}-[1-9]\d{0,3}$/.test(String(id||''));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clampStars=n=>Math.max(0,Math.min(4,Math.trunc(Number(n)||0)));
-const starsForDamage=damage=>damage<=0?4:damage<=1?3:damage<=2?2:damage<=3?1:0;
+const starsForDamage=(damage,stageId=null)=>{
+ const st=chapters?.flatMap(ch=>ch.stages).find(s=>s.id===stageId);
+ const limits=st?.stars?.damageMax||[0,1,2,3];
+ const n=Math.max(0,Math.floor(Number(damage)||0));
+ for(let i=0;i<4;i++)if(n<=limits[i])return 4-i;
+ return 0;
+};
 let chapters=null,completed=new Set(),bestStars={},startFn=null,view='closed',activeChapter=0,selectedId=null;
 let autoTimer=0;
 const box=document.createElement('div');box.id='storyRoot';box.hidden=true;document.body.appendChild(box);
@@ -34,15 +40,28 @@ function normalizeManifest(raw){
    for(const st of (Array.isArray(ch.stages)?ch.stages:[]).slice(0,100)){
      const id=String(st.id||'');if(!validId(id)||ids.has(id))continue;ids.add(id);
      const cleanScenes=arr=>(Array.isArray(arr)?arr:[]).slice(0,100).map(x=>({image:String(x.image||''),caption:String(x.caption||'').slice(0,300)}));
-     chapter.stages.push({id,title:String(st.title||id).slice(0,85),description:String(st.description||'').slice(0,600),type:['story-only','battle-only','story-battle'].includes(st.type)?st.type:'story-battle',intro:cleanScenes(st.intro),outro:cleanScenes(st.outro),battle:{template:Math.max(1,Math.min(5,Number(st.battle?.template)||1)),bossName:String(st.battle?.bossName||'Story Boss').slice(0,40),bossHp:Math.max(1,Math.min(999,Number(st.battle?.bossHp)||20))}});
+     chapter.stages.push({id,title:String(st.title||id).slice(0,85),description:String(st.description||'').slice(0,600),type:['story-only','battle-only','story-battle'].includes(st.type)?st.type:'story-battle',intro:cleanScenes(st.intro),outro:cleanScenes(st.outro),stars:{damageMax:Array.isArray(st.stars?.damageMax)&&st.stars.damageMax.length===4?st.stars.damageMax:[0,1,2,3]},unlock:{stageId:String(st.unlock?.stageId||''),minStars:Math.max(0,Math.min(4,Number(st.unlock?.minStars)||0))},battle:{template:Math.max(1,Math.min(5,Number(st.battle?.template)||1)),bossName:String(st.battle?.bossName||'Story Boss').slice(0,40),bossHp:Math.max(1,Math.min(999,Number(st.battle?.bossHp)||20))}});
    }
    if(chapter.stages.length)chaptersOut.push(chapter);
  }
  if(!chaptersOut.length)throw Error('No story stages available.');
  return chaptersOut;
 }
-async function loadManifest(){if(chapters)return chapters;const r=await fetch('story/chapters.json',{cache:'no-store'});if(!r.ok)throw Error('Unable to load story/chapters.json');chapters=normalizeManifest(await r.json());return chapters;}
-function isUnlocked(id){const items=allStages();const at=items.findIndex(x=>x.id===id);return at===0||(at>0&&completed.has(items[at-1].id))}
+async function loadManifest(refresh=false){
+ if(chapters&&!refresh)return chapters;
+ // Do not silently revert to stale static chapters if a Firestore read fails.
+ const {loadEffectiveStory}=await import('./story-content-cloud.js?v=87.0');
+ const {manifest}=await loadEffectiveStory();
+ chapters=normalizeManifest(manifest);
+ return chapters;
+}
+function isUnlocked(id){
+ const items=allStages(),at=items.findIndex(x=>x.id===id);
+ if(at===0)return true;if(at<0)return false;
+ const stage=items[at],required=stage.unlock?.stageId||items[at-1].id;
+ if(!completed.has(required))return false;
+ return (bestStars[required]??0)>=(stage.unlock?.minStars||0);
+}
 function show(html){box.hidden=false;view='active';box.innerHTML=`<div class="story-screen">${html}</div>`;}
 function hide(){clearTimeout(autoTimer);autoTimer=0;box.hidden=true;box.innerHTML='';view='closed'}
 function errorScreen(msg){show(`<div class="story-modal"><h1>STORY MODE</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=hide}
@@ -78,7 +97,7 @@ function openChapter(chIndex,preferred=null,focusTarget=''){
  if(focusTarget==='stage')target?.focus({preventScroll:true});
  else if(focusTarget==='chapter')box.querySelector('.story-chapter-tab.active')?.focus({preventScroll:true});
 }
-async function openMap(fn,preferred){if(typeof fn==='function')startFn=fn;try{await loadManifest();await loadProgress();openChapter(activeChapter,preferred)}catch(e){errorScreen(e.message||'Story unavailable')}}
+async function openMap(fn,preferred){if(typeof fn==='function')startFn=fn;try{await loadManifest(true);await loadProgress();openChapter(activeChapter,preferred)}catch(e){errorScreen(e.message||'Story unavailable')}}
 document.addEventListener('keydown',e=>{
  if(e.key==='Escape' && !box.hidden && view==='map'){
   e.preventDefault();hide();
@@ -120,7 +139,7 @@ async function markCompleted(id,result={}){
  let stars=null;
  if(battle){
    const damage=Math.max(0,Math.floor(Number(result.damageTaken)||0));
-   stars=starsForDamage(damage);
+   stars=starsForDamage(damage,id);
    bestStars[id]=Math.max(bestStars[id]??0,stars);
  }
  const saved=await serverProgress('save');

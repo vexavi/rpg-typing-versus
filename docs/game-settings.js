@@ -1,6 +1,7 @@
 import {currentTeacher,googleTeacher,teacherSignOut,errorMessage} from './cloud-api.js';
 import {getFirestore,doc,getDoc,setDoc,deleteDoc,serverTimestamp,runTransaction} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
+import {loadEffectiveStory} from './story-content-cloud.js';
 const el=id=>document.getElementById(id);let teacher=null,db=null,chapters=[],ready=false,reading=0;
 const fields={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,20],bossMaxHp:['Boss HP',1,2000,1],hitDamage:['Damage / word',1,100,1]};
 const options=list=>list.map(([id,label])=>{const o=document.createElement('option');o.value=id;o.textContent=label;return o});
@@ -98,10 +99,18 @@ async function clear(){if(!teacher)return;
 async function signIn(){try{teacher=await googleTeacher();db=getFirestore(getApp());ready=true;syncAuth();await load()}catch(e){message(errorMessage(e),true)}}
 function syncAuth(){el('google').classList.toggle('hidden',!!teacher);el('signout').classList.toggle('hidden',!teacher)}
 async function boot(){initInputs();
- try{const manifest=await fetch('story/chapters.json',{cache:'no-store'}).then(r=>r.json());chapters=manifest.chapters||[];}catch(_){chapters=[{id:'1',title:'Chapter 1',stages:[{id:'1-1',title:'Stage 1-1'}]}]}
+ try{const {manifest}=await loadEffectiveStory();chapters=manifest.chapters||[];}
+ catch(e){message('Could not load published chapters: '+errorMessage(e),true);chapters=[];}
  for(const name of ['mode','scope','chapter','stage'])el(name).addEventListener('change',()=>{
   if(name==='mode'||name==='chapter')refreshChoices();void load();
  });
+ const direct=new URLSearchParams(location.search);
+ if(direct.get('mode')==='story'){
+  el('mode').value='story';el('scope').value='stage';refreshChoices();
+  const target=String(direct.get('stage')||'');
+  const owner=chapters.find(ch=>ch.stages.some(st=>String(st.id)===target));
+  if(owner){el('chapter').value=String(owner.id);refreshChoices();el('stage').value=target;}
+ }
  el('google').onclick=signIn;el('signout').onclick=async()=>{await teacherSignOut();teacher=null;syncAuth();await load()};
  el('save').onclick=save;el('reset').onclick=clear;
  try{teacher=await currentTeacher();db=getFirestore(getApp());ready=true;}catch(e){message(errorMessage(e),true)}

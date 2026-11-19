@@ -1,0 +1,55 @@
+/* Pure validation/normalization; imported by the teacher editor and testable in Node.
+ * Stable identifiers are essential to player progress and Game Settings overrides.
+ */
+export const safeStoryImage = s => /^story\/images\/[\w.-]+\.(png|webp|jpg|jpeg|svg)$/i.test(String(s||''));
+export function cleanStory(raw){
+ if(!raw||!Array.isArray(raw.chapters)||!raw.chapters.length||raw.chapters.length>40)throw Error('Story must have 1–40 chapters.');
+ const seen=new Set(),chapters=[],chapterIds=new Set();let totalStages=0;
+ for(const ch of raw.chapters){
+  const chId=String(ch.id??'');
+  if(!/^[1-9]\d{0,3}$/.test(chId)||chapterIds.has(chId))throw Error('Chapter IDs must be unique positive numbers.');
+  chapterIds.add(chId);
+  const title=String(ch.title||'').trim(),subtitle=String(ch.subtitle||'').trim();
+  if(!title||title.length>80||subtitle.length>150)throw Error(`Chapter ${chId}: title required (max 80) and subtitle max 150 characters.`);
+  if(!Array.isArray(ch.stages)||!ch.stages.length||ch.stages.length>60)throw Error(`Chapter ${chId} must contain 1–60 stages.`);
+  const stages=[];
+  for(const st of ch.stages){
+   const id=String(st.id||'');
+   if(!new RegExp('^'+chId+'-[1-9]\\d{0,3}$').test(id)||seen.has(id))throw Error(`Invalid or repeated stage ID: ${id}`);
+   seen.add(id);totalStages++;
+   const title=String(st.title||'').trim(),description=String(st.description||'').trim();
+   if(!title||title.length>85||description.length>600)throw Error(`Stage ${id}: title required (max 85), description max 600.`);
+   if(!['story-only','battle-only','story-battle'].includes(st.type))throw Error(`Stage ${id}: invalid type.`);
+   const battle={template:Number(st.battle?.template??1),bossName:String(st.battle?.bossName??'Story Boss').trim(),bossHp:Number(st.battle?.bossHp??20)};
+   if(!Number.isInteger(battle.template)||battle.template<1||battle.template>5||!battle.bossName||battle.bossName.length>40||!Number.isInteger(battle.bossHp)||battle.bossHp<1||battle.bossHp>999)throw Error(`Stage ${id}: invalid battle template, boss name or HP.`);
+   function scenes(items,phase){
+    if(!Array.isArray(items)||items.length>50)throw Error(`Stage ${id}: too many ${phase} slides (max 50).`);
+    return items.map((x,i)=>{const image=String(x.image||'').trim(),caption=String(x.caption||'');
+     if(image&&!safeStoryImage(image))throw Error(`Stage ${id} ${phase} slide ${i+1}: image must be a static story/images/... path.`);
+     if(caption.length>300)throw Error(`Stage ${id} ${phase} slide ${i+1}: caption over 300 characters.`);
+     return {image,caption};});
+   }
+   const defaults=[0,1,2,3];
+   const damageMax=st.stars?.damageMax===undefined?defaults:st.stars.damageMax;
+   if(!Array.isArray(damageMax)||damageMax.length!==4||damageMax.some((n,i)=>!Number.isInteger(n)||n<0||n>99||(i>0&&n<=damageMax[i-1])))throw Error(`Stage ${id}: star damage limits must be four increasing integers (0–99).`);
+   const unlock={stageId:String(st.unlock?.stageId||''),minStars:Number(st.unlock?.minStars??0)};
+   if(!Number.isInteger(unlock.minStars)||unlock.minStars<0||unlock.minStars>4)throw Error(`Stage ${id}: unlock stars must be 0–4.`);
+   stages.push({id,title,type:st.type,description,battle,stars:{damageMax:[...damageMax]},unlock,intro:scenes(st.intro,'intro'),outro:scenes(st.outro,'outro')});
+  }
+  chapters.push({id:chId,title,subtitle,stages});
+ }
+ if(totalStages>300)throw Error('Maximum 300 stages in a published story.');
+ const previous=[];
+ for(const stage of chapters.flatMap(ch=>ch.stages)){
+  const autoPrerequisite=previous.at(-1)?.id||'';
+  const required=stage.unlock.stageId||autoPrerequisite;
+  if(stage.unlock.stageId&&!previous.some(s=>s.id===stage.unlock.stageId))throw Error(`Stage ${stage.id}: prerequisite must be an earlier stage.`);
+  const prior=previous.find(s=>s.id===required);
+  if(stage.unlock.minStars>0&&(!prior||prior.type==='story-only'))throw Error(`Stage ${stage.id}: a star prerequisite needs an earlier battle stage.`);
+  if(!required&&stage.unlock.minStars>0)throw Error(`Stage ${stage.id}: the first stage cannot require stars.`);
+  previous.push(stage);
+ }
+ const result={version:1,chapters};
+ if(new TextEncoder().encode(JSON.stringify(result)).length>700000)throw Error('Story text exceeds 700 KB. Please split content or shorten captions before publishing.');
+ return result;
+}

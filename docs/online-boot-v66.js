@@ -158,7 +158,7 @@ async function load(identity,progress,{offline=false}={}){
  for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear],['bossTyping_extraCleared_v1',progress?.extra_clear]])localStorage.setItem(key(k),val?'1':'0');
  window.RPG_PERF?.begin('Game scripts');
  for(const file of ['story-mode.js','adventure_rewards.js','guild-coins.js','adventure_engine.js'])await new Promise((resolve,reject)=>{
-   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'86.45':file==='story-mode.js'?'86.9':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
+   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'87.0':file==='story-mode.js'?'87.0':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
  });
  window.RPG_PERF?.end('Game scripts');
  gate.remove();

@@ -6,6 +6,7 @@
     ['rankings-admin.html','Classes'],
     ['vocabulary-admin.html','Vocabulary'],
     ['game-settings.html','Game Settings'],
+    ['story-editor.html','Story Editor'],
     ['recruitment-admin.html','Featured Banner'],
     ['guild-grants.html','Guild Coins'],
     ['aura-admin.html','Shards'],

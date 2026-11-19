@@ -2910,7 +2910,7 @@ async function completeStoryStage(stage,damage=null){
   let result=null;
   if(runLocalOnly||window.RPG_V66_DISCONNECTED||!navigator.onLine){
     try{window.RPG_LOCAL_PRACTICE?.record({mode:'story',stageId:stage.id});}catch(_){}
-    const stars=damage===null?null:window.RPG_STORY.starsForDamage(damage);
+    const stars=damage===null?null:window.RPG_STORY.starsForDamage(damage,stage.id);
     result={stars,best:stars,firstClear:false,offline:true};
   }else{
     try{result=await window.RPG_STORY.markCompleted(stage.id,{isBattle:damage!==null,damageTaken:damage??0});}catch(e){console.warn(e)}
