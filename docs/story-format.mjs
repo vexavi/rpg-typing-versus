@@ -21,6 +21,9 @@ export function cleanStory(raw){
    if(!title||title.length>85||description.length>600)throw Error(`Stage ${id}: title required (max 85), description max 600.`);
    if(!['story-only','battle-only','story-battle'].includes(st.type))throw Error(`Stage ${id}: invalid type.`);
    const battle={template:Number(st.battle?.template??1),bossName:String(st.battle?.bossName??'Story Boss').trim(),bossHp:Number(st.battle?.bossHp??20)};
+   const bossSprite=String(st.battle?.bossSprite||'').trim();
+   if(bossSprite&&!safeStoryImage(bossSprite))throw Error(`Stage ${id}: boss sprite must be a static story/images/... image path.`);
+   if(bossSprite)battle.bossSprite=bossSprite;
    const numericRanges={fallSpeedPxPerSec:[5,250],spawnEveryMs:[180,15000],hitDamage:[1,100]};
    for(const [key,[min,max]] of Object.entries(numericRanges)){
     const rawValue=st.battle?.[key];

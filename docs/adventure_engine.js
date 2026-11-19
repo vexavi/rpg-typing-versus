@@ -2891,7 +2891,7 @@ async function launchStoryStage(stage){
       bossDialogue:"Ready for battle?",midFightDialogue:"",
       bossMaxHp:Math.max(1,Math.min(999,Math.floor(Number(stage.battle?.bossHp)||20))),
       ...Object.fromEntries(['fallSpeedPxPerSec','spawnEveryMs','hitDamage'].filter(k=>typeof stage.battle?.[k]==='number'&&Number.isFinite(stage.battle[k])).map(k=>[k,stage.battle[k]])),
-      bossFile:"",bossFile2:"",bgFile:"",playBgmFile:"",dialogueBgmFile:"",
+      bossFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.bossSprite||""))?String(stage.battle.bossSprite):""),bossFile2:"",bgFile:"",playBgmFile:"",dialogueBgmFile:"",
       words:WORDS};
   }else storyBattleStage=null;
   // Per-stage Story Editor values take priority over inherited Game Settings.
@@ -5601,6 +5601,8 @@ if(state === "landed"){
     }
 
     bossNormalSrc = normal;
+    // Chapter artwork may be illustrated rather than pixel art.
+    bossImg.style.imageRendering = currentMode === "story" ? "auto" : "";
 
     bossImg.style.display = "none";
     bossFallback.style.display = "grid";

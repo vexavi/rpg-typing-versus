@@ -11,7 +11,13 @@
     if(u.origin!==base.origin||!u.pathname.startsWith(base.pathname))return {present:true,url:value,external:true};
     const path=decodeURIComponent(u.pathname.slice(base.pathname.length));
     const entry=catalog[path];
-    if(!entry)return {present:false,url:'',missing:path};
+    if(!entry){
+      // Story Editor assets are published later via GitHub and won't exist in
+      // the build-time asset manifest. Permit safe same-origin Story images.
+      if(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(path))
+        return {present:true,url:u.href,path,bytes:0};
+      return {present:false,url:'',missing:path};
+    }
     u.searchParams.set('v',entry.hash);
     return {present:true,url:u.href,path,bytes:entry.bytes};
   }

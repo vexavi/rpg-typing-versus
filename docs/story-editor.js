@@ -88,7 +88,7 @@ function mechanicMarkup(st){
  }).join('');
 }
 function clearPhotoSelection(){for(const data of stagedPhotos.values())URL.revokeObjectURL(data.url);stagedPhotos.clear();updateAuth()}
-function dropUnusedPhotos(){const names=new Set(chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image))));for(const [key,item] of stagedPhotos)if(!names.has(key)){URL.revokeObjectURL(item.url);stagedPhotos.delete(key)}updateAuth()}
+function dropUnusedPhotos(){const names=new Set(chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image).concat(st.battle?.bossSprite?[st.battle.bossSprite]:[]))));for(const [key,item] of stagedPhotos)if(!names.has(key)){URL.revokeObjectURL(item.url);stagedPhotos.delete(key)}updateAuth()}
 async function addPhoto(event){
  const file=event.target.files?.[0];event.target.value='';if(!file)return;
  const st=currentStage(),phase=event.target.dataset.photoPhase,i=Number(event.target.dataset.photoIndex);
@@ -105,6 +105,23 @@ async function addPhoto(event){
   status('Photo added to slide preview. Download the Photo Pack and copy it into GitHub before publishing.',false,true);
  }catch(error){status('Photo failed: '+error.message,true)}
 }
+async function addBossSprite(event){
+ const file=event.target.files?.[0];event.target.value='';if(!file)return;
+ const st=currentStage(),ch=currentChapter();if(!st||!ch)return;
+ try{
+  status('Optimizing boss sprite…');const blob=await optimizePhoto(file);
+  if(currentStage()!==st)throw Error('Stage changed. Select the boss sprite again.');
+  if(stagedPhotos.size>=250)throw Error('At most 250 images can be staged. Download your current pack first.');
+  const ext=blob.type==='image/webp'?'webp':blob.type==='image/jpeg'?'jpg':blob.type==='image/png'?'png':null;
+  if(!ext)throw Error('Browser could not make a compatible boss sprite.');
+  const name=photoName(ch.id,st.id,'boss',0,file.name,Date.now().toString(36)+'-'+(++photoSerial)).replace(/\.webp$/,'.'+ext);
+  const path='story/images/'+name;
+  st.battle.bossSprite=path;
+  stagedPhotos.set(path,{blob,url:URL.createObjectURL(blob)});
+  dropUnusedPhotos();markDirty();renderFields();
+  status('Boss sprite selected. Download the Photo Pack and copy it into GitHub before publishing.',false,true);
+ }catch(error){status('Boss sprite failed: '+error.message,true)}
+}
 async function downloadPhotos(){
  if(!stagedPhotos.size)return;
  try{busy=true;updateAuth();status('Building photo ZIP…');
@@ -114,7 +131,7 @@ async function downloadPhotos(){
  }catch(error){status(error.message,true)}finally{busy=false;updateAuth()}
 }
 async function verifyImageFiles(payload){
- const paths=[...new Set(payload.chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image).filter(Boolean))))];
+ const paths=[...new Set(payload.chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image).concat(st.battle?.bossSprite?[st.battle.bossSprite]:[]).filter(Boolean))))];
  if(!paths.length)return;
  const missing=[];
  // Limit concurrent requests to avoid a burst of classroom bandwidth use.
@@ -144,7 +161,12 @@ function renderFields(){
  <div class="grid"><div class="field"><label for="st-title">Stage title</label><input id="st-title" data-stage-field="title" maxlength="85" value="${esc(st.title)}"></div><div class="field"><label for="st-type">Stage type</label><select id="st-type" data-stage-field="type"><option value="story-battle" ${st.type==='story-battle'?'selected':''}>Story + Battle</option><option value="story-only" ${st.type==='story-only'?'selected':''}>Story Only</option><option value="battle-only" ${st.type==='battle-only'?'selected':''}>Battle Only</option></select></div></div>
  <div class="field"><label for="st-desc">Stage description</label><textarea id="st-desc" data-stage-field="description" maxlength="600" rows="2">${esc(st.description||'')}</textarea></div>
  <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status">Current values shown below. Stage overrides are saved with this chapter.</p>
- <div class="grid"><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"><span class="muted">Current: ${esc(st.battle?.bossHp??20)} HP</span></div>${numericFields}</div></div>
+ <div class="grid"><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"><span class="muted">Current: ${esc(st.battle?.bossHp??20)} HP</span></div>${numericFields}</div>
+ <div class="boss-sprite-panel"><div><h4>Boss Sprite</h4><p class="muted">This sprite appears during this stage's battle. It does not change Normal or Extra Mode bosses.</p></div>
+ <div class="boss-sprite-row"><img id="boss-sprite-preview" ${st.battle?.bossSprite?`src="${esc(stagedPhotos.get(st.battle.bossSprite)?.url||(safeStoryImage(st.battle.bossSprite)?st.battle.bossSprite:''))}"`: ''} alt="${st.battle?.bossSprite?'Boss sprite preview':'No boss sprite selected'}">
+ <div class="boss-sprite-controls"><div class="field"><label for="st-bosssprite">Boss sprite image path</label><input id="st-bosssprite" data-battle-field="bossSprite" maxlength="180" value="${esc(st.battle?.bossSprite||'')}" placeholder="story/images/boss.webp"></div>
+ <div class="boss-sprite-actions"><label class="filebutton">Select Sprite<input type="file" data-boss-photo accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden></label><button type="button" data-action="remove-boss-sprite" class="danger" ${!st.battle?.bossSprite?'disabled':''}>Remove Sprite</button></div>
+ <p class="muted">Select Sprite → Download Photo Pack → upload to GitHub → Publish to Students.</p></div></div></div></div>
  <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Story-specific settings are published with the chapter; no code comes from Firebase.</p></div>
  <p class="muted">Stage ID ${esc(st.id)} is fixed because it identifies student progress. Chapter changes take effect the next time a student starts Story Mode.</p></section>`;
  fillLiveValues()
@@ -153,6 +175,7 @@ function renderFields(){
  const choices=preceding.map(x=>`<option value="${esc(x.id)}" ${unlock.stageId===x.id?'selected':''}>${esc(x.id)} — ${esc(x.title)}</option>`).join('');
  $('stageFields').insertAdjacentHTML('beforeend',`<section class="section"><h3>Stage Conditions</h3><div class="grid"><div class="field"><label for="unlockStage">Unlock after</label><select id="unlockStage" data-unlock-field="stageId"><option value="" ${!unlock.stageId?'selected':''}>Previous stage (default)</option>${choices}</select></div><div class="field"><label for="unlockStars">Stars needed on prerequisite</label><select id="unlockStars" data-unlock-field="minStars">${[0,1,2,3,4].map(n=>`<option value="${n}" ${Number(unlock.minStars)===n?'selected':''}>${n===0?'Clear only':n+' stars'}</option>`).join('')}</select></div></div><h3>Star Rating · Maximum Damage Taken</h3><div class="grid">${limits.map((n,i)=>`<div class="field"><label>${4-i}★ maximum damage</label><input type="number" min="0" max="99" step="1" data-star-index="${i}" value="${esc(n)}"></div>`).join('')}</div><p class="muted">Defaults: 4★ ≤0, 3★ ≤1, 2★ ≤2, 1★ ≤3. Lower ratings require larger damage limits. Star-gated stages must follow a battle stage.</p></section>`);
  $('slidesEditor').innerHTML=slideMarkup(st,'intro')+slideMarkup(st,'outro');
+ const bossPreview=$('boss-sprite-preview');if(bossPreview)bossPreview.addEventListener('error',()=>{bossPreview.removeAttribute('src');bossPreview.alt='Boss sprite not found. Upload it to docs/story/images/.';});
  for(const img of $('slidesEditor').querySelectorAll('img[data-scene-preview]'))img.addEventListener('error',()=>{img.removeAttribute('src');img.alt='Image not found. Add it to docs/story/images/ first.';});
 }
 function render(){renderNav();renderFields();updateAuth();void loadLiveValues();}
@@ -168,7 +191,7 @@ function handleNavClick(event){const btn=event.target.closest('button[data-actio
 function handleEditorInput(event){const t=event.target,st=currentStage(),ch=currentChapter();if(!ch||!st)return;
  if(t.dataset.chapterField)ch[t.dataset.chapterField]=t.value;
  else if(t.dataset.stageField)st[t.dataset.stageField]=t.value;
- else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='number'?(t.value===''?null:Number(t.value)):t.value;fillLiveValues();}
+ else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(t.dataset.battleField==='bossSprite'){dropUnusedPhotos();const img=$('boss-sprite-preview');if(img){if(safeStoryImage(t.value)){img.src=stagedPhotos.get(t.value)?.url||t.value}else img.removeAttribute('src');}}else fillLiveValues();}
  else if(t.dataset.mechanicId){
   const m=catalog().find(x=>x.id===t.dataset.mechanicId),field=m?.fields.find(x=>x.key===t.dataset.mechanicKey);if(!field)return;
   const value=field.type==='boolean'?t.value==='true':Number(t.value);
@@ -192,6 +215,7 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
   if(ch.stages.length===1){status('Every chapter needs at least one stage.',true);return;}
   if(!confirm(`Delete stage ${st.id} from the next publication? Existing progress for this stage will remain in student records.`))return;
   retiredStages.add(st.id);ch.stages.splice(stageIndex,1);stageIndex=Math.min(stageIndex,ch.stages.length-1);
+ }else if(a==='remove-boss-sprite'){st.battle.bossSprite='';
  }else if(a==='add-slide'){st[phase].push({image:'',caption:''});
  }else if(a==='delete-slide'){st[phase].splice(i,1);
  }else if(a==='slide-up'){if(!swap(st[phase],i,i-1))return;
@@ -259,6 +283,7 @@ async function importFile(event){const file=event.target.files?.[0];event.target
 async function boot(){
  $('chapterList').addEventListener('click',handleNavClick);$('stageList').addEventListener('click',handleNavClick);
  $('chapterFields').addEventListener('input',handleEditorInput);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
+ $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-boss-photo]'))void addBossSprite(event);});
  $('slidesEditor').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-photo-phase]'))void addPhoto(event);});
  $('chapterFields').addEventListener('click',editorAction);$('stageFields').addEventListener('click',editorAction);$('slidesEditor').addEventListener('click',editorAction);
  $('addChapter').onclick=()=>{const id=nextChapterId(),ch={id,title:`Chapter ${id}`,subtitle:'',stages:[]};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();};
