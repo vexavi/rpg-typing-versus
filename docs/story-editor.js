@@ -6,12 +6,15 @@ import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js'
 import {getFirestore,doc,runTransaction,serverTimestamp,getDocFromServer} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 import {loadPublishedStory,missingStoryRule} from './story-content-cloud.js';
 import {cleanStory,safeStoryImage} from './story-format.mjs';
-import {photoName,optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
+import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
+import {planImageRepairs,applyImageRepairs,stablePhotoName,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const DRAFT_KEY='rpg_story_teacher_draft_v87';
 const STAGE_BASE=[{fallSpeedPxPerSec:41,spawnEveryMs:2950,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,hitDamage:1}];
 const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Boss damage per word',1,100,1]};
-const stagedPhotos=new Map();let photoSerial=0,liveBalance={},liveRequestId=0;
+const stagedPhotos=new Map();let liveBalance={},liveRequestId=0;
+const REPO_KEY='rpg_story_github_repo_v90';
+let repairChoices=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=obj=>JSON.parse(JSON.stringify(obj));
@@ -99,10 +102,10 @@ async function addPhoto(event){
   if(stagedPhotos.size>=250)throw Error('At most 250 photos can be staged. Download your current pack first.');
   const ext=blob.type==='image/webp'?'webp':blob.type==='image/jpeg'?'jpg':blob.type==='image/png'?'png':null;
   if(!ext)throw Error('Browser could not make a compatible photo.');
-  const name=photoName(currentChapter().id,st.id,phase,i,file.name,Date.now().toString(36)+'-'+(++photoSerial)).replace(/\.webp$/,'.'+ext);
+  const name=await stablePhotoName(currentChapter().id,st.id,phase,i,blob);
   scene.image='story/images/'+name;
   stagedPhotos.set(scene.image,{blob,url:URL.createObjectURL(blob)});dropUnusedPhotos();markDirty();renderFields();
-  status('Photo added to slide preview. Download the Photo Pack and copy it into GitHub before publishing.',false,true);
+  status('Photo selected. The filename is now stable even if you select it again. Download the Photo Pack once, then push to GitHub.',false,true);
  }catch(error){status('Photo failed: '+error.message,true)}
 }
 async function addBossSprite(event){
@@ -114,12 +117,12 @@ async function addBossSprite(event){
   if(stagedPhotos.size>=250)throw Error('At most 250 images can be staged. Download your current pack first.');
   const ext=blob.type==='image/webp'?'webp':blob.type==='image/jpeg'?'jpg':blob.type==='image/png'?'png':null;
   if(!ext)throw Error('Browser could not make a compatible boss sprite.');
-  const name=photoName(ch.id,st.id,'boss',0,file.name,Date.now().toString(36)+'-'+(++photoSerial)).replace(/\.webp$/,'.'+ext);
+  const name=await stablePhotoName(ch.id,st.id,'boss',0,blob);
   const path='story/images/'+name;
   st.battle.bossSprite=path;
   stagedPhotos.set(path,{blob,url:URL.createObjectURL(blob)});
   dropUnusedPhotos();markDirty();renderFields();
-  status('Boss sprite selected. Download the Photo Pack and copy it into GitHub before publishing.',false,true);
+  status('Boss sprite selected with a stable filename. Download the Photo Pack once, then push to GitHub.',false,true);
  }catch(error){status('Boss sprite failed: '+error.message,true)}
 }
 async function downloadPhotos(){
@@ -130,17 +133,92 @@ async function downloadPhotos(){
   status('Photo Pack downloaded. Extract into the GitHub repository root, commit and push, then Publish to Students.',false,true);
  }catch(error){status(error.message,true)}finally{busy=false;updateAuth()}
 }
+// A missing photo can be repaired from the filenames already in the GitHub repository.
+// This only edits the local draft; Firestore is never written by a repair operation.
+function photoPaths(){return [...new Set(imageSlots(chapters).map(slot=>slot.from).filter(Boolean))];}
+async function photoOnline(path){
+ try{
+  const url=new URL(path,document.baseURI);
+  url.searchParams.set('check',String(Date.now()));
+  const response=await fetch(url.href,{method:'HEAD',cache:'no-store'});
+  if(response.ok && /^image\//i.test(response.headers.get('content-type')||''))return true;
+  // Some static hosts refuse HEAD, so use GET only in that case.
+  if(response.status!==405 && response.status!==501)return false;
+  const fallback=await fetch(url.href,{cache:'no-store'});
+  return fallback.ok && /^image\//i.test(fallback.headers.get('content-type')||'');
+ }catch{return false;}
+}
+function photoReport(rows){
+ const list=$('photoReport');if(!list)return;
+ list.innerHTML=rows.map(item=>`<li class="${item.ok?'photo-ok':'photo-bad'}">${esc(item.label)} — ${esc(item.text)}</li>`).join('');
+ $('photoReportPanel').hidden=rows.length===0;
+}
+async function checkPhotos(){
+ if(busy)return;busy=true;updateAuth();status('Checking chapter images on the published website…');
+ try{
+  const paths=photoPaths();let present=0,local=0;const rows=[];
+  for(let i=0;i<paths.length;i+=6){
+   const batch=await Promise.all(paths.slice(i,i+6).map(async path=>({path,ok:await photoOnline(path)})));
+   for(const item of batch){
+    if(item.ok)present++;
+    else if(stagedPhotos.has(item.path))local++;
+    rows.push({ok:item.ok,label:item.path.split('/').at(-1),text:item.ok?'Online ✓':stagedPhotos.has(item.path)?'Selected locally — needs GitHub upload':'Not found on published website'});
+   }
+  }
+  photoReport(rows);
+  const missing=paths.length-present;
+  status(missing?`${present}/${paths.length} images online. ${missing} unavailable (${local} still staged locally). Use Find Existing Images to fix wrong paths, or upload the missing files.`:`All ${present} chapter images are online. You can Publish to Students.`,missing>0,missing===0);
+ }finally{busy=false;updateAuth();}
+}
+function repairUsingNames(filenames,source){
+ const plan=planImageRepairs(chapters,filenames,[]); // Explicit repair must include previously selected images (v89's double-prefix bug).
+ if(plan.repairs.length){applyImageRepairs(plan);dropUnusedPhotos();markDirty();render();}
+ const extra=plan.ambiguous.length?` ${plan.ambiguous.length} entries have multiple candidate filenames and were not changed.`:'';
+ const other=plan.missing.length?` ${plan.missing.length} paths had no matching filename.`:'';
+ status(`${source}: corrected ${plan.repairs.length} image paths in your draft.${extra}${other} Click Check Images to verify the actual website before publishing.`,plan.ambiguous.length>0||plan.missing.length>0,false);
+ if(plan.ambiguous.length){
+  repairChoices=plan.ambiguous;
+  const panel=$('photoReport');
+  $('photoReportPanel').hidden=false;
+  panel.innerHTML=plan.ambiguous.map((item,index)=>`<li class="photo-bad photo-choice"><strong>${esc(item.label)}</strong><div class="choice-row"><img class="choice-preview" src="${esc('story/images/'+item.candidates[0])}" alt="Image candidate preview"><select data-repair-index="${index}" aria-label="Select correct photo">${item.candidates.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select><button data-action="apply-photo-fix" data-fix-index="${index}" type="button">Use this image</button></div></li>`).join('');
+ }else repairChoices=[];
+ return plan;
+}
+async function repairFromGithub(){
+ if(busy)return;
+ const repo=$('repoName').value.trim();
+ if(!validGithubRepo(repo)){status('Enter your GitHub repository as username/repository, or use Choose Local Images Folder.',true);return;}
+ localStorage.setItem(REPO_KEY,repo);
+ busy=true;updateAuth();status('Finding existing images in GitHub…');
+ try{
+  const response=await fetch(`https://api.github.com/repos/${repo}/contents/docs/story/images`,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});
+  if(!response.ok)throw Error(response.status===404?'Cannot find a public docs/story/images folder in this repository. Check the repository name, or choose the local folder.':`GitHub returned HTTP ${response.status}. Choose the local image folder instead.`);
+  const data=await response.json();if(!Array.isArray(data))throw Error('GitHub did not return an image directory.');
+  repairUsingNames(data.filter(x=>x.type==='file').map(x=>x.name),'GitHub scan');
+ }catch(error){status('Could not scan GitHub: '+error.message+' You can use Choose Local Images Folder below.',true);}
+ finally{busy=false;updateAuth();}
+}
+function repairFromLocalFolder(event){
+ const files=[...(event.target.files||[])];event.target.value='';
+ if(!files.length)return;
+ const candidates=files.filter(f=>/\.(?:png|webp|jpg|jpeg|svg)$/i.test(f.name));
+ const plan=repairUsingNames(candidates.map(f=>f.name),'Local folder scan');
+ // Do not stage or rename these files; they already have their existing filename.
+ // If a candidate isn't on GitHub Pages, the checker will clearly report it.
+ if(!plan.repairs.length && !plan.unchanged.length && !plan.ambiguous.length)status('No matching photos found in that folder. Please select your actual docs/story/images folder.',true);
+}
 async function verifyImageFiles(payload){
  const paths=[...new Set(payload.chapters.flatMap(ch=>ch.stages.flatMap(st=>[...st.intro,...st.outro].map(x=>x.image).concat(st.battle?.bossSprite?[st.battle.bossSprite]:[]).filter(Boolean))))];
  if(!paths.length)return;
  const missing=[];
- // Limit concurrent requests to avoid a burst of classroom bandwidth use.
- for(let i=0;i<paths.length;i+=6){await Promise.all(paths.slice(i,i+6).map(async img=>{
-  try{const response=await fetch(img+'?story-photo-check='+Date.now(),{cache:'no-store'});
-   if(!response.ok||!/^image\//i.test(response.headers.get('content-type')||''))missing.push(img);
-  }catch{missing.push(img)}
- }));if(missing.length>0)break;}
- if(missing.length)throw Error(`Some chapter photos are not available on this website yet: ${missing.slice(0,3).join(', ')}. Upload the Photo Pack to GitHub and push first.`);
+ for(let i=0;i<paths.length;i+=6){
+  const group=await Promise.all(paths.slice(i,i+6).map(async img=>({img,ok:await photoOnline(img)})));
+  missing.push(...group.filter(x=>!x.ok).map(x=>x.img));
+ }
+ if(missing.length){
+  photoReport(missing.map(path=>({ok:false,label:path.split('/').at(-1),text:stagedPhotos.has(path)?'Only stored in browser — upload photo pack':'Not on published website; use Find Existing Images'})));
+  throw Error(`${missing.length} chapter images cannot be found online. See the Photo Report below. Click Find Existing Images to repair old filenames; do not reselect or rename the photos.`);
+ }
 }
 function renderNav(){
  $('chapterList').innerHTML=chapters.map((c,i)=>`<div class="navrow"><button class="navitem" data-action="select-chapter" data-i="${i}" aria-current="${i===chapterIndex}">${esc(c.id)} · ${esc(c.title)}</button><div class="navcontrols"><button data-action="chapter-up" data-i="${i}" ${i===0?'disabled':''} aria-label="Move chapter up">▲</button><button data-action="chapter-down" data-i="${i}" ${i===chapters.length-1?'disabled':''} aria-label="Move chapter down">▼</button></div></div>`).join('');
@@ -290,6 +368,27 @@ async function boot(){
  $('addStage').onclick=()=>{const ch=currentChapter();if(!ch)return;if(ch.stages.length>=60){status('Maximum 60 stages per chapter.',true);return;}ch.stages.push(newStage(ch));stageIndex=ch.stages.length-1;markDirty();render();};
  $('saveDraft').onclick=()=>{try{writeDraft()}catch(e){status('Could not save local draft: '+e.message,true)}};
  $('downloadPhotos').onclick=downloadPhotos;
+ $('checkPhotos').onclick=()=>void checkPhotos();
+ $('repairGithub').onclick=()=>void repairFromGithub();
+ $('repairFolder').onchange=repairFromLocalFolder;
+ $('photoReport').addEventListener('change',e=>{
+  if(e.target.matches('select[data-repair-index]')){
+   const preview=e.target.closest('.choice-row')?.querySelector('img');
+   if(preview)preview.src='story/images/'+e.target.value;
+  }
+ });
+ $('photoReport').addEventListener('click',e=>{
+  const btn=e.target.closest('button[data-action="apply-photo-fix"]');if(!btn)return;
+  const item=repairChoices[Number(btn.dataset.fixIndex)];
+  const select=btn.closest('.choice-row')?.querySelector('select');
+  if(!item||!select||!item.candidates.includes(select.value))return;
+  if(item.kind==='boss')item.stage.battle.bossSprite='story/images/'+select.value;
+  else item.stage[item.kind][item.index].image='story/images/'+select.value;
+  btn.closest('.photo-choice')?.remove();markDirty();render();
+  status(`Assigned ${item.label} to ${select.value}. Click Check Images, then Publish to Students.`,false,true);
+ });
+ $('repoName').value=localStorage.getItem(REPO_KEY)||githubRepoGuess(location);
+ $('repoName').addEventListener('change',()=>{if(validGithubRepo($('repoName').value))localStorage.setItem(REPO_KEY,$('repoName').value.trim());});
  $('export').onclick=exportFile;$('import').onchange=importFile;$('publish').onclick=publish;
  $('google').onclick=signIn;$('signout').onclick=async()=>{try{await teacherSignOut();teacher=null;liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
  $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard local edits and the saved draft, then reload published chapters?'))return;}localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();await loadRemote(false);};
