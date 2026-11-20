@@ -25,8 +25,9 @@
       description:'Every 6 consecutive correct words, freeze all falling words and spawns for 2.5 seconds, then slow falling words 15% for 3 seconds. Mistakes reset the streak.'}),
     shield: Object.freeze({id:'shield',name:'Mara',rarity:5,title:'Reinforced Vitality / Shield Advance',maxHpBonus:3,upperHp:10,lowerHp:3,upperPushPct:10,lowerPushPct:35,freezeSec:2,
       description:'Passive 1: +3 maximum HP. Passive 2: below 10 HP, push falling words up 10%; below 3 HP, push them up 35% and freeze affected words for 2 seconds. Each threshold triggers once per stage. Stacked words and spawn pacing are unchanged.'}),
-    crossbow: Object.freeze({id:'crossbow',name:'Crossbow Operator',rarity:5,title:'Show-Off / Adrenaline Rush',every:5,showOffDamage:1,adrenalineHp:3,adrenalineDamage:1,
-      description:'Every 5 consecutive correctly typed words, mark the longest typeable word with a bullseye (spawn the longest word from the stage bank if the field is empty). Typing it deals +1 boss damage. Damage or a wrong answer resets the combo. Below 3 HP, all typeable words gain an adrenaline glow and deal +1 boss damage when typed; bonuses stack.'}),
+    crossbow: Object.freeze({id:'crossbow',name:'Fletcher',rarity:5,title:'Show-Off / Adrenaline Rush',every:5,showOffDamage:1,adrenalineHp:1,adrenalineDamage:1,
+      lastStandSeconds:3,lastStandSpeedMultiplier:0.1,lastStandSpawnFrequency:0.1,overdriveSpeedMultiplier:1.9,overdriveSpawnFrequency:1.9,
+      description:'Show-Off: every 5 consecutive correct words mark the longest typeable word (+1 boss damage if typed). Adrenaline Rush: at 1 HP, gain 3 seconds of invulnerability with 90% slower falling and 90% fewer spawns. Afterward, while at 1 HP, falling and spawning increase by 90%; typed words deal +1 boss damage and can stack with Show-Off. Last Stand can activate only once per stage.'}),
     anodyne: Object.freeze({id:'anodyne',name:'Anodyne',rarity:5,title:'Experimental Medicine',every:6,heal:2,slowPct:30,slowSec:5,suppressSec:4,
       description:'Every 6 correct words, administer one of three random medicines: Recovery Serum (+2 HP, can overheal), Cryogenic Solution (30% slower falling for 5 seconds), or Suppression Formula (no new spawns for up to 4 seconds; ends when no falling or stacked words remain).'}),
     seraphine: Object.freeze({id:'seraphine',name:'Seraphine',rarity:5,title:'Phantom Execution',every:5,pendingSec:3,
@@ -57,7 +58,7 @@
     let houndProgress=0,houndPhase='none',houndMarked=null,houndDeadline=0,houndChainHits=0,houndNeedSpawn=false;
     let cassianProgress=0,cassianGuardUntil=0;
     let anodyneProgress=0;
-    let crossbowCombo=0,crossbowTarget=null,adrenalineActive=false;
+    let crossbowCombo=0,crossbowTarget=null,adrenalineActive=false,adrenalineTriggered=false,adrenalineLastStandUntil=0;
     const crossbowTypeable=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.foxfireHidden&&Number.isFinite(w.y);
     function releaseCrossbowTarget(){
       crossbowTarget?.el?.classList?.remove('operator-crossbow-bullseye');crossbowTarget=null;
@@ -70,7 +71,10 @@
     }
     function syncAdrenaline(words,hp){
       if(rule?.id!=='crossbow')return false;
-      const active=Number(hp)>0&&Number(hp)<rule.adrenalineHp;
+      const active=Number(hp)===rule.adrenalineHp;
+      // Healing out of Last Stand cancels its remaining protection permanently.
+      // Restoring 1 HP again cannot restart a 3-second safety window.
+      if(!active&&adrenalineActive&&adrenalineTriggered)adrenalineLastStandUntil=0;
       if(adrenalineActive===active)return active;
       adrenalineActive=active;
       for(const word of (Array.isArray(words)?words:[])){
@@ -78,9 +82,21 @@
       }
       return active;
     }
+    // The emergency invulnerability can occur just once per stage. All timings
+    // use the pause-aware stage clock rather than wall-clock seconds.
+    function getAdrenalinePhase(time){
+      if(rule?.id!=='crossbow'||!adrenalineActive||!adrenalineTriggered)return 'off';
+      return validTime(time)<adrenalineLastStandUntil?'last-stand':'overdrive';
+    }
+    function getSpawnIntervalMultiplier(time){
+      const phase=getAdrenalinePhase(time);
+      if(phase==='last-stand')return 1/rule.lastStandSpawnFrequency;
+      if(phase==='overdrive')return 1/rule.overdriveSpawnFrequency;
+      return 1;
+    }
     function onWordSpawn(word,hp){
       if(rule?.id!=='crossbow')return;
-      if(crossbowTypeable(word))word.el?.classList?.toggle('operator-crossbow-adrenaline',Number(hp)>0&&Number(hp)<rule.adrenalineHp);
+      if(crossbowTypeable(word))word.el?.classList?.toggle('operator-crossbow-adrenaline',Number(hp)===rule.adrenalineHp);
     }
     function longestCrossbowWord(words){
       const available=(Array.isArray(words)?words:[]).filter(crossbowTypeable);
@@ -167,7 +183,7 @@
       endLupa();
       endHound();cassianProgress=0;cassianGuardUntil=0;anodyneProgress=0;
       shieldUpperUsed=false;shieldLowerUsed=false;releaseShieldFrozen();
-      releaseCrossbowTarget();crossbowCombo=0;adrenalineActive=false;
+      releaseCrossbowTarget();crossbowCombo=0;adrenalineActive=false;adrenalineTriggered=false;adrenalineLastStandUntil=0;
     }
     function tick(time){
       const t=validTime(time);
@@ -216,6 +232,10 @@
       if(rule.id==='livia')return rule.fallMultiplier;
       if((rule.id==='alden'||rule.id==='elise')&&t<slowUntil)return 1-rule.slowPct/100;
       if(rule.id==='anodyne'&&t<slowUntil)return 1-rule.slowPct/100;
+      if(rule.id==='crossbow'){
+        const phase=getAdrenalinePhase(t);
+        return phase==='last-stand'?rule.lastStandSpeedMultiplier:phase==='overdrive'?rule.overdriveSpeedMultiplier:1;
+      }
       if(rule.id==='isolde'){
         if(t<domainFreezeUntil)return 0;
         if(t<slowUntil)return 1-rule.slowPct/100;
@@ -253,6 +273,14 @@
       if(rule?.id==='crossbow'){
         if(nextHp<previousHp)crossbowCombo=0;
         syncAdrenaline(words,nextHp);
+        // Exactly 1 HP, reached through HP damage. A lethal hit ending at
+        // 0 HP does not grant an automatic revive or protection.
+        if(nextHp===rule.adrenalineHp&&previousHp>nextHp&&!adrenalineTriggered){
+          adrenalineTriggered=true;
+          adrenalineLastStandUntil=validTime(time)+rule.lastStandSeconds;
+          activations++;
+          return {type:'fletcher-last-stand',seconds:rule.lastStandSeconds,characterId:rule.id};
+        }
         return null;
       }
       if(rule?.id==='shield'){
@@ -292,7 +320,7 @@
         if(hit)releaseCrossbowTarget();
         tick(t);
         crossbowCombo++;
-        const adrenaline=Number(context.hp)>0&&Number(context.hp)<rule.adrenalineHp;
+        const adrenaline=Number(context.hp)===rule.adrenalineHp;
         const bonusDamage=(hit?rule.showOffDamage:0)+(adrenaline?rule.adrenalineDamage:0);
         if(crossbowCombo%rule.every===0){
           const word=longestCrossbowWord(words);
@@ -532,12 +560,13 @@
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
       cassianProgress,cassianGuardUntil,anodyneProgress,
       shieldUpperUsed,shieldLowerUsed,shieldFrozenIds:[...shieldFrozenWords.keys()],
-      crossbowCombo,crossbowTargetId:crossbowTarget?.id??null,adrenalineActive};}
-    function isInvulnerable(time){return rule?.id==='cassian'&&validTime(time)<cassianGuardUntil;}
+      crossbowCombo,crossbowTargetId:crossbowTarget?.id??null,adrenalineActive,
+      adrenalineTriggered,adrenalineLastStandUntil};}
+    function isInvulnerable(time){return (rule?.id==='cassian'&&validTime(time)<cassianGuardUntil)||getAdrenalinePhase(time)==='last-stand';}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,updateField,
       startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,
-      isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getMaxHpBonus,
+      isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
       isInvulnerable,isFoxfireHidden,debug});
   }
   window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create});

@@ -3476,6 +3476,9 @@ async function debugJumpTo(mode, idx){
   let selectedOperatorId=null;
   let activeOperatorId='mc';
   let operatorPassive=null;
+  let lastFletcherPhase='off';
+  let fletcherStatusEl=null;
+  let fletcherStatusLastText='';
   function equippedOperatorIconSrc(){
     const id=getSelectedOperator();
     return `assets/profile-icons/${id}.webp`;
@@ -3500,13 +3503,39 @@ async function debugJumpTo(mode, idx){
     activeOperatorId=operatorModeEligible()?getSelectedOperator():'mc';
     operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
   }
+  // Keeps one unobtrusive visible 3-second countdown inside the word lane.
+  function renderFletcherStatus(time){
+    const phase=operatorPassive?.getAdrenalinePhase?.(time)||'off';
+    if(phase==='off'){
+      fletcherStatusEl?.remove();fletcherStatusEl=null;fletcherStatusLastText='';
+      wordLane?.classList?.remove('operator-fletcher-last-stand','operator-fletcher-overdrive');
+      return;
+    }
+    wordLane?.classList?.toggle('operator-fletcher-last-stand',phase==='last-stand');
+    wordLane?.classList?.toggle('operator-fletcher-overdrive',phase==='overdrive');
+    if(!fletcherStatusEl||!fletcherStatusEl.isConnected){
+      fletcherStatusEl=document.createElement('div');
+      fletcherStatusEl.className='operator-fletcher-status';
+      fletcherStatusEl.setAttribute('role','timer');
+      fletcherStatusEl.setAttribute('aria-live','off');
+      wordLane?.appendChild(fletcherStatusEl);
+      fletcherStatusLastText='';
+    }
+    const until=operatorPassive?.debug?.().adrenalineLastStandUntil||0;
+    const text=phase==='last-stand'
+      ?`LAST STAND · ${Math.max(0,until-time).toFixed(1)}s`
+      :'OVERDRIVE · 1 HP';
+    if(text!==fletcherStatusLastText){fletcherStatusEl.textContent=text;fletcherStatusLastText=text;}
+  }
   function resetOperatorForStage(){
     operatorPassive?.reset();
+    lastFletcherPhase='off';
+    fletcherStatusEl?.remove();fletcherStatusEl=null;fletcherStatusLastText='';
     for(const word of wordsOnField){
       word.el?.classList?.remove('operator-crossbow-bullseye','operator-crossbow-adrenaline');
     }
     bossHpText?.classList?.remove('operator-weak-point-ready');
-    wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard');
+    wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard','operator-fletcher-last-stand','operator-fletcher-overdrive');
     operatorClearLupaVisuals();
   }
   function operatorStageWithoutBoss(){
@@ -6126,6 +6155,12 @@ function damagePlayer(amount, reason){
     const passiveEffect=operatorPassive?.onPlayerDamage(previousHp,playerHp,stageElapsedSec(),wordsOnField);
     if(passiveEffect?.type==='slowdown')pushMsg('ALDEN · SECOND WIND (5s)',true);
     else if(passiveEffect?.type==='shield-advance')applyOperatorFieldEffect(passiveEffect);
+    else if(passiveEffect?.type==='fletcher-last-stand'){
+      // Discard accumulated spawn time: no delayed spawn burst when the phase changes.
+      spawnAccMs=0;
+      pushMsg('FLETCHER · LAST STAND (3s INVULNERABLE)',true);
+      renderFletcherStatus(stageElapsedSec());
+    }
     if(currentMode !== 'shared') mechanicEvent('onPlayerDamage',null,{damage:scaled,reason});
     playPlayerHitSfx();
     flashPlayerDamage();
@@ -7035,9 +7070,16 @@ if(gameState === "paused"){
       updateEx2HackMechanic();
       operatorPassive?.tick(elapsed);
       operatorPassive?.syncAdrenaline?.(wordsOnField,playerHp);
+      const fletcherPhase=operatorPassive?.getAdrenalinePhase?.(elapsed)||'off';
+      if(fletcherPhase!==lastFletcherPhase){
+        spawnAccMs=0; // never burst pending words after switching phases
+        if(lastFletcherPhase==='last-stand'&&fletcherPhase==='overdrive')pushMsg('FLETCHER · OVERDRIVE (+90% SPEED AND SPAWNS)',true);
+        lastFletcherPhase=fletcherPhase;
+      }
+      renderFletcherStatus(elapsed);
       // Low-cost arena status indication, cleared when the timed freeze expires.
       wordLane?.classList?.toggle('operator-frozen-domain',!!operatorPassive?.isFieldFrozen(elapsed));
-      wordLane?.classList?.toggle('operator-sovereign-guard',!!operatorPassive?.isInvulnerable(elapsed));
+      wordLane?.classList?.toggle('operator-sovereign-guard',operatorPassive?.rule?.id==='cassian'&&!!operatorPassive?.isInvulnerable(elapsed));
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
       if(!overflowSpawnPaused && !operatorPause){
@@ -7069,6 +7111,9 @@ if(gameState === "paused"){
       if(currentMode === "challenge"){
         spawnMs = Math.max(220, Math.round(spawnMs / challengeRampMultiplier(elapsed)));
       }
+      // Spawn rate is frequency: -90% => 10x interval; +90% => /1.9 interval.
+      // Apply after stage mechanics so both phases scale the actual stage pace.
+      spawnMs = Math.max(80, Math.round(spawnMs * (operatorPassive?.getSpawnIntervalMultiplier?.(elapsed)||1)));
         let loops = 0;
         if(!overflowSpawnPaused && !operatorPause){
           while(spawnAccMs >= spawnMs && loops < 6){
