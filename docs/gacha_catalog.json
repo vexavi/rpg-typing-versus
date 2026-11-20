@@ -81,6 +81,12 @@
       "art": "assets/recruitment/seraphine.webp"
     },
     {
+      "id": "shield",
+      "name": "Mara",
+      "rarity": 5,
+      "art": "assets/recruitment/shield.webp"
+    },
+    {
       "id": "cassian",
       "name": "Cassian",
       "rarity": 6,

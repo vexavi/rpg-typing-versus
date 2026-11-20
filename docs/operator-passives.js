@@ -23,6 +23,8 @@
       description:'Every 6 correct words, charge the next manually typed word: +2 boss damage, or clear one extra falling word in survival stages (no extra rewards).'}),
     isolde: Object.freeze({id:'isolde',name:'Isolde',rarity:5,title:'Frozen Domain',every:6,freezeSec:2.5,slowSec:3,slowPct:15,
       description:'Every 6 consecutive correct words, freeze all falling words and spawns for 2.5 seconds, then slow falling words 15% for 3 seconds. Mistakes reset the streak.'}),
+    shield: Object.freeze({id:'shield',name:'Mara',rarity:5,title:'Reinforced Vitality / Shield Advance',maxHpBonus:3,upperHp:10,lowerHp:3,upperPushPct:10,lowerPushPct:35,freezeSec:2,
+      description:'Passive 1: +3 maximum HP. Passive 2: below 10 HP, push falling words up 10%; below 3 HP, push them up 35% and freeze affected words for 2 seconds. Each threshold triggers once per stage. Stacked words and spawn pacing are unchanged.'}),
     anodyne: Object.freeze({id:'anodyne',name:'Anodyne',rarity:5,title:'Experimental Medicine',every:6,heal:2,slowPct:30,slowSec:5,suppressSec:4,
       description:'Every 6 correct words, administer one of three random medicines: Recovery Serum (+2 HP, can overheal), Cryogenic Solution (30% slower falling for 5 seconds), or Suppression Formula (no new spawns for up to 4 seconds; ends when no falling or stacked words remain).'}),
     seraphine: Object.freeze({id:'seraphine',name:'Seraphine',rarity:5,title:'Phantom Execution',every:5,pendingSec:3,
@@ -53,6 +55,13 @@
     let houndProgress=0,houndPhase='none',houndMarked=null,houndDeadline=0,houndChainHits=0,houndNeedSpawn=false;
     let cassianProgress=0,cassianGuardUntil=0;
     let anodyneProgress=0;
+    // Only words present at the below-3-HP activation are frozen; later spawns remain unaffected.
+    let shieldUpperUsed=false,shieldLowerUsed=false;
+    const shieldFrozenWords=new Map();
+    function releaseShieldFrozen(){
+      for(const {word} of shieldFrozenWords.values())word.el?.classList?.remove('operator-shield-hold');
+      shieldFrozenWords.clear();
+    }
     function releaseFrozen(){
       if(frozen?.el?.classList)frozen.el.classList.remove('operator-shadow-hold');
       frozen=null;freezeUntil=0;
@@ -121,10 +130,16 @@
       foxfireProgress=0;foxfirePrimed=false;foxfireActive=false;foxfireQueue=[];foxfireCurrentId=null;
       endLupa();
       endHound();cassianProgress=0;cassianGuardUntil=0;anodyneProgress=0;
+      shieldUpperUsed=false;shieldLowerUsed=false;releaseShieldFrozen();
     }
     function tick(time){
       const t=validTime(time);
       if(frozen&&(t>=freezeUntil||frozen.state!=='falling'))releaseFrozen();
+      if(rule?.id==='shield')for(const [id,entry] of shieldFrozenWords){
+        if(t>=entry.until||entry.word.state!=='falling'||entry.word.el?.isConnected===false){
+          entry.word.el?.classList?.remove('operator-shield-hold');shieldFrozenWords.delete(id);
+        }
+      }
       if(marked&&(marked.state!=='falling'||marked.el?.isConnected===false))releaseMark();
       if(spawnPauseUntil&&t>=spawnPauseUntil)spawnPauseUntil=0;
       if(slowUntil&&t>=slowUntil)slowUntil=0;
@@ -153,7 +168,9 @@
         ||(rule?.id==='tavi'&&foxfireActive);
     }
     function isWordFrozen(word,time){
-      return (rule?.id==='nora'&&word===frozen&&validTime(time)<freezeUntil&&word.state==='falling')||isFieldFrozen(time);
+      return (rule?.id==='nora'&&word===frozen&&validTime(time)<freezeUntil&&word.state==='falling')
+        ||(rule?.id==='shield'&&word?.state==='falling'&&shieldFrozenWords.get(word?.id)?.word===word&&validTime(time)<(shieldFrozenWords.get(word?.id)?.until??0))
+        ||isFieldFrozen(time);
     }
     function getFallMultiplier(time){
       if(!rule)return 1;
@@ -167,7 +184,7 @@
       }
       return 1;
     }
-    function getMaxHpBonus(){return rule?.id==='vern'?rule.maxHpBonus:0;}
+    function getMaxHpBonus(){return rule?.maxHpBonus||0;}
     function onMistake(time){
       if(!rule)return null;
       const t=validTime(time);
@@ -193,7 +210,29 @@
       }
       return null;
     }
-    function onPlayerDamage(previousHp,nextHp,time){
+    function onPlayerDamage(previousHp,nextHp,time,words=[]){
+      if(rule?.id==='shield'){
+        // Thresholds are strictly below 10/3 (not at them). A fatal hit cannot
+        // save the player; if one hit crosses both, only the stronger push runs.
+        if(!(nextHp>0&&nextHp<previousHp))return null;
+        const low=nextHp<rule.lowerHp&&!shieldLowerUsed;
+        const high=nextHp<rule.upperHp&&!shieldUpperUsed;
+        if(!low&&!high)return null;
+        if(low){shieldLowerUsed=true;shieldUpperUsed=true;}
+        else shieldUpperUsed=true;
+        const percent=low?rule.lowerPushPct:rule.upperPushPct;
+        const freezeSeconds=low?rule.freezeSec:0;
+        const affected=(Array.isArray(words)?words:[]).filter(fallingWord);
+        if(freezeSeconds){
+          const until=validTime(time)+freezeSeconds;
+          for(const word of affected){
+            shieldFrozenWords.set(word.id,{word,until});
+            word.el?.classList?.add('operator-shield-hold');
+          }
+        }
+        activations++;
+        return {type:'shield-advance',percent,freezeSeconds,wordIds:affected.map(w=>w.id),characterId:rule.id};
+      }
       if(rule?.id!=='alden'||used||previousHp<=1||nextHp!==1)return null;
       used=true;activations++;slowUntil=validTime(time)+rule.durationSec;
       return {type:'slowdown',seconds:rule.durationSec,percent:rule.slowPct,characterId:rule.id};
@@ -421,7 +460,8 @@
       lupaProgress,lupaActive,lupaDeadline,lupaTargets:lupaTargets.slice(),
       foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
-      cassianProgress,cassianGuardUntil,anodyneProgress};}
+      cassianProgress,cassianGuardUntil,anodyneProgress,
+      shieldUpperUsed,shieldLowerUsed,shieldFrozenIds:[...shieldFrozenWords.keys()]};}
     function isInvulnerable(time){return rule?.id==='cassian'&&validTime(time)<cassianGuardUntil;}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,updateField,
