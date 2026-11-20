@@ -3521,10 +3521,13 @@ async function debugJumpTo(mode, idx){
       wordLane?.appendChild(fletcherStatusEl);
       fletcherStatusLastText='';
     }
-    const until=operatorPassive?.debug?.().adrenalineLastStandUntil||0;
+    const fletcherState=operatorPassive?.debug?.()||{};
+    const until=fletcherState.adrenalineLastStandUntil||0;
     const text=phase==='last-stand'
       ?`LAST STAND · ${Math.max(0,until-time).toFixed(1)}s`
-      :'OVERDRIVE · 1 HP';
+      :fletcherState.adrenalineMomentumUnlocked
+        ?'ADRENALINE MOMENTUM · +1 DMG'
+        :`OVERDRIVE · ${Math.min(3,fletcherState.adrenalineMomentumStreak||0)}/3 WORDS`;
     if(text!==fletcherStatusLastText){fletcherStatusEl.textContent=text;fletcherStatusLastText=text;}
   }
   function resetOperatorForStage(){
@@ -3669,6 +3672,7 @@ async function debugJumpTo(mode, idx){
       hp:playerHp,maxHp:playerMaxHp,clearedWord,nonBoss:operatorStageWithoutBoss()
     });
     if(!effect)return null;
+    if(effect.momentumUnlocked)pushMsg('FLETCHER · ADRENALINE MOMENTUM (+1 DAMAGE UNLOCKED)',true);
     if(effect.type==='word-freeze')pushMsg('NORA · SHADOW HOLD (1.5s)',true);
     else if(effect.type==='spawn-pause'){
       // Discard prior spawn progress: this is a pause, not a delayed burst.
