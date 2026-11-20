@@ -3479,6 +3479,18 @@ async function debugJumpTo(mode, idx){
   let lastFletcherPhase='off';
   let fletcherStatusEl=null;
   let fletcherStatusLastText='';
+  // v102: Foxfire rewinds visually while the model remains safely at the top.
+  const FOXFIRE_REWIND_MS=580;
+  let foxfireRewindTimer=null,foxfireRewindTicket=0;
+  function cancelFoxfireRewind(){
+    foxfireRewindTicket++;
+    if(foxfireRewindTimer!==null){clearTimeout(foxfireRewindTimer);foxfireRewindTimer=null;}
+    for(const word of wordsOnField){
+      word.el?.classList?.remove('operator-foxfire-rewinding');
+      word.el?.style?.removeProperty?.('--tavi-rewind-distance');
+    }
+    wordLane?.classList?.remove('operator-foxfire-rewinding');
+  }
   function equippedOperatorIconSrc(){
     const id=getSelectedOperator();
     return `assets/profile-icons/${id}.webp`;
@@ -3531,6 +3543,7 @@ async function debugJumpTo(mode, idx){
     if(text!==fletcherStatusLastText){fletcherStatusEl.textContent=text;fletcherStatusLastText=text;}
   }
   function resetOperatorForStage(){
+    cancelFoxfireRewind();
     operatorPassive?.reset();
     lastFletcherPhase='off';
     fletcherStatusEl?.remove();fletcherStatusEl=null;fletcherStatusLastText='';
@@ -3773,21 +3786,25 @@ async function debugJumpTo(mode, idx){
       spawnAccMs=0;
       pushMsg('ANODYNE · SUPPRESSION ENDED',true);
     }else if(effect.type==='foxfire-start'){
+      cancelFoxfireRewind();
       spawnAccMs=0;
       const ids=new Set(effect.wordIds);
+      const rewound=[];
       for(const word of wordsOnField){
         if(!ids.has(word.id))continue;
-        // Both airborne and already stacked words become a falling-word queue.
-        // Reclassify landed words before restacking, otherwise a queued word
-        // stays in the grounded stack and skips the falling-word lifecycle.
+        // The simulation is safely moved to -30 immediately, but an independent
+        // CSS `translate` starts at the original on-screen coordinate. All
+        // affected words visibly travel BACK up the lane before entering stasis.
+        const fromY=word.y;
         const wasLanded=word.state==='landed';
         word.foxfireOrigin=true;
         word.foxfireHidden=true;
         word.state='falling';
         word.y=-30;
         word.groupId=0;word.groupIndex=0;word.spawnBaseCount=undefined;
-        word.el?.classList?.remove('landed');
-        word.el?.classList?.add('operator-foxfire-hidden');
+        word.el?.classList?.remove('landed','operator-foxfire-released');
+        word.el?.classList?.add('operator-foxfire-hidden','operator-foxfire-rewinding');
+        word.el?.style?.setProperty('--tavi-rewind-distance',`${Math.max(0,fromY+30)}px`);
         if(wasLanded){
           // Landed-only special timers should not expire while rewound.
           word.ex1DamageArmed=false;word.ex1DeadlineMs=0;
@@ -3795,19 +3812,34 @@ async function debugJumpTo(mode, idx){
           word.el?.classList?.remove('ex1StarArmed');
         }
         setWordY(word.el,word.y);
+        rewound.push(word);
       }
-      // Residual non-rewindable words (such as expired ghosts) still need
-      // their correct stack positions after the eligible words leave it.
+      // Excluded words are unchanged, and their stack reflows immediately.
       restackDirty=true;
       restackLanded();
-      wordLane?.classList?.add('operator-foxfire-active');
-      releaseFoxfireWord(effect.releaseId);
+      wordLane?.classList?.add('operator-foxfire-active','operator-foxfire-rewinding');
+      const ticket=foxfireRewindTicket;
+      const finish=()=>{
+        if(ticket!==foxfireRewindTicket)return; // Stage/reset/continue won.
+        foxfireRewindTimer=null;
+        for(const word of rewound){
+          word.el?.classList?.remove('operator-foxfire-rewinding');
+          word.el?.style?.removeProperty?.('--tavi-rewind-distance');
+        }
+        wordLane?.classList?.remove('operator-foxfire-rewinding');
+        // The first word becomes typeable only after its visible rewind ends.
+        if(gameState==='playing'||gameState==='paused')releaseFoxfireWord(effect.releaseId);
+      };
+      const reduced=!!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      if(reduced||!rewound.length)finish();
+      else foxfireRewindTimer=setTimeout(finish,FOXFIRE_REWIND_MS);
       pushMsg(`TAVI · FOXFIRE REWIND (${effect.wordIds.length} WORDS)`,true);
     }else if(effect.type==='foxfire-next'){
       releaseFoxfireWord(effect.wordId);
     }else if(effect.type==='foxfire-ready'){
       pushMsg('TAVI · FOXFIRE READY',true);
     }else if(effect.type==='foxfire-end'){
+      cancelFoxfireRewind();
       wordLane?.classList?.remove('operator-foxfire-active');
       spawnAccMs=0;
       pushMsg('TAVI · FOXFIRE COMPLETE',true);
@@ -4138,6 +4170,7 @@ function updateUI(){
   }
 
   function resetField(opts = {}){
+    cancelFoxfireRewind();
     const preservePermafrost = !!opts.preservePermafrost;
 
     if(!preservePermafrost){

@@ -597,3 +597,41 @@ body.adventure-client .operator-lupa-timer-value {
 @media(prefers-reduced-motion:reduce){
   .word.operator-shield-pushing{animation:none;translate:0 0}
 }
+
+
+/* v102 — Tavi's Foxfire Rewind. Visual positions reverse without changing the
+   typeable/hidden model or the existing shortest-to-longest release order. */
+.word.operator-foxfire-hidden.operator-foxfire-rewinding{
+  display:flex!important;pointer-events:none;
+  border-color:#a6e9ff!important;
+  box-shadow:0 0 16px #87ddffb0,inset 0 0 0 1px #d1f7ff99!important;
+  will-change:translate,opacity;
+  animation:tavi-foxfire-rewind 580ms cubic-bezier(.26,.02,.50,1) both;
+}
+.word.operator-foxfire-rewinding::after{
+  content:"";position:absolute;top:98%;left:9%;right:9%;height:26px;
+  pointer-events:none;background:linear-gradient(#88d8ff70,#75aaff12,transparent);
+  filter:blur(3px);
+}
+@keyframes tavi-foxfire-rewind{
+  0%{translate:0 var(--tavi-rewind-distance,0px);opacity:1;filter:brightness(1)}
+  40%{opacity:.91;filter:brightness(1.35)}
+  78%{opacity:.62;filter:brightness(1.6)}
+  100%{translate:0 0;opacity:0;filter:brightness(1.6)}
+}
+.wordLane.operator-foxfire-rewinding::after{
+  content:"⟲";position:absolute;z-index:100;top:10px;right:12px;
+  pointer-events:none;color:#bcecff;text-shadow:0 0 10px #60ccff;
+  font:900 30px/1 system-ui,sans-serif;
+  animation:tavi-foxfire-signal 580ms ease-out both;
+}
+@keyframes tavi-foxfire-signal{
+  0%{opacity:0;rotate:0deg;scale:.8}
+  20%{opacity:.95}
+  80%{opacity:.75}
+  100%{opacity:0;rotate:-150deg;scale:1.15}
+}
+@media(prefers-reduced-motion:reduce){
+  .word.operator-foxfire-hidden.operator-foxfire-rewinding{animation:none;display:none!important}
+  .wordLane.operator-foxfire-rewinding::after{animation:none;display:none}
+}
