@@ -3733,10 +3733,26 @@ async function debugJumpTo(mode, idx){
       // Keep words within the top boundary; stacked words/spawn timer are untouched.
       const ids=new Set(effect.wordIds);
       const height=Math.max(1,laneHeight());
+      const moved=[];
       for(const word of wordsOnField){
         if(!ids.has(word.id)||word.state!=='falling')continue;
-        word.y=Math.max(-30,word.y-height*effect.percent/100);
+        const before=word.y;
+        word.y=Math.max(-30,before-height*effect.percent/100);
+        const delta=before-word.y;
+        if(delta<=0)continue;
+        // The simulation moves to the safe position immediately. A separate
+        // CSS `translate` animates from the old screen position to the new
+        // one without interfering with per-frame `transform: var(--y)`.
+        word.el?.classList?.remove('operator-shield-pushing');
+        word.el?.style?.setProperty('--mara-shield-push-distance',`${delta}px`);
         setWordY(word.el,word.y);
+        moved.push(word.el);
+      }
+      // Batch the style flush once so the same word can animate a second
+      // threshold crossing even if the first animation is still in progress.
+      if(moved.length){
+        void wordLane?.offsetWidth;
+        for(const el of moved)el?.classList?.add('operator-shield-pushing');
       }
       pushMsg(effect.freezeSeconds
         ?'SHIELD ADVANCE · 35% PUSH + 2s HOLD'
@@ -6276,6 +6292,17 @@ function damagePlayer(amount, reason){
     showOverlay(false);
     resetField({ preservePermafrost: isNormalStage5() });
     playerHp = Math.min(playerMaxHp,CONTINUE_HP);
+    // Revive restores 3 HP in the same stage. Explicitly clear Fletcher's
+    // previous-life combo, bullseye, Adrenaline VFX and timer while preserving
+    // the once-per-stage Last Stand activation flag.
+    const reviveEffect=operatorPassive?.onRevive?.(playerHp,stageElapsedSec(),wordsOnField);
+    lastFletcherPhase='off';
+    renderFletcherStatus(stageElapsedSec());
+    if(reviveEffect?.type==='fletcher-last-stand'){
+      pushMsg('FLETCHER · LAST STAND (3s INVULNERABLE)',true);
+      renderFletcherStatus(stageElapsedSec());
+    }
+    spawnAccMs=0;
     overflowAcc = 0;
     overflow = false;
     overflowSpawnGraceUntilMs = 0;

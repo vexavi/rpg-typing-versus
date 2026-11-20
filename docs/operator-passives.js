@@ -276,6 +276,23 @@
       activations++;
       return {type:'fletcher-last-stand',seconds:rule.lastStandSeconds,characterId:rule.id};
     }
+    // A Continue is a revive inside the SAME stage, not a stage reset. Clear
+    // Fletcher's old life/temporary VFX, but keep adrenalineTriggered so the
+    // 3-second invulnerability can never be farmed with Continue hearts.
+    function onRevive(hp,time,words=[]){
+      if(rule?.id!=='crossbow')return null;
+      releaseCrossbowTarget();
+      crossbowCombo=0;
+      adrenalineActive=false;
+      adrenalineLastStandUntil=0;
+      for(const word of (Array.isArray(words)?words:[])){
+        word?.el?.classList?.remove('operator-crossbow-bullseye','operator-crossbow-adrenaline');
+      }
+      syncAdrenaline(words,hp);
+      // Normal Continue resumes at 3 HP. Support a 1-HP revive safely if a
+      // future mode adds one, without bypassing the once-per-stage restriction.
+      return Number(hp)===rule.adrenalineHp?activateFletcherLastStand(time):null;
+    }
     // Stage transitions retain player HP in Normal/Extra but reset operator
     // counters. Trigger a fresh emergency shield if Fletcher enters at 1 HP.
     // Called after the stage countdown: its 3 seconds are all playable time.
@@ -576,7 +593,7 @@
       adrenalineTriggered,adrenalineLastStandUntil};}
     function isInvulnerable(time){return (rule?.id==='cassian'&&validTime(time)<cassianGuardUntil)||getAdrenalinePhase(time)==='last-stand';}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
-    return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,updateField,
+    return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,onRevive,updateField,
       startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
       isInvulnerable,isFoxfireHidden,debug});
