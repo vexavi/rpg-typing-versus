@@ -25,6 +25,8 @@
       description:'Every 6 consecutive correct words, freeze all falling words and spawns for 2.5 seconds, then slow falling words 15% for 3 seconds. Mistakes reset the streak.'}),
     shield: Object.freeze({id:'shield',name:'Mara',rarity:5,title:'Reinforced Vitality / Shield Advance',maxHpBonus:3,upperHp:10,lowerHp:3,upperPushPct:10,lowerPushPct:35,freezeSec:4,emergencyDepthPct:40,
       description:'Passive 1: +3 maximum HP. Passive 2: below 10 HP, push falling words up 10%; below 3 HP, push them up 35% and freeze affected words for 4 seconds. Stage-start low HP prepares the strongest available push until a falling word reaches 40% depth. Empty fields do not consume a charge. Continue does not recharge used thresholds. Stacked words and spawn pacing are unchanged.'}),
+    hexaxe: Object.freeze({id:'hexaxe',name:'Crescent Hex Operator',rarity:5,title:'Chain Cleave',every:6,durationSec:4,extraWords:4,maxExisting:2,
+      description:'Every 6 non-hex manually typed correct words, all current and newly spawned words are hexed for 4 seconds, temporarily changing to the shortest vocabulary word. If 2 or fewer words remain, summon 4 additional hexed words. Manual hex clears earn maximum points for their original word length; summoned untyped words vanish at expiry. Hexed clears cannot charge Chain Cleave.'}),
     crossbow: Object.freeze({id:'crossbow',name:'Fletcher',rarity:5,title:'Show-Off / Adrenaline Rush',every:5,showOffDamage:1,adrenalineHp:1,adrenalineDamage:1,momentumWords:3,
       lastStandSeconds:3,lastStandSpeedMultiplier:0.1,lastStandSpawnFrequency:0.1,overdriveSpeedMultiplier:1.25,overdriveSpawnFrequency:1.2,
       description:'Show-Off: every 5 consecutive correct words mark the longest typeable word (+1 boss damage if typed). Adrenaline Rush: at 1 HP, gain 3 seconds of invulnerability with 90% slower falling and 90% fewer spawns. Afterward, while at 1 HP, falling speed increases by 25% and spawning frequency by 20%; type 3 consecutive correct words while vulnerable to unlock +1 boss damage on subsequent correctly typed words, stacking with Show-Off; mistakes reset progress. Last Stand never grants this damage. A fresh Last Stand activates at stage start if already at 1 HP. Last Stand triggers once per stage.'}),
@@ -58,6 +60,7 @@
     let houndProgress=0,houndPhase='none',houndMarked=null,houndDeadline=0,houndChainHits=0,houndNeedSpawn=false;
     let cassianProgress=0,cassianGuardUntil=0;
     let anodyneProgress=0;
+    let chainCleaveProgress=0,chainCleaveUntil=0;
     let crossbowCombo=0,crossbowTarget=null,adrenalineActive=false,adrenalineTriggered=false,adrenalineLastStandUntil=0;
     let adrenalineMomentumStreak=0,adrenalineMomentumUnlocked=false;
     const crossbowTypeable=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.foxfireHidden&&Number.isFinite(w.y);
@@ -226,6 +229,7 @@
       foxfireProgress=0;foxfirePrimed=false;foxfireActive=false;foxfireQueue=[];foxfireCurrentId=null;
       endLupa();
       endHound();cassianProgress=0;cassianGuardUntil=0;anodyneProgress=0;
+      chainCleaveProgress=0;chainCleaveUntil=0;
       shieldUpperUsed=false;shieldLowerUsed=false;shieldPending=null;releaseShieldFrozen();
       releaseCrossbowTarget();crossbowCombo=0;adrenalineActive=false;adrenalineTriggered=false;adrenalineLastStandUntil=0;
       adrenalineMomentumStreak=0;adrenalineMomentumUnlocked=false;
@@ -287,6 +291,8 @@
       }
       return 1;
     }
+    function isChainCleaveActive(time){return rule?.id==='hexaxe'&&chainCleaveUntil>0&&validTime(time)<chainCleaveUntil;}
+    function getChainCleaveRemaining(time){return isChainCleaveActive(time)?Math.max(0,chainCleaveUntil-validTime(time)):0;}
     function getMaxHpBonus(){return rule?.maxHpBonus||0;}
     function onMistake(time){
       if(!rule)return null;
@@ -338,6 +344,7 @@
         }
         return null; // Continue is not a new stage; used thresholds stay used.
       }
+      if(rule?.id==='hexaxe'){chainCleaveProgress=0;chainCleaveUntil=0;return null;}
       if(rule?.id!=='crossbow')return null;
       releaseCrossbowTarget();
       crossbowCombo=0;
@@ -407,6 +414,17 @@
       if(!rule)return null;
       correct++;
       const t=validTime(time);
+      if(rule.id==='hexaxe'){
+        // Hexed words remain real, manually typed answers with full rewards,
+        // but none of them can charge the next Chain Cleave activation.
+        if(context.clearedWord?.chainHexed)return null;
+        if(++chainCleaveProgress<rule.every)return null;
+        chainCleaveProgress=0;
+        chainCleaveUntil=t+rule.durationSec;
+        activations++;
+        return {type:'chain-cleave-start',seconds:rule.durationSec,
+          extraWords:rule.extraWords,maxExisting:rule.maxExisting,characterId:rule.id};
+      }
       if(rule.id==='crossbow'){
         // The cleared word has already left the DOM, but its identity remains
         // available for correctly awarding both independent damage bonuses.
@@ -687,7 +705,7 @@
       lupaProgress,lupaActive,lupaDeadline,lupaTargets:lupaTargets.slice(),
       foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
-      cassianProgress,cassianGuardUntil,anodyneProgress,
+      cassianProgress,cassianGuardUntil,anodyneProgress,chainCleaveProgress,chainCleaveUntil,
       shieldUpperUsed,shieldLowerUsed,shieldPending,shieldFrozenIds:[...shieldFrozenWords.keys()],
       crossbowCombo,crossbowTargetId:crossbowTarget?.id??null,adrenalineActive,
       adrenalineTriggered,adrenalineLastStandUntil,
@@ -697,7 +715,7 @@
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,onRevive,updateField,
       startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
-      isInvulnerable,isFoxfireHidden,debug});
+      isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,debug});
   }
   window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create});
 })();

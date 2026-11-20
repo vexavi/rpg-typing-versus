@@ -3339,6 +3339,14 @@ function showModeSelectScreen(){
     const modeMult = scoreModeMultiplier();
     return Math.max(1, Math.round(base * posMult * pen * modeMult));
   }
+  function calcMaximumHexWordScore(word){
+    // Hex typing uses the original word's length tier at the highest normal
+    // lane-position multiplier (2.0x), then existing mode/Continue modifiers.
+    // Summoned words originate from the stage's shortest vocabulary entry.
+    const answer=word?.chainHexOrigin?.answer||word?.answer||'';
+    return Math.max(1,Math.round(basePointsForAnswer(answer)*2
+      *scorePenaltyMultiplier()*scoreModeMultiplier()));
+  }
   function calcMinimumWordScore(word){
     // Seraphine's automatically eliminated words use the LOW end (1.2x) of
     // the existing length-based scoring range, with normal mode/continue modifiers.
@@ -3479,6 +3487,81 @@ async function debugJumpTo(mode, idx){
   let lastFletcherPhase='off';
   let fletcherStatusEl=null;
   let fletcherStatusLastText='';
+  // Chain Cleave owns only the temporary hex visuals/word replacements.
+  // Its activation clock is in operator-passives and is pause-aware.
+  let chainHexEntry=null,chainHexStatusEl=null,chainHexStatusText='';
+  function hexWord(word, summoned=false){
+    if(!chainHexEntry||!word||word.chainHexed||word.foxfireHidden||word.ex2Hacked||word.ex3ExpiredGhost||word.s5Permafrost)return false;
+    if(word.state!=='falling'&&word.state!=='landed')return false;
+    word.chainHexOrigin={prompt:word.prompt,answer:word.answer,answerNorm:word.answerNorm,
+      shownPrompt:word.promptEl?.textContent??word.prompt,
+      shownAnswer:word.answerEl?.textContent??word.answer,
+      shownTag:word.tagEl?.textContent??''};
+    word.chainHexed=true;word.chainHexSummoned=!!summoned;
+    word.prompt=chainHexEntry.prompt;word.answer=chainHexEntry.answer;
+    word.answerNorm=normalizeAnswer(word.answer);
+    if(word.promptEl)word.promptEl.textContent=word.prompt;
+    if(word.answerEl)word.answerEl.textContent=word.answer;
+    if(word.tagEl)word.tagEl.textContent='☾';
+    word.el?.classList?.add('operator-chain-hex');
+    return true;
+  }
+  function clearChainCleaveHex(){
+    let removed=false;
+    for(const word of [...wordsOnField]){
+      if(word.chainHexSummoned){removeWord(word.id);removed=true;continue;}
+      const original=word.chainHexOrigin;
+      if(!original)continue;
+      word.prompt=original.prompt;word.answer=original.answer;word.answerNorm=original.answerNorm;
+      if(word.promptEl)word.promptEl.textContent=original.shownPrompt;
+      if(word.answerEl)word.answerEl.textContent=original.shownAnswer;
+      if(word.tagEl)word.tagEl.textContent=original.shownTag;
+      delete word.chainHexed;delete word.chainHexOrigin;delete word.chainHexSummoned;
+      word.el?.classList?.remove('operator-chain-hex');
+    }
+    if(removed){restackDirty=true;restackLanded();}
+    chainHexEntry=null;
+    chainHexStatusEl?.remove();chainHexStatusEl=null;chainHexStatusText='';
+  }
+  function syncChainCleaveHex(time){
+    if(!chainHexEntry)return;
+    if(!operatorPassive?.isChainCleaveActive(time)){
+      clearChainCleaveHex();
+      pushMsg('CHAIN CLEAVE · HEX ENDED',true);
+      return;
+    }
+    if(!chainHexStatusEl||!chainHexStatusEl.isConnected){
+      chainHexStatusEl=document.createElement('div');
+      chainHexStatusEl.className='operator-chain-hex-status';
+      chainHexStatusEl.setAttribute('aria-live','off');
+      wordLane?.appendChild(chainHexStatusEl);
+      chainHexStatusText='';
+    }
+    const remaining=operatorPassive.getChainCleaveRemaining(time);
+    const label=`CHAIN CLEAVE · ${remaining.toFixed(1)}s`;
+    if(label!==chainHexStatusText){chainHexStatusText=label;chainHexStatusEl.textContent=label;}
+  }
+  function startChainCleaveHex(effect){
+    // The combo-triggering word was already removed. Only words still on
+    // the field at activation are eligible for the 2-or-fewer condition.
+    chainHexEntry=operatorShortestStageEntry();
+    if(!chainHexEntry)return;
+    const currentlyTypeable=wordsOnField.filter(w=>
+      (w.state==='falling'||w.state==='landed')&&!w.foxfireHidden&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost);
+    for(const word of currentlyTypeable)hexWord(word);
+    if(currentlyTypeable.length<=effect.maxExisting){
+      // Four extra words are deliberately NOT normal timed spawns. They
+      // have no stage-mechanic spawn hooks and are removed when the hex ends.
+      for(let i=0;i<effect.extraWords;i++){
+        const word=spawnOneWord({forceOperatorSpawn:true,operatorHexSummoned:true,
+          state:'falling',y:-30-i*32,countSpawn:false,skipMechanicHooks:true,
+          preventEx4Infection:true,prompt:chainHexEntry.prompt,answer:chainHexEntry.answer});
+        if(word)hexWord(word,true);
+      }
+    }
+    syncChainCleaveHex(stageElapsedSec());
+    pushMsg('CHAIN CLEAVE · 4s HEX',true);
+  }
   // v102: Foxfire rewinds visually while the model remains safely at the top.
   const FOXFIRE_REWIND_MS=580;
   let foxfireRewindTimer=null,foxfireRewindTicket=0;
@@ -3543,6 +3626,7 @@ async function debugJumpTo(mode, idx){
     if(text!==fletcherStatusLastText){fletcherStatusEl.textContent=text;fletcherStatusLastText=text;}
   }
   function resetOperatorForStage(){
+    clearChainCleaveHex();
     cancelFoxfireRewind();
     operatorPassive?.reset();
     lastFletcherPhase='off';
@@ -3573,6 +3657,10 @@ async function debugJumpTo(mode, idx){
       valid.push({prompt,answer});
     }
     return valid;
+  }
+  function operatorShortestStageEntry(){
+    const valid=operatorStageWordEntries();
+    return valid.reduce((best,w)=>!best||countEnglishLetters(w.answer)<countEnglishLetters(best.answer)?w:best,null);
   }
   function operatorLongestStageEntry(exclude=new Set()){
     const valid=operatorStageWordEntries().filter(entry=>!exclude.has(normalizeAnswer(entry.answer)));
@@ -3745,7 +3833,9 @@ async function debugJumpTo(mode, idx){
   // after frame spawns, so timed effects can pick up newly arriving words.
   function applyOperatorFieldEffect(effect){
     if(!effect)return;
-    if(effect.type==='shield-advance'){
+    if(effect.type==='chain-cleave-start'){
+      startChainCleaveHex(effect);
+    }else if(effect.type==='shield-advance'){
       // Push only the snapshot of falling words present at the HP crossing.
       // Keep words within the top boundary; stacked words/spawn timer are untouched.
       const ids=new Set(effect.wordIds);
@@ -4170,6 +4260,7 @@ function updateUI(){
   }
 
   function resetField(opts = {}){
+    clearChainCleaveHex();
     cancelFoxfireRewind();
     const preservePermafrost = !!opts.preservePermafrost;
 
@@ -5486,6 +5577,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     if(!opts.forceOperatorSpawn && operatorSpawnPaused() && (opts.state||'falling')==='falling')return null;
 
     const state = opts.state || "falling";
+    const operatorHexSummoned=!!opts.operatorHexSummoned;
     const countSpawn = (opts.countSpawn !== false);
     const nextSpawnCount = spawnCountThisStage + ((countSpawn && state === "falling") ? 1 : 0);
     const willBeChallengeComet = challengeWouldBeCometForCount(nextSpawnCount);
@@ -5500,7 +5592,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     if(countSpawn && state === "falling") spawnCountThisStage++;
     // Extra Stage 1: every 3rd spawned word becomes a shooting star.
     const ex1Freq = ex1HighlightFrequency();
-    const ex1Highlighted = (state === "falling" && ex1Freq > 0 && (spawnCountThisStage % ex1Freq === 0));
+    const ex1Highlighted = (!operatorHexSummoned && state === "falling" && ex1Freq > 0 && (spawnCountThisStage % ex1Freq === 0));
 
     // Old EX1 variable-speed/ghost phase mechanics are removed.
     const ex1FallMult = 1;
@@ -5510,7 +5602,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
 
     // Extra Stage 2: time-based phases obscure the English every N spawns (per-phase cadence)
     let ex2ShouldObscure = false;
-    if(isExtraStage2() && state === "falling" && countSpawn){
+    if(!operatorHexSummoned && isExtraStage2() && state === "falling" && countSpawn){
       const n = (ex2Phase === 1) ? 3 : (ex2Phase >= 2 ? 2 : 0);
       if(n > 0){
         ex2PhaseSpawnCount++;
@@ -5522,33 +5614,33 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     const shouldObscureAnswer = hidePromptWhileFalling;
 
 // Extra Stage 2 Phase 4+: all words ignore collision while falling and fall at different rates
-const ex2Phase4Plus = (isExtraStage2() && ex2Phase >= 4 && state === "falling");
+const ex2Phase4Plus = (!operatorHexSummoned && isExtraStage2() && ex2Phase >= 4 && state === "falling");
 const ex2IgnoreCollision = ex2Phase4Plus;
 const ex2FallMult = ex2Phase4Plus ? ex2RandomFallMult() : 1;
 
     // Extra Stage 2: every Nth word highlighted (phase mechanics removed: constant frequency)
     const ex2Freq = ex2HighlightFrequency();
-    const ex2Highlighted = (state === "falling" && ex2Freq > 0 && (spawnCountThisStage % ex2Freq === 0));
+    const ex2Highlighted = (!operatorHexSummoned && state === "falling" && ex2Freq > 0 && (spawnCountThisStage % ex2Freq === 0));
 
     // Normal Stage 5 mechanic removed: no special highlighted/frozen words.
     const s5Highlighted = false;
 
     // Extra Stage 3: every other word becomes a ghost word.
     const ex3Freq = ex3SpecialFrequency();
-    const ex3Special = (state === "falling" && ex3Freq > 0 && (spawnCountThisStage % ex3Freq === 0));
+    const ex3Special = (!operatorHexSummoned && state === "falling" && ex3Freq > 0 && (spawnCountThisStage % ex3Freq === 0));
     const ex3FallMult = ex3Special ? ex3RandomFallMult() : 1;
 
     // Extra Stage 4: every Nth spawned word becomes infected.
     const ex4Freq = ex4InfectFrequency();
-    const ex4Infected = (state === "falling" && countSpawn && !opts.preventEx4Infection && ex4Freq > 0 && (spawnCountThisStage % ex4Freq === 0));
+    const ex4Infected = (!operatorHexSummoned && state === "falling" && countSpawn && !opts.preventEx4Infection && ex4Freq > 0 && (spawnCountThisStage % ex4Freq === 0));
 
     // Challenge: star-struck every 3, comet every 4; after 60s special words become both; after 120s all words become both.
-    const challengeComet = (state === "falling" && countSpawn && challengeIsCometSpawn());
-    const challengeStarStruck = (state === "falling" && countSpawn && challengeIsStarStruckSpawn());
+    const challengeComet = (!operatorHexSummoned && state === "falling" && countSpawn && challengeIsCometSpawn());
+    const challengeStarStruck = (!operatorHexSummoned && state === "falling" && countSpawn && challengeIsStarStruckSpawn());
 
     // Extra Stage 5: every Nth spawned word becomes star-struck.
     const ex5Freq = ex5StarStruckFrequency();
-    const ex5StarStruck = challengeStarStruck || (state === "falling" && countSpawn && ex5Freq > 0 &&
+    const ex5StarStruck = challengeStarStruck || (!operatorHexSummoned && state === "falling" && countSpawn && ex5Freq > 0 &&
       (window.RPG_BALANCE?.mechanic('star_struck','enabled',true)!==false) &&
       (()=>{const pct=window.RPG_BALANCE?.mechanic('star_struck','chancePct',-1)??-1;
         return pct>=0?Math.random()*100<pct:(((spawnCountThisStage-1)%ex5Freq)===0)})());
@@ -5663,6 +5755,8 @@ if(state === "landed"){
     setWordY(el, obj.y);
     wordsOnField.push(obj);
     operatorPassive?.onWordSpawn?.(obj,playerHp);
+    // Hex new timed spawns immediately, without modifying the spawn schedule.
+    if(!operatorHexSummoned&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
     return obj;
   }
@@ -5899,7 +5993,7 @@ if(state === "landed"){
       return false;
     }
 
-    const pts = calcWordScore(best);
+    const pts = best.chainHexed ? calcMaximumHexWordScore(best) : calcWordScore(best);
     guildCorrectThisRun++; // Counts real successful submitted words only.
     addScore(pts);
     // XP gain: 1 XP per correct word
@@ -7142,6 +7236,7 @@ if(gameState === "paused"){
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
       operatorPassive?.tick(elapsed);
+      syncChainCleaveHex(elapsed);
       operatorPassive?.syncAdrenaline?.(wordsOnField,playerHp);
       const fletcherPhase=operatorPassive?.getAdrenalinePhase?.(elapsed)||'off';
       if(fletcherPhase!==lastFletcherPhase){

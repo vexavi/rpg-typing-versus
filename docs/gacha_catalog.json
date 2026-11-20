@@ -93,6 +93,12 @@
       "art": "assets/recruitment/crossbow.webp"
     },
     {
+      "id": "hexaxe",
+      "name": "Crescent Hex Operator",
+      "rarity": 5,
+      "art": "assets/recruitment/hexaxe.webp"
+    },
+    {
       "id": "cassian",
       "name": "Cassian",
       "rarity": 6,
