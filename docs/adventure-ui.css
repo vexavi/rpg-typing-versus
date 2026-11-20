@@ -515,3 +515,24 @@ body.adventure-client .operator-lupa-timer-value {
 
 /* Story Editor example mechanic: visibly mark slowed or sped-up words. */
 .word.story-drifting-word{outline:2px dashed #9a70d2;outline-offset:2px}
+
+/* v93: Shield Advance applies only to currently falling, pushed words. */
+.word.operator-shield-hold{outline:2px solid rgba(235,194,107,.7);outline-offset:1px;box-shadow:0 0 10px rgba(235,194,107,.25),inset 0 0 12px rgba(235,194,107,.12)}
+
+/* v95 — Mara's +3 maximum HP appears in a separate gold segment.
+   The normal 10 HP remains green; the gold segment depletes first. */
+#playerMeter{position:relative}
+#playerMeter .fillHP{position:absolute;top:0;left:0}
+#playerMeter .fillHPBonus{
+  position:absolute;top:0;height:100%;width:0;
+  background:linear-gradient(90deg,#c48e24 0%,#f3cb69 100%);
+  pointer-events:none;
+}
+#playerMeter.operator-mara-hp{
+  height:16px;border-width:2px; /* show the gold +3 HP clearly */
+  background:linear-gradient(90deg,#d1d3d1 0 var(--mara-base-share,76.9%),#b5a88a var(--mara-base-share,76.9%) 100%);
+}
+#playerMeter.operator-mara-hp::after{
+  content:"";position:absolute;top:0;bottom:0;left:var(--mara-base-share,76.9%);
+  width:2px;background:rgba(33,28,17,.85);pointer-events:none;
+}

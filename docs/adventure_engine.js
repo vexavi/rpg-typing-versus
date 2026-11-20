@@ -2350,6 +2350,8 @@ const iconDef = PROFILE_ICON_PRESETS.find(x=>x.id===iconId) || PROFILE_ICON_PRES
 
 
   const playerFill = document.getElementById("playerFill");
+  const playerBonusFill = document.getElementById("playerBonusFill");
+  const playerMeter = document.getElementById("playerMeter");
   const playerHpText = document.getElementById("playerHpText");
   const mistakesText = document.getElementById("mistakesText");
 
@@ -2891,7 +2893,7 @@ async function launchStoryStage(stage){
       bossDialogue:"Ready for battle?",midFightDialogue:"",
       bossMaxHp:Math.max(1,Math.min(999,Math.floor(Number(stage.battle?.bossHp)||20))),
       ...Object.fromEntries(['fallSpeedPxPerSec','spawnEveryMs','hitDamage'].filter(k=>typeof stage.battle?.[k]==='number'&&Number.isFinite(stage.battle[k])).map(k=>[k,stage.battle[k]])),
-      bossFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.bossSprite||""))?String(stage.battle.bossSprite):""),bossFile2:"",bgFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.battleBackground||""))?String(stage.battle.battleBackground):""),playBgmFile:"",dialogueBgmFile:"",
+      bossFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.bossSprite||""))?String(stage.battle.bossSprite):""),bossFile2:"",bgFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.battleBackground||""))?String(stage.battle.battleBackground):""),playBgmFile:(/^story\/audio\/[a-zA-Z0-9][\w.-]*\.(?:mp3|m4a|webm|opus|ogg|wav)$/i.test(String(stage.battle?.bgmFile||""))?String(stage.battle.bgmFile):""),playBgmLoop:stage.battle?.bgmLoop!==false,dialogueBgmFile:"",
       words:WORDS};
   }else storyBattleStage=null;
   // Per-stage Story Editor values take priority over inherited Game Settings.
@@ -3687,7 +3689,20 @@ async function debugJumpTo(mode, idx){
   // after frame spawns, so timed effects can pick up newly arriving words.
   function applyOperatorFieldEffect(effect){
     if(!effect)return;
-    if(effect.type==='lupa-start'){
+    if(effect.type==='shield-advance'){
+      // Push only the snapshot of falling words present at the HP crossing.
+      // Keep words within the top boundary; stacked words/spawn timer are untouched.
+      const ids=new Set(effect.wordIds);
+      const height=Math.max(1,laneHeight());
+      for(const word of wordsOnField){
+        if(!ids.has(word.id)||word.state!=='falling')continue;
+        word.y=Math.max(-30,word.y-height*effect.percent/100);
+        setWordY(word.el,word.y);
+      }
+      pushMsg(effect.freezeSeconds
+        ?'SHIELD ADVANCE · 35% PUSH + 2s HOLD'
+        :'SHIELD ADVANCE · 10% PUSH',true);
+    }else if(effect.type==='lupa-start'){
       operatorApplyLupaVisuals(effect.wordIds,effect.seconds);
       pushMsg(`LUPA · MOONLIT AMBUSH (${effect.wordIds.length} WEAK POINTS)`,true);
     }else if(effect.type==='lupa-timeout'){
@@ -3875,6 +3890,9 @@ let stage5Phase = 1;
     bossFillW: null,
     playerHpStr: null,
     playerFillW: null,
+    playerBonusFillW: null,
+    playerBonusLeft: null,
+    maraHpActive: null,
     mistakes: null,
     continuesLeft: null,
     overflow: null,
@@ -3917,6 +3935,18 @@ function updatePauseCmdUI(){
     nextUiTickAt = now + UI_TICK_MS;
     updateUI();
   }
+
+// 5★ Mara: the standard 10 HP remains green, and only her +3 HP is amber.
+// Split by total bar capacity; consuming bonus HP removes amber before green.
+function computePlayerHpSegments(hp,maxHp,maraEquipped){
+  const capacity=Math.max(1,Number(maxHp)||BASE_PLAYER_MAX_HP);
+  const remaining=clamp(Number(hp)||0,0,capacity);
+  const baseCap=Math.min(BASE_PLAYER_MAX_HP,capacity);
+  const base=(maraEquipped?Math.min(remaining,baseCap):remaining);
+  const extra=maraEquipped?Math.max(0,remaining-baseCap):0;
+  const percent=n=>`${(100*n/capacity).toFixed(1)}%`;
+  return {baseWidth:percent(base),bonusWidth:percent(extra),bonusLeft:percent(baseCap)};
+}
 
 function updateUI(){
     const stage = STAGES[stageIndex] || null;
@@ -3967,10 +3997,25 @@ function updateUI(){
       playerHpText.classList.toggle('operator-anodyne-overheal',playerHp>playerMaxHp);
     }
 
-    const playerW = `${(clamp(playerHp/playerMaxHp,0,1) * 100).toFixed(1)}%`;
-    if(playerW !== uiCache.playerFillW){
-      uiCache.playerFillW = playerW;
-      playerFill.style.width = playerW;
+    const maraHpActive=operatorPassive?.rule?.id==='shield' && playerMaxHp>BASE_PLAYER_MAX_HP;
+    const hpVisual=computePlayerHpSegments(playerHp,playerMaxHp,maraHpActive);
+    if(maraHpActive!==uiCache.maraHpActive){
+      uiCache.maraHpActive=maraHpActive;
+      playerMeter.classList.toggle('operator-mara-hp',maraHpActive);
+      playerMeter.title=maraHpActive?'Mara: 10 base HP + 3 bonus HP':'';
+    }
+    if(hpVisual.baseWidth!==uiCache.playerFillW){
+      uiCache.playerFillW=hpVisual.baseWidth;
+      playerFill.style.width=hpVisual.baseWidth;
+    }
+    if(hpVisual.bonusWidth!==uiCache.playerBonusFillW){
+      uiCache.playerBonusFillW=hpVisual.bonusWidth;
+      playerBonusFill.style.width=hpVisual.bonusWidth;
+    }
+    if(hpVisual.bonusLeft!==uiCache.playerBonusLeft){
+      uiCache.playerBonusLeft=hpVisual.bonusLeft;
+      playerBonusFill.style.left=hpVisual.bonusLeft;
+      playerMeter.style.setProperty('--mara-base-share',hpVisual.bonusLeft);
     }
 
     if(mistakes !== uiCache.mistakes){
@@ -6064,8 +6109,9 @@ function damagePlayer(amount, reason){
     damageTakenThisRun += scaled;
     const previousHp=playerHp;
     playerHp = Math.max(0, playerHp - scaled);
-    const passiveEffect=operatorPassive?.onPlayerDamage(previousHp,playerHp,stageElapsedSec());
+    const passiveEffect=operatorPassive?.onPlayerDamage(previousHp,playerHp,stageElapsedSec(),wordsOnField);
     if(passiveEffect?.type==='slowdown')pushMsg('ALDEN · SECOND WIND (5s)',true);
+    else if(passiveEffect?.type==='shield-advance')applyOperatorFieldEffect(passiveEffect);
     if(currentMode !== 'shared') mechanicEvent('onPlayerDamage',null,{damage:scaled,reason});
     playPlayerHitSfx();
     flashPlayerDamage();
@@ -7070,9 +7116,10 @@ if(gameState === "paused"){
         const v = (Number.isFinite(w.fallSpeedOverride)
           ? w.fallSpeedOverride
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
-        if(!operatorPassive?.isWordFrozen(w,elapsed))w.y += v * dt;
-        // Isolde freezes the entire word field, including movement from custom mechanics.
-        if(!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt});
+        const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
+        if(!frozenByOperator)w.y += v * dt;
+        // Word-specific Shield Advance holds also suspend custom movement hooks.
+        if(!frozenByOperator&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt});
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
         const gIdx = (w.groupIndex || 0);
