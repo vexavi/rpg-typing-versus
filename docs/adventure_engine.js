@@ -3149,6 +3149,11 @@ function showModeSelectScreen(){
   addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     window.location.assign('recruitment.html');
   }});
+  const auraWorkshopMode=addMode('Aura Workshop', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
+    lockedReason:'Online Firebase required',onClick:()=>{
+      window.location.assign('auras.html');
+    }});
+  auraWorkshopMode.classList.add('aura-mode-card');
   addMode('Rankings', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     void openRankings('normal');
   }});
@@ -7303,12 +7308,14 @@ if(gameState === "paused"){
         return;
       }
       // Sleepy runs on the pause-aware stage clock. Delirium changes text once at full closure.
-      // Panic and normal word motion freeze only while the eyelids are fully closed.
+      // Falling words and impacts CONTINUE even while the eyelids are fully closed.
+      // Only fresh normal spawns wait until the eyes start opening.
       const chapterBlackout=!!window.RPG_CH1_SPECIAL?.frame(elapsed,{
         words:wordsOnField,vocabulary:currentMode==='story'?operatorStageWordEntries():[],
         normalize:normalizeAnswer,onClosed:()=>{answerInput.value='';}
       });
-      const battleDt=chapterBlackout?0:dt;
+      const battleDt=dt; // No word-motion freeze during Sleepy darkness.
+      const spawnDt=chapterBlackout?0:dt; // Do not spawn new, unseen words during the blackout.
       ex4HandlePhaseTriggers(elapsed);
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
@@ -7328,7 +7335,7 @@ if(gameState === "paused"){
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
       if(!overflowSpawnPaused && !operatorPause){
-        spawnAccMs += battleDt * 1000;
+        spawnAccMs += spawnDt * 1000;
       }else{
         spawnAccMs = 0;
       }
