@@ -26,8 +26,8 @@
     shield: Object.freeze({id:'shield',name:'Mara',rarity:5,title:'Reinforced Vitality / Shield Advance',maxHpBonus:3,upperHp:10,lowerHp:3,upperPushPct:10,lowerPushPct:35,freezeSec:2,
       description:'Passive 1: +3 maximum HP. Passive 2: below 10 HP, push falling words up 10%; below 3 HP, push them up 35% and freeze affected words for 2 seconds. Each threshold triggers once per stage. Stacked words and spawn pacing are unchanged.'}),
     crossbow: Object.freeze({id:'crossbow',name:'Fletcher',rarity:5,title:'Show-Off / Adrenaline Rush',every:5,showOffDamage:1,adrenalineHp:1,adrenalineDamage:1,
-      lastStandSeconds:3,lastStandSpeedMultiplier:0.1,lastStandSpawnFrequency:0.1,overdriveSpeedMultiplier:1.9,overdriveSpawnFrequency:1.9,
-      description:'Show-Off: every 5 consecutive correct words mark the longest typeable word (+1 boss damage if typed). Adrenaline Rush: at 1 HP, gain 3 seconds of invulnerability with 90% slower falling and 90% fewer spawns. Afterward, while at 1 HP, falling and spawning increase by 90%; typed words deal +1 boss damage and can stack with Show-Off. Last Stand can activate only once per stage.'}),
+      lastStandSeconds:3,lastStandSpeedMultiplier:0.1,lastStandSpawnFrequency:0.1,overdriveSpeedMultiplier:1.25,overdriveSpawnFrequency:1.2,
+      description:'Show-Off: every 5 consecutive correct words mark the longest typeable word (+1 boss damage if typed). Adrenaline Rush: at 1 HP, gain 3 seconds of invulnerability with 90% slower falling and 90% fewer spawns. Afterward, while at 1 HP, falling speed increases by 25% and spawning frequency by 20%; typed words deal +1 boss damage and stack with Show-Off. A fresh Last Stand activates at stage start if already at 1 HP. Last Stand triggers once per stage.'}),
     anodyne: Object.freeze({id:'anodyne',name:'Anodyne',rarity:5,title:'Experimental Medicine',every:6,heal:2,slowPct:30,slowSec:5,suppressSec:4,
       description:'Every 6 correct words, administer one of three random medicines: Recovery Serum (+2 HP, can overheal), Cryogenic Solution (30% slower falling for 5 seconds), or Suppression Formula (no new spawns for up to 4 seconds; ends when no falling or stacked words remain).'}),
     seraphine: Object.freeze({id:'seraphine',name:'Seraphine',rarity:5,title:'Phantom Execution',every:5,pendingSec:3,
@@ -269,6 +269,21 @@
       }
       return null;
     }
+    function activateFletcherLastStand(time){
+      if(rule?.id!=='crossbow'||adrenalineTriggered||!adrenalineActive)return null;
+      adrenalineTriggered=true;
+      adrenalineLastStandUntil=validTime(time)+rule.lastStandSeconds;
+      activations++;
+      return {type:'fletcher-last-stand',seconds:rule.lastStandSeconds,characterId:rule.id};
+    }
+    // Stage transitions retain player HP in Normal/Extra but reset operator
+    // counters. Trigger a fresh emergency shield if Fletcher enters at 1 HP.
+    // Called after the stage countdown: its 3 seconds are all playable time.
+    function onStageStart(hp,time,words=[]){
+      if(rule?.id!=='crossbow')return null;
+      syncAdrenaline(words,hp);
+      return Number(hp)===rule.adrenalineHp?activateFletcherLastStand(time):null;
+    }
     function onPlayerDamage(previousHp,nextHp,time,words=[]){
       if(rule?.id==='crossbow'){
         if(nextHp<previousHp)crossbowCombo=0;
@@ -276,10 +291,7 @@
         // Exactly 1 HP, reached through HP damage. A lethal hit ending at
         // 0 HP does not grant an automatic revive or protection.
         if(nextHp===rule.adrenalineHp&&previousHp>nextHp&&!adrenalineTriggered){
-          adrenalineTriggered=true;
-          adrenalineLastStandUntil=validTime(time)+rule.lastStandSeconds;
-          activations++;
-          return {type:'fletcher-last-stand',seconds:rule.lastStandSeconds,characterId:rule.id};
+          return activateFletcherLastStand(time);
         }
         return null;
       }
@@ -564,7 +576,7 @@
       adrenalineTriggered,adrenalineLastStandUntil};}
     function isInvulnerable(time){return (rule?.id==='cassian'&&validTime(time)<cassianGuardUntil)||getAdrenalinePhase(time)==='last-stand';}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
-    return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,updateField,
+    return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,updateField,
       startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
       isInvulnerable,isFoxfireHidden,debug});

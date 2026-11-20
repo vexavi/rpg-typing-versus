@@ -6533,6 +6533,14 @@ function damagePlayer(amount, reason){
     if(currentMode !== "shared") mechanicEvent('onStageStart');
 
     stagePlayStartMs = nowMs();
+    // HP carries between Normal/Extra stages. Starting a new stage at 1 HP
+    // must trigger Fletcher's once-per-stage Last Stand *after* countdown.
+    const fletcherStageEffect=operatorPassive?.onStageStart?.(playerHp,stageElapsedSec(),wordsOnField);
+    if(fletcherStageEffect?.type==='fletcher-last-stand'){
+      spawnAccMs=0;
+      pushMsg('FLETCHER · LAST STAND (3s INVULNERABLE)',true);
+      renderFletcherStatus(stageElapsedSec());
+    }
     if(!["story","shared"].includes(currentMode)) try{ window.RPG_REWARDS?.startStage(currentMode,stageIndex); }catch(_){}
 
     // Normal Stage 4 mechanic removed.
@@ -7073,7 +7081,7 @@ if(gameState === "paused"){
       const fletcherPhase=operatorPassive?.getAdrenalinePhase?.(elapsed)||'off';
       if(fletcherPhase!==lastFletcherPhase){
         spawnAccMs=0; // never burst pending words after switching phases
-        if(lastFletcherPhase==='last-stand'&&fletcherPhase==='overdrive')pushMsg('FLETCHER · OVERDRIVE (+90% SPEED AND SPAWNS)',true);
+        if(lastFletcherPhase==='last-stand'&&fletcherPhase==='overdrive')pushMsg('FLETCHER · OVERDRIVE (+25% FALL / +20% SPAWNS)',true);
         lastFletcherPhase=fletcherPhase;
       }
       renderFletcherStatus(elapsed);
@@ -7111,7 +7119,7 @@ if(gameState === "paused"){
       if(currentMode === "challenge"){
         spawnMs = Math.max(220, Math.round(spawnMs / challengeRampMultiplier(elapsed)));
       }
-      // Spawn rate is frequency: -90% => 10x interval; +90% => /1.9 interval.
+      // Spawn frequency: Last Stand -90% => 10x interval; Overdrive +20% => /1.2 interval.
       // Apply after stage mechanics so both phases scale the actual stage pace.
       spawnMs = Math.max(80, Math.round(spawnMs * (operatorPassive?.getSpawnIntervalMultiplier?.(elapsed)||1)));
         let loops = 0;
