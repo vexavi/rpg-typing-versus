@@ -87,6 +87,12 @@
       "art": "assets/recruitment/shield.webp"
     },
     {
+      "id": "crossbow",
+      "name": "Crossbow Operator",
+      "rarity": 5,
+      "art": "assets/recruitment/crossbow.webp"
+    },
+    {
       "id": "cassian",
       "name": "Cassian",
       "rarity": 6,

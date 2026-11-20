@@ -25,6 +25,8 @@
       description:'Every 6 consecutive correct words, freeze all falling words and spawns for 2.5 seconds, then slow falling words 15% for 3 seconds. Mistakes reset the streak.'}),
     shield: Object.freeze({id:'shield',name:'Mara',rarity:5,title:'Reinforced Vitality / Shield Advance',maxHpBonus:3,upperHp:10,lowerHp:3,upperPushPct:10,lowerPushPct:35,freezeSec:2,
       description:'Passive 1: +3 maximum HP. Passive 2: below 10 HP, push falling words up 10%; below 3 HP, push them up 35% and freeze affected words for 2 seconds. Each threshold triggers once per stage. Stacked words and spawn pacing are unchanged.'}),
+    crossbow: Object.freeze({id:'crossbow',name:'Crossbow Operator',rarity:5,title:'Show-Off / Adrenaline Rush',every:5,showOffDamage:1,adrenalineHp:3,adrenalineDamage:1,
+      description:'Every 5 consecutive correctly typed words, mark the longest typeable word with a bullseye (spawn the longest word from the stage bank if the field is empty). Typing it deals +1 boss damage. Damage or a wrong answer resets the combo. Below 3 HP, all typeable words gain an adrenaline glow and deal +1 boss damage when typed; bonuses stack.'}),
     anodyne: Object.freeze({id:'anodyne',name:'Anodyne',rarity:5,title:'Experimental Medicine',every:6,heal:2,slowPct:30,slowSec:5,suppressSec:4,
       description:'Every 6 correct words, administer one of three random medicines: Recovery Serum (+2 HP, can overheal), Cryogenic Solution (30% slower falling for 5 seconds), or Suppression Formula (no new spawns for up to 4 seconds; ends when no falling or stacked words remain).'}),
     seraphine: Object.freeze({id:'seraphine',name:'Seraphine',rarity:5,title:'Phantom Execution',every:5,pendingSec:3,
@@ -55,6 +57,40 @@
     let houndProgress=0,houndPhase='none',houndMarked=null,houndDeadline=0,houndChainHits=0,houndNeedSpawn=false;
     let cassianProgress=0,cassianGuardUntil=0;
     let anodyneProgress=0;
+    let crossbowCombo=0,crossbowTarget=null,adrenalineActive=false;
+    const crossbowTypeable=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.foxfireHidden&&Number.isFinite(w.y);
+    function releaseCrossbowTarget(){
+      crossbowTarget?.el?.classList?.remove('operator-crossbow-bullseye');crossbowTarget=null;
+    }
+    function markCrossbowWord(word){
+      if(rule?.id!=='crossbow'||!crossbowTypeable(word))return false;
+      releaseCrossbowTarget();crossbowTarget=word;
+      word.el?.classList?.add('operator-crossbow-bullseye');
+      return true;
+    }
+    function syncAdrenaline(words,hp){
+      if(rule?.id!=='crossbow')return false;
+      const active=Number(hp)>0&&Number(hp)<rule.adrenalineHp;
+      if(adrenalineActive===active)return active;
+      adrenalineActive=active;
+      for(const word of (Array.isArray(words)?words:[])){
+        if(crossbowTypeable(word))word.el?.classList?.toggle('operator-crossbow-adrenaline',active);
+      }
+      return active;
+    }
+    function onWordSpawn(word,hp){
+      if(rule?.id!=='crossbow')return;
+      if(crossbowTypeable(word))word.el?.classList?.toggle('operator-crossbow-adrenaline',Number(hp)>0&&Number(hp)<rule.adrenalineHp);
+    }
+    function longestCrossbowWord(words){
+      const available=(Array.isArray(words)?words:[]).filter(crossbowTypeable);
+      // Length uses A-Z letters, matching existing game vocabulary scoring.
+      return available.reduce((best,w)=>{
+        const len=String(w.answer||'').replace(/[^a-z]/gi,'').length;
+        if(!best||len>best.len||(len===best.len&&w.y>best.word.y))return {word:w,len};
+        return best;
+      },null)?.word||null;
+    }
     // Only words present at the below-3-HP activation are frozen; later spawns remain unaffected.
     let shieldUpperUsed=false,shieldLowerUsed=false;
     const shieldFrozenWords=new Map();
@@ -131,6 +167,7 @@
       endLupa();
       endHound();cassianProgress=0;cassianGuardUntil=0;anodyneProgress=0;
       shieldUpperUsed=false;shieldLowerUsed=false;releaseShieldFrozen();
+      releaseCrossbowTarget();crossbowCombo=0;adrenalineActive=false;
     }
     function tick(time){
       const t=validTime(time);
@@ -141,6 +178,7 @@
         }
       }
       if(marked&&(marked.state!=='falling'||marked.el?.isConnected===false))releaseMark();
+      if(crossbowTarget&&(!crossbowTypeable(crossbowTarget)||crossbowTarget.el?.isConnected===false))releaseCrossbowTarget();
       if(spawnPauseUntil&&t>=spawnPauseUntil)spawnPauseUntil=0;
       if(slowUntil&&t>=slowUntil)slowUntil=0;
       if(domainFreezeUntil&&t>=domainFreezeUntil)domainFreezeUntil=0;
@@ -188,6 +226,7 @@
     function onMistake(time){
       if(!rule)return null;
       const t=validTime(time);
+      if(rule.id==='crossbow'){crossbowCombo=0;return null;}
       if(rule.id==='isolde'){streak=0;return null;}
       if(rule.id==='tavi'){
         if(!foxfireActive)foxfireProgress=0;
@@ -211,6 +250,11 @@
       return null;
     }
     function onPlayerDamage(previousHp,nextHp,time,words=[]){
+      if(rule?.id==='crossbow'){
+        if(nextHp<previousHp)crossbowCombo=0;
+        syncAdrenaline(words,nextHp);
+        return null;
+      }
       if(rule?.id==='shield'){
         // Thresholds are strictly below 10/3 (not at them). A fatal hit cannot
         // save the player; if one hit crosses both, only the stronger push runs.
@@ -241,6 +285,27 @@
       if(!rule)return null;
       correct++;
       const t=validTime(time);
+      if(rule.id==='crossbow'){
+        // The cleared word has already left the DOM, but its identity remains
+        // available for correctly awarding both independent damage bonuses.
+        const hit=!!crossbowTarget&&!!context.clearedWord&&crossbowTarget.id===context.clearedWord.id;
+        if(hit)releaseCrossbowTarget();
+        tick(t);
+        crossbowCombo++;
+        const adrenaline=Number(context.hp)>0&&Number(context.hp)<rule.adrenalineHp;
+        const bonusDamage=(hit?rule.showOffDamage:0)+(adrenaline?rule.adrenalineDamage:0);
+        if(crossbowCombo%rule.every===0){
+          const word=longestCrossbowWord(words);
+          if(word){
+            markCrossbowWord(word);activations++;
+            return {type:'crossbow-showoff',wordId:word.id,bonusDamage,hit,adrenaline,characterId:rule.id};
+          }
+          // Empty battlefield: the real stage vocabulary will provide the
+          // longest answer. A forced word is not a free typed answer.
+          return {type:'crossbow-showoff',forceLongest:true,bonusDamage,hit,adrenaline,characterId:rule.id};
+        }
+        return bonusDamage?{type:'crossbow-hit',bonusDamage,hit,adrenaline,characterId:rule.id}:null;
+      }
       // Capture the marked-word hit before tick() removes DOM-disconnected marks.
       const wasMarkedHit=rule.id==='seraphine'&&!!marked&&!!context.clearedWord&&marked.id===context.clearedWord.id;
       // Capture the prey before tick() sees the newly removed DOM node.
@@ -397,6 +462,11 @@
     }
     // Called once per gameplay frame, after spawns. Automatic clears never call onCorrect.
     function updateField(words,time){
+      if(rule?.id==='crossbow'){
+        // If the target was removed by a stage mechanic, never leave a stale marker.
+        tick(time);
+        return null;
+      }
       if(rule?.id==='anodyne'&&spawnPauseUntil){
         const active=(Array.isArray(words)?words:[]).some(w=>w&&(w.state==='falling'||w.state==='landed'));
         if(!active){
@@ -461,11 +531,12 @@
       foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
       cassianProgress,cassianGuardUntil,anodyneProgress,
-      shieldUpperUsed,shieldLowerUsed,shieldFrozenIds:[...shieldFrozenWords.keys()]};}
+      shieldUpperUsed,shieldLowerUsed,shieldFrozenIds:[...shieldFrozenWords.keys()],
+      crossbowCombo,crossbowTargetId:crossbowTarget?.id??null,adrenalineActive};}
     function isInvulnerable(time){return rule?.id==='cassian'&&validTime(time)<cassianGuardUntil;}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,updateField,
-      startLupa,
+      startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getMaxHpBonus,
       isInvulnerable,isFoxfireHidden,debug});
   }

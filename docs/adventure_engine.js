@@ -3502,6 +3502,9 @@ async function debugJumpTo(mode, idx){
   }
   function resetOperatorForStage(){
     operatorPassive?.reset();
+    for(const word of wordsOnField){
+      word.el?.classList?.remove('operator-crossbow-bullseye','operator-crossbow-adrenaline');
+    }
     bossHpText?.classList?.remove('operator-weak-point-ready');
     wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard');
     operatorClearLupaVisuals();
@@ -3659,6 +3662,13 @@ async function debugJumpTo(mode, idx){
       // Don't queue a burst of words after the pause ends.
       spawnAccMs=0;
       pushMsg('ANODYNE · SUPPRESSION FORMULA (4s)',true);
+    }else if(effect.type==='crossbow-showoff'){
+      if(effect.forceLongest){
+        const entry=operatorLongestStageEntry();
+        const spawned=entry?spawnOneWord({prompt:entry.prompt,answer:entry.answer,forceOperatorSpawn:true}):null;
+        if(spawned)operatorPassive?.markCrossbowWord(spawned);
+      }
+      pushMsg('SHOW-OFF · BULLSEYE MARKED',true);
     }else if(effect.type==='charge'){
       bossHpText?.classList?.add('operator-weak-point-ready');
       pushMsg('AVELINE · WEAK POINT READY',true);
@@ -5570,6 +5580,7 @@ if(state === "landed"){
     if(obj.challengeComet) challengeUpdateCometGlow(obj, 0);
     setWordY(el, obj.y);
     wordsOnField.push(obj);
+    operatorPassive?.onWordSpawn?.(obj,playerHp);
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
     return obj;
   }
@@ -5822,6 +5833,9 @@ if(state === "landed"){
     removeWord(best.id);
     const passiveEffect=operatorOnCorrect(best);
     let bonusDamage=0;
+    // Show-Off and Adrenaline Rush can both bonus the same manually typed word.
+    // Only manual onCorrect awards these, never automatic clears or spawns.
+    if(passiveEffect?.bonusDamage)bonusDamage+=passiveEffect.bonusDamage;
     if(passiveEffect?.type==='boss-bonus')bonusDamage+=passiveEffect.damage;
     if(passiveEffect?.type==='lupa-hit'||passiveEffect?.type==='lupa-complete')bonusDamage+=passiveEffect.damage||0;
     if(passiveEffect?.type==='aveline-cleave'){
@@ -7020,6 +7034,7 @@ if(gameState === "paused"){
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
       operatorPassive?.tick(elapsed);
+      operatorPassive?.syncAdrenaline?.(wordsOnField,playerHp);
       // Low-cost arena status indication, cleared when the timed freeze expires.
       wordLane?.classList?.toggle('operator-frozen-domain',!!operatorPassive?.isFieldFrozen(elapsed));
       wordLane?.classList?.toggle('operator-sovereign-guard',!!operatorPassive?.isInvulnerable(elapsed));

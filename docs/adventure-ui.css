@@ -536,3 +536,29 @@ body.adventure-client .operator-lupa-timer-value {
   content:"";position:absolute;top:0;bottom:0;left:var(--mara-base-share,76.9%);
   width:2px;background:rgba(33,28,17,.85);pointer-events:none;
 }
+
+/* v96 — crossbow operator: distinct bullseye + low-HP adrenaline effects. */
+.word.operator-crossbow-bullseye{
+  border-color:#f15c58!important;
+  box-shadow:inset 0 0 0 2px #ec504c88,0 0 10px #bd292988!important;
+}
+.word.operator-crossbow-bullseye::after{
+  content:'◎';position:absolute;right:3px;top:-22px;
+  color:#ffdad3;font:900 22px/1 system-ui,sans-serif;
+  text-shadow:0 0 2px #791818,0 0 7px #ff4438;
+  pointer-events:none;z-index:2;
+}
+.word.operator-crossbow-adrenaline{
+  outline:2px solid #ffa746;outline-offset:1px;
+  box-shadow:0 0 10px #ff7c35ae,inset 0 0 8px #ff7b354f!important;
+  animation:operator-crossbow-adrenaline-pulse 1.2s ease-in-out infinite;
+}
+.word.operator-crossbow-bullseye.operator-crossbow-adrenaline{
+  border-color:#ff5252!important;
+  box-shadow:0 0 12px #ff6d3baf,inset 0 0 0 2px #ff5b5988!important;
+}
+@keyframes operator-crossbow-adrenaline-pulse{
+  0%,100%{outline-color:#ff9f45;filter:drop-shadow(0 0 2px #f75c3580)}
+  50%{outline-color:#ffd087;filter:drop-shadow(0 0 6px #ff9b5485)}
+}
+@media(prefers-reduced-motion:reduce){.word.operator-crossbow-adrenaline{animation:none}}
