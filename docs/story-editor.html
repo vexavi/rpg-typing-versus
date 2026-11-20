@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Story Editor — RPG Typing Versus</title>
 <link rel="stylesheet" href="teacher-nav.css?v=87"><script defer src="teacher-nav.js?v=87"></script>
-<link rel="stylesheet" href="story-editor.css?v=107.0">
+<link rel="stylesheet" href="story-editor.css?v=108.0">
 <script defer src="game-mechanics.js?v=88"></script><script defer src="custom-mechanics.js?v=107.0"></script>
 </head><body><main>
 <header class="header"><div><p class="eyebrow">RPG TYPING VERSUS / TEACHER</p><h1>Story Editor</h1></div><div class="actions"><button id="google" type="button">Sign in with Google</button><button id="signout" type="button" hidden>Sign out</button></div></header>
@@ -22,4 +22,13 @@
  <section class="panel editpanel"><div id="chapterFields"></div><div id="stageFields"></div><div id="slidesEditor"></div></section>
 </div>
 <section class="panel footerpanel"><h2>Chapter Images, Shared Boss Sprites & Battle Backgrounds + Music</h2><p>Under Battle Settings, choose <strong>Use Existing Image</strong> to reuse a boss sprite or battle background from another stage. A shared image is uploaded only once. To create a new one, click <strong>Upload New Boss Sprite</strong> or <strong>Upload New Battle Background</strong>; these use short shared filenames. On a slide, click <strong>Select Photo</strong> to choose an image from your computer. The preview is local. For <strong>new images only</strong>, click <strong>Download Photo Pack</strong>, extract it into your GitHub repository root (so files land in <code>docs/story/images/</code>), then commit and push. If your photos are already in GitHub, click <strong>Find Existing Images</strong> at the top instead of uploading them again. After <strong>Check Images</strong> reports that the files are online, click <strong>Publish to Students</strong>. This avoids paid Firebase Cloud Storage. JPG, PNG, and WEBP are supported; photos are automatically optimized to WEBP when your browser supports it.</p><p>Music files are not stored in the browser draft: download the Music Pack before reloading. Browser autoplay restrictions can require students to tap a control or unmute audio. Player progress is tied to stage IDs. IDs are fixed once created; changing stage order or deleting published stages can change which stages unlock. Save Draft is local to this browser and does not save image bytes: download the Photo Pack of any newly selected images before refreshing or closing this tab. Existing GitHub-hosted images do not need a new Photo Pack. Publishing requires your authorized teacher Google account and an added Firestore rule.</p></section>
-</main><script type="module" src="story-editor.js?v=107.0"></script></body></html>
+</main><script>
+window.RPG_STORY_EDITOR_BOOT={loaded:false};
+setTimeout(()=>{
+ const state=window.RPG_STORY_EDITOR_BOOT,notice=document.getElementById('status');
+ if(state&&!state.loaded&&notice&&notice.textContent.includes('Loading chapters')){
+  notice.className='error';
+  notice.textContent='Story Editor could not finish starting. Check your connection and reload. If this continues, Firebase or an editor script may be blocked; open DevTools Console for the exact error.';
+ }
+},12000);
+</script><script type="module" src="story-editor.js?v=108.0"></script></body></html>

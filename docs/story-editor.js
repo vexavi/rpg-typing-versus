@@ -21,12 +21,12 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=obj=>JSON.parse(JSON.stringify(obj));
 const db=getFirestore(getApp());
-let teacher=null,chapters=[],chapterIndex=0,stageIndex=0,loadedRevision=0,publishedOrder=[],retiredStages=new Set(),retiredChapters=new Set(),dirty=false,busy=false;
+let teacher=null,chapters=[],chapterIndex=0,stageIndex=0,loadedRevision=0,publishedOrder=[],retiredStages=new Set(),retiredChapters=new Set(),dirty=false,busy=false,cloudAvailable=false,authReadId=0;
 function status(message,bad=false,success=false){$('status').textContent=message;$('status').className=bad?'error':success?'success':'';}
 function checkAuth(){return Boolean(teacher&&teacher.uid===TEACHER_UID);}
 function updateAuth(){
  $('google').hidden=!!teacher;$('signout').hidden=!teacher;
- $('publish').disabled=busy||!checkAuth()||!chapters.length;
+ $('publish').disabled=busy||!checkAuth()||!chapters.length||!cloudAvailable;
  $('saveDraft').disabled=busy||!chapters.length;
  $('reload').disabled=busy;$('import').disabled=busy;
  $('downloadPhotos').disabled=busy||stagedPhotos.size===0;$('downloadPhotos').textContent=`Download Photo Pack (${stagedPhotos.size})`;
@@ -470,29 +470,74 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
 }
 function setLoaded(manifest,revision=0){const normalized=cleanStory(manifest);chapters=normalized.chapters;loadedRevision=revision;chapterIndex=0;stageIndex=0;dirty=false;}
 function restoreRetired(source){retiredStages=new Set((source.retiredStageIds||[]).filter(s=>/^[1-9]\d{0,3}-[1-9]\d{0,3}$/.test(String(s))));retiredChapters=new Set((source.retiredChapterIds||[]).filter(s=>/^[1-9]\d{0,3}$/.test(String(s))));}
-async function loadRemote(useDraft=false){
+// Firebase is a publishing dependency, not a reason to block local Story editing.
+// Never allow a disconnected fallback to publish over unknown cloud revisions.
+async function boundedCloudRead(timeoutMs=10000){
+ let timer;
+ try{
+  return await Promise.race([
+   loadPublishedStory(),
+   new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Firebase did not respond within 10 seconds.')),timeoutMs);})
+  ]);
+ }finally{clearTimeout(timer);}
+}
+async function loadRemote(useDraft=false,{requireCloud=false}={}){
  busy=true;updateAuth();status('Loading Story chapters…');
  try{
-  let remote=null,missingRule=false;
-  try{remote=await loadPublishedStory();}
-  catch(error){if(!missingStoryRule(error))throw error;missingRule=true;}
-  const source=remote||await fetch('story/chapters.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Built-in Story chapters not found.');return r.json();});
-  setLoaded(source,Number(remote?.revision)||0);restoreRetired(remote||{});publishedOrder=currentOrder();
-  let draftRecovered=false;
-  if(useDraft){try{const draft=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');if(draft&&Array.isArray(draft.chapters)){
-   if(draft.chapters.length>0&&draft.chapters.length<=40&&draft.chapters.every(c=>c&&Array.isArray(c.stages)&&c.stages.length>0&&c.stages.every(st=>st&&st.battle&&Array.isArray(st.intro)&&Array.isArray(st.outro)))){
-    chapters=clone(draft.chapters);restoreRetired(draft);loadedRevision=Number(draft.revision)||0;draftRecovered=true;
+  let remote=null,cloudIssue=null,missingRule=false,cloudOnline=false;
+  try{remote=await boundedCloudRead();cloudOnline=true;}
+  catch(error){cloudIssue=error;missingRule=missingStoryRule(error);}
+  // "Reload Published" must never silently replace edits with built-in defaults
+  // when the cloud read failed. Keep current data and any saved draft intact.
+  if(requireCloud&&!cloudOnline){
+   cloudAvailable=false;
+   status('Could not reload published Story: '+errorMessage(cloudIssue)+'. Your current editor content and saved draft were kept.',true);
+   return false;
+  }
+  let source=remote;
+  if(!source){
+   try{source=await fetch('story/chapters.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Built-in Story chapters not found.');return r.json();});}
+   catch(error){
+    // Offline users can still recover an existing local draft if the JSON
+    // bootstrap is also unavailable. They cannot publish until cloud is back.
+    if(!useDraft)throw error;
+    try{const saved=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');if(!saved?.chapters?.length)throw error;source=saved;}
+    catch{throw error;}
+    cloudIssue ||= error;
    }
-  }}catch(e){status('Saved draft could not be recovered: '+e.message,true);}}
-  if(!draftRecovered)status(remote?`Published Story loaded (revision ${loadedRevision}).`:'Loaded initial Chapter 1 from the game files. No cloud Story published yet.',false,true);
-  else status('Local draft restored. Students still see the published version.',false,true);
-  if(missingRule)status('The new Firestore Story rule is not deployed yet. You can edit or save a draft, but publishing will fail until it is added.',true);
+  }
+  // Validate before changing the active editor state.
+  const normalized=cleanStory(source);
+  setLoaded(normalized,Number(remote?.revision)||0);
+  restoreRetired(remote||{});publishedOrder=currentOrder();cloudAvailable=cloudOnline;
+  let draftRecovered=false;
+  if(useDraft){
+   try{
+    const draft=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');
+    if(draft&&Array.isArray(draft.chapters)&&draft.chapters.length){
+     const cleaned=cleanStory(draft);
+     chapters=cleaned.chapters;restoreRetired(draft);loadedRevision=Number(draft.revision)||0;draftRecovered=true;
+    }
+   }catch(e){console.warn('Story draft was not valid:',e);}
+  }
   render();
- }catch(e){status('Story failed to load: '+errorMessage(e),true);}
+  if(!cloudOnline){
+   const reason=missingRule?'The Firestore Story rule is missing or access is denied.':errorMessage(cloudIssue||Error('Firebase unavailable'));
+   status(`Offline editor: ${draftRecovered?'local draft':'built-in chapters'} loaded. Save Draft and Export JSON work. Publishing is disabled until you reconnect and use Reload Published. ${reason}`,true);
+  }else if(draftRecovered)status('Local draft restored. Students still see the published version.',false,true);
+  else status(remote?`Published Story loaded (revision ${loadedRevision}).`:'Loaded initial Chapter 1 from the game files. No cloud Story published yet.',false,true);
+  if(window.RPG_STORY_EDITOR_BOOT)window.RPG_STORY_EDITOR_BOOT.loaded=true;
+  return true;
+ }catch(e){status('Story failed to load: '+errorMessage(e)+'. Try Import JSON if you have a backup.',true);return false;}
  finally{busy=false;updateAuth();}
 }
-async function signIn(){try{teacher=await googleTeacher();if(!checkAuth())throw Error('This Google account is not the authorized teacher.');status('Authorized teacher signed in.',false,true);updateAuth();void loadLiveValues();}
- catch(e){status(errorMessage(e),true);teacher=await currentTeacher();updateAuth();}}
+async function signIn(){
+ ++authReadId;
+ try{teacher=await googleTeacher();if(!checkAuth())throw Error('This Google account is not the authorized teacher.');
+  status(cloudAvailable?'Authorized teacher signed in.':'Authorized teacher signed in. Firebase Story is still disconnected; reload published data before publishing.',false,true);
+  updateAuth();void loadLiveValues();
+ }catch(e){status(errorMessage(e),true);try{teacher=await currentTeacher();}catch{teacher=null;}updateAuth();}
+}
 async function publish(){
  if(!checkAuth()){status('Sign in using the authorized teacher Google account.',true);return;}
  let payload;try{payload=cleanStory({chapters});}catch(e){status(e.message,true);return;}
@@ -562,10 +607,15 @@ async function boot(){
  $('repoName').value=localStorage.getItem(REPO_KEY)||githubRepoGuess(location);
  $('repoName').addEventListener('change',()=>{if(validGithubRepo($('repoName').value))localStorage.setItem(REPO_KEY,$('repoName').value.trim());});
  $('export').onclick=exportFile;$('import').onchange=importFile;$('publish').onclick=publish;
- $('google').onclick=signIn;$('signout').onclick=async()=>{try{await teacherSignOut();teacher=null;liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
- $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard local edits and the saved draft, then reload published chapters?'))return;}localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();clearAudioSelection();await loadRemote(false);};
- try{teacher=await currentTeacher();}catch(e){status(errorMessage(e),true)}
+ $('google').onclick=signIn;$('signout').onclick=async()=>{++authReadId;try{await teacherSignOut();teacher=null;liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
+ $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Reload published chapters? This discards local edits and the saved draft ONLY if the cloud reload succeeds. Export JSON first if you want a backup.'))return;}if(await loadRemote(false,{requireCloud:true})){localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();clearAudioSelection();}};
+ const authToken=++authReadId;
+ void currentTeacher().then(account=>{
+  if(authToken!==authReadId)return;
+  teacher=account;updateAuth();if(teacher)void loadLiveValues();
+  if(teacher&&!checkAuth())status('The current Google account is not authorized to publish. Sign out, then use the teacher account.',true);
+ }).catch(error=>{if(authToken===authReadId)console.warn('Teacher login status unavailable:',error);});
+ // Display editable Story data without waiting for Firebase Auth initialization.
  updateAuth();await loadRemote(true);
- if(teacher&&!checkAuth())status('The current Google account is not authorized to publish. Sign out, then use the teacher account.',true);
 }
 void boot();
