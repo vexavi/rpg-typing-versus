@@ -652,3 +652,41 @@ body.adventure-client .operator-lupa-timer-value {
 }
 @keyframes chain-hex-pulse{from{filter:brightness(1)}to{filter:brightness(1.2)}}
 @media(prefers-reduced-motion:reduce){.word.operator-chain-hex{animation:none}}
+
+
+/* v106 — Nitrate 6★ Wrath. Marked words retain their normal prompt/answer. */
+.word.operator-nitrate-wrath{
+  border-color:#f6bd42!important;
+  box-shadow:inset 0 0 0 2px rgba(240,174,50,.56),0 0 14px rgba(244,174,35,.65)!important;
+  overflow:visible;
+}
+.word.operator-nitrate-wrath::before{
+  content:'WRATH';position:absolute;right:3px;top:-17px;font:900 10px/1 system-ui;
+  letter-spacing:.08em;color:#ffe7a6;text-shadow:0 0 7px #a67823;pointer-events:none;
+}
+.wordLane.operator-nitrate-ready .word.operator-nitrate-wrath{
+  border-color:#fd8455!important;
+  box-shadow:inset 0 0 0 2px rgba(251,102,52,.7),0 0 19px rgba(245,110,36,.83)!important;
+}
+.wordLane.operator-nitrate-ready .word.operator-nitrate-wrath::before{content:'WRATH +7';color:#ffba83;text-shadow:0 0 8px #f95124}
+.operator-nitrate-shield[hidden]{display:none!important}
+.operator-nitrate-shield{display:flex;align-items:center;gap:6px;min-width:0;padding-top:5px;color:#dfb657}
+.operator-nitrate-shield .nitrate-shield-label{font:800 9px/1.1 system-ui;letter-spacing:.04em;white-space:nowrap}
+.operator-nitrate-shield .nitrate-shield-caption{font:800 9px/1 system-ui;white-space:nowrap;color:#d3b886}
+.operator-nitrate-shield .nitrate-shield-pips{display:flex;gap:3px;flex:1;min-width:0}
+.operator-nitrate-shield .nitrate-shield-segment{height:12px;min-width:0;flex:1;border:1px solid #8c7248;background:rgba(88,66,37,.3);border-radius:2px;transition:background-color .15s}
+.operator-nitrate-shield .nitrate-shield-segment.filled{background:linear-gradient(#ffed9b,#e0a02e);box-shadow:0 0 6px rgba(234,183,69,.7)}
+.operator-nitrate-shield.awakened .nitrate-shield-pips{filter:drop-shadow(0 0 5px rgba(255,190,65,.7))}
+.operator-nitrate-shield.charged .nitrate-shield-segment.filled{background:linear-gradient(#ffe19d,#e85a33);box-shadow:0 0 8px rgba(239,91,41,.8)}
+.operator-nitrate-shield.nitrate-block-impact{animation:nitrateBlockImpact .33s ease-out}
+@keyframes nitrateBlockImpact{0%{filter:brightness(2.3);transform:scale(1.02)}100%{filter:brightness(1);transform:scale(1)}}
+.operator-nitrate-release{
+  z-index:15;pointer-events:none;position:absolute;top:21%;left:15%;width:70%;padding:7px 6px;
+  font:1000 clamp(20px,3.2vw,36px)/1.2 system-ui;text-align:center;letter-spacing:.08em;
+  color:#fff5ca;text-shadow:0 0 15px #ff8a19,0 2px 3px #5c2717;
+  border-top:3px solid #ffe1a0;border-bottom:2px solid #e99746;
+  background:linear-gradient(90deg,transparent,rgba(246,149,43,.34),transparent);
+  animation:nitrateRelease .75s ease-out both;
+}
+@keyframes nitrateRelease{0%{opacity:0;transform:translateY(14px) scale(.8)}20%{opacity:1;transform:translateY(0) scale(1.07)}100%{opacity:0;transform:translateY(-30px) scale(1)}}
+@media(prefers-reduced-motion:reduce){.operator-nitrate-release{animation:none;opacity:1}.operator-nitrate-shield.nitrate-block-impact{animation:none}}

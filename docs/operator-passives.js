@@ -38,6 +38,8 @@
       description:'After 6 consecutive correct words, rewind and hide falling and stacked words, then release them one at a time from shortest to longest. Mistakes reset the combo; rewound words cannot recharge it.'}),
     lupa: Object.freeze({id:'lupa',name:'Lupa',rarity:6,title:'Moonlit Ambush',every:6,weakpointCount:3,weakpointSec:6,bonusDamage:2,fullClearBonus:3,selfDamage:2,
       description:'After 6 consecutive correct words without error, mark 3 stacked Weak Point words for 6 seconds. Each cleared Weak Point deals +2 boss damage; clearing all 3 in time deals +3 more. Any remaining Weak Point deals 2 damage to the player when time expires.'}),
+    nitrate: Object.freeze({id:'nitrate',name:'Nitrate',rarity:6,title:'Wrath',minIntervalSec:4,maxIntervalSec:6,doubleMarkChance:0.25,maxShield:5,releaseDamage:7,
+      description:'Every 4–6 seconds, mark 1 word (75%) or 2 words (25%) as Wrath. Only manually typed Wrath words grant +1 Shield HP (maximum 5), which absorbs incoming damage. Clearing another Wrath word while already at 5 Shield HP consumes all 5 and deals +7 boss damage. Empty-field marks wait for natural spawns; no forced spawns.'}),
     hound: Object.freeze({id:'hound',name:'Hound',rarity:6,title:'Blood Hunt',every:4,preySec:6,chainSec:3,maxChain:3,bonusDamage:2,
       description:'After 4 consecutive correct words, type the marked Prey within 6 seconds to start Blood Hunt: complete up to 3 timed Prey (3 seconds each) for +2 boss damage apiece.'}),
     cassian: Object.freeze({id:'cassian',name:'Cassian',rarity:6,title:"Sovereign’s Decree",every:6,maxEliminations:3,invulnerableSec:5,
@@ -61,6 +63,72 @@
     let cassianProgress=0,cassianGuardUntil=0;
     let anodyneProgress=0;
     let chainCleaveProgress=0,chainCleaveUntil=0;
+    // Nitrate: pending marks are owed to naturally spawning words, never forced spawns.
+    // Marks on words already stacked remain typeable; a freshly falling marked word
+    // loses its mark when it reaches the bottom. The clock only advances during play.
+    let wrathShield=0,wrathNextAt=0,wrathPending=0,wrathActivated=false,wrathMarked=new Map();
+    const wrathTypeable=w=>w&&(w.state==='falling'||w.state==='landed')
+      &&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.foxfireHidden
+      &&w.el?.isConnected!==false&&Number.isFinite(w.y);
+    function wrathRandom(){
+      const value=Number(random());
+      return Number.isFinite(value)?Math.min(0.999999,Math.max(0,value)):0.5;
+    }
+    function wrathInterval(){return rule.minIntervalSec+wrathRandom()*(rule.maxIntervalSec-rule.minIntervalSec);}
+    function removeWrathMark(word){
+      if(!word||!wrathMarked.has(word.id))return false;
+      wrathMarked.delete(word.id);
+      word.el?.classList?.remove('operator-nitrate-wrath');
+      return true;
+    }
+    function clearWrath(){
+      for(const entry of wrathMarked.values())entry.word.el?.classList?.remove('operator-nitrate-wrath');
+      wrathMarked.clear();wrathPending=0;wrathNextAt=0;wrathActivated=false;wrathShield=0;
+    }
+    function completeWrathCycle(time){
+      if(!wrathActivated||wrathPending||wrathMarked.size)return;
+      wrathActivated=false;
+      wrathNextAt=validTime(time)+wrathInterval();
+    }
+    function markWrathWord(word){
+      if(rule?.id!=='nitrate'||!wrathTypeable(word)||wrathMarked.has(word.id)||wrathPending<=0)return false;
+      wrathMarked.set(word.id,{word,originallyFalling:word.state==='falling'});
+      wrathPending--;
+      word.el?.classList?.add('operator-nitrate-wrath');
+      return true;
+    }
+    function placeWrathMarks(words){
+      if(!wrathPending)return [];
+      const available=(Array.isArray(words)?words:[]).filter(w=>wrathTypeable(w)&&!wrathMarked.has(w.id));
+      // Prefer still-falling words near the top: enough time to reach and type them.
+      // Otherwise stacked words are eligible, as agreed for empty falling lanes.
+      const falling=available.filter(w=>w.state==='falling').sort((a,b)=>a.y-b.y);
+      const stacked=available.filter(w=>w.state==='landed');
+      const selected=[];
+      while(wrathPending&&(falling.length||stacked.length)){
+        const pool=falling.length?falling:stacked;
+        // Random among the best 3 positions, rather than always choosing the first.
+        const choice=Math.floor(wrathRandom()*Math.min(3,pool.length));
+        const next=pool.splice(choice,1)[0];
+        if(markWrathWord(next))selected.push(next.id);
+      }
+      return selected;
+    }
+    function expireWrathMarks(time){
+      for(const entry of [...wrathMarked.values()]){
+        const w=entry.word;
+        if(!wrathTypeable(w)||(entry.originallyFalling&&w.state!=='falling'))removeWrathMark(w);
+      }
+      completeWrathCycle(time);
+    }
+    function nitrateAbsorbDamage(amount){
+      if(rule?.id!=='nitrate'||!(amount>0))return 0;
+      const absorbed=Math.min(wrathShield,Math.max(0,Math.ceil(amount)));
+      wrathShield-=absorbed;
+      return absorbed;
+    }
+    function getNitrateShield(){return rule?.id==='nitrate'?wrathShield:0;}
+
     let crossbowCombo=0,crossbowTarget=null,adrenalineActive=false,adrenalineTriggered=false,adrenalineLastStandUntil=0;
     let adrenalineMomentumStreak=0,adrenalineMomentumUnlocked=false;
     const crossbowTypeable=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.foxfireHidden&&Number.isFinite(w.y);
@@ -109,6 +177,10 @@
       return 1;
     }
     function onWordSpawn(word,hp){
+      if(rule?.id==='nitrate'){
+        if(markWrathWord(word))return {type:'nitrate-mark',wordIds:[word.id],pending:wrathPending,characterId:rule.id};
+        return null;
+      }
       if(rule?.id!=='crossbow')return;
       if(crossbowTypeable(word))word.el?.classList?.toggle('operator-crossbow-adrenaline',Number(hp)===rule.adrenalineHp&&adrenalineActive&&adrenalineMomentumUnlocked);
     }
@@ -223,6 +295,7 @@
       lupaActive=false;lupaDeadline=0;lupaTargets=[];lupaProgress=0;
     }
     function reset(){
+      if(rule?.id==='nitrate')clearWrath();
       releaseFrozen();releaseMark();releaseHoundMark();correct=0;activations=0;spawnPauseUntil=0;slowUntil=0;
       lastSlowAt=-Infinity;mistakeArmed=false;used=false;streak=0;domainFreezeUntil=0;
       charged=false;awaitingMark=false;executionPendingUntil=0;
@@ -236,6 +309,7 @@
     }
     function tick(time){
       const t=validTime(time);
+      if(rule?.id==='nitrate')expireWrathMarks(t);
       if(frozen&&(t>=freezeUntil||frozen.state!=='falling'))releaseFrozen();
       if(rule?.id==='shield')for(const [id,entry] of shieldFrozenWords){
         if(t>=entry.until||entry.word.state!=='falling'||entry.word.el?.isConnected===false){
@@ -335,6 +409,7 @@
     // Fletcher's old life/temporary VFX, but keep adrenalineTriggered so the
     // 3-second invulnerability can never be farmed with Continue hearts.
     function onRevive(hp,time,words=[]){
+      if(rule?.id==='nitrate'){clearWrath();wrathNextAt=validTime(time)+wrathInterval();return null;}
       if(rule?.id==='shield'){
         shieldPending=null;
         releaseShieldFrozen();
@@ -364,6 +439,7 @@
     // counters. Trigger a fresh emergency shield if Fletcher enters at 1 HP.
     // Called after the stage countdown: its 3 seconds are all playable time.
     function onStageStart(hp,time,words=[]){
+      if(rule?.id==='nitrate'){clearWrath();wrathNextAt=validTime(time)+wrathInterval();return null;}
       if(rule?.id==='shield'){
         // Stage carryover can start below a threshold with no fresh HP loss.
         // Arm (do not spend) the strongest applicable charge; updateField
@@ -414,6 +490,20 @@
       if(!rule)return null;
       correct++;
       const t=validTime(time);
+      if(rule.id==='nitrate'){
+        const word=context.clearedWord;
+        if(!word||!wrathMarked.has(word.id))return null;
+        removeWrathMark(word);
+        // In survival/practice stages there is no damageable boss. Preserve
+        // the defensive shield instead of wasting 5 HP on an empty release.
+        const release=wrathShield>=rule.maxShield&&!context.nonBoss;
+        if(release){wrathShield=0;activations++;}
+        else wrathShield=Math.min(rule.maxShield,wrathShield+1);
+        completeWrathCycle(t);
+        return release
+          ?{type:'nitrate-release',damage:rule.releaseDamage,shield:0,characterId:rule.id}
+          :{type:'nitrate-charge',shield:wrathShield,characterId:rule.id};
+      }
       if(rule.id==='hexaxe'){
         // Hexed words remain real, manually typed answers with full rewards,
         // but none of them can charge the next Chain Cleave activation.
@@ -620,6 +710,22 @@
     }
     // Called once per gameplay frame, after spawns. Automatic clears never call onCorrect.
     function updateField(words,time,context={}){
+      if(rule?.id==='nitrate'){
+        const t=validTime(time);
+        expireWrathMarks(t);
+        if(!wrathActivated&&!wrathNextAt)wrathNextAt=t+wrathInterval();
+        if(!wrathActivated&&t>=wrathNextAt){
+          wrathPending=wrathRandom()<rule.doubleMarkChance?2:1;
+          wrathActivated=true;wrathNextAt=0;activations++;
+          const markedIds=placeWrathMarks(words);
+          return {type:'nitrate-mark',wordIds:markedIds,pending:wrathPending,characterId:rule.id};
+        }
+        if(wrathActivated&&wrathPending){
+          const markedIds=placeWrathMarks(words);
+          if(markedIds.length)return {type:'nitrate-mark',wordIds:markedIds,pending:wrathPending,characterId:rule.id};
+        }
+        return null;
+      }
       if(rule?.id==='shield'){
         tick(time);
         if(!shieldPending)return null;
@@ -706,6 +812,7 @@
       foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
       cassianProgress,cassianGuardUntil,anodyneProgress,chainCleaveProgress,chainCleaveUntil,
+      wrathShield,wrathNextAt,wrathPending,wrathActivated,wrathMarkedIds:[...wrathMarked.keys()],
       shieldUpperUsed,shieldLowerUsed,shieldPending,shieldFrozenIds:[...shieldFrozenWords.keys()],
       crossbowCombo,crossbowTargetId:crossbowTarget?.id??null,adrenalineActive,
       adrenalineTriggered,adrenalineLastStandUntil,
@@ -713,7 +820,7 @@
     function isInvulnerable(time){return (rule?.id==='cassian'&&validTime(time)<cassianGuardUntil)||getAdrenalinePhase(time)==='last-stand';}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,onRevive,updateField,
-      startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,
+      startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,nitrateAbsorbDamage,getNitrateShield,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
       isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,debug});
   }

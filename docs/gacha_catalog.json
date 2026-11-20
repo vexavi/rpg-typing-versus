@@ -121,6 +121,12 @@
       "name": "Lupa",
       "rarity": 6,
       "art": "assets/recruitment/lupa.webp"
+    },
+    {
+      "id": "nitrate",
+      "name": "Nitrate",
+      "rarity": 6,
+      "art": "assets/recruitment/nitrate.webp"
     }
   ]
 }

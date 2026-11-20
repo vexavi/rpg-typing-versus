@@ -3485,6 +3485,8 @@ async function debugJumpTo(mode, idx){
   let activeOperatorId='mc';
   let operatorPassive=null;
   let lastFletcherPhase='off';
+  const nitrateShieldEl=document.getElementById('nitrateShield');
+  const nitrateShieldSegments=Array.from(nitrateShieldEl?.querySelectorAll('.nitrate-shield-segment')||[]);
   let fletcherStatusEl=null;
   let fletcherStatusLastText='';
   // Chain Cleave owns only the temporary hex visuals/word replacements.
@@ -3635,7 +3637,8 @@ async function debugJumpTo(mode, idx){
       word.el?.classList?.remove('operator-crossbow-bullseye','operator-crossbow-adrenaline');
     }
     bossHpText?.classList?.remove('operator-weak-point-ready');
-    wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard','operator-fletcher-last-stand','operator-fletcher-overdrive');
+    wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard','operator-fletcher-last-stand','operator-fletcher-overdrive','operator-nitrate-ready');
+    uiCache.nitrateShield=null;uiCache.nitrateVisible=null;
     operatorClearLupaVisuals();
   }
   function operatorStageWithoutBoss(){
@@ -3796,6 +3799,13 @@ async function debugJumpTo(mode, idx){
       // Don't queue a burst of words after the pause ends.
       spawnAccMs=0;
       pushMsg('ANODYNE · SUPPRESSION FORMULA (4s)',true);
+    }else if(effect.type==='nitrate-charge'){
+      pushMsg(`NITRATE · WRATH SHIELD (${effect.shield}/5)`,true);
+      updateUI();
+    }else if(effect.type==='nitrate-release'){
+      pushMsg('NITRATE · WRATH RELEASE (+7 BOSS DAMAGE)',true);
+      nitrateReleaseVisual();
+      updateUI();
     }else if(effect.type==='crossbow-showoff'){
       if(effect.forceLongest){
         const entry=operatorLongestStageEntry();
@@ -3833,7 +3843,9 @@ async function debugJumpTo(mode, idx){
   // after frame spawns, so timed effects can pick up newly arriving words.
   function applyOperatorFieldEffect(effect){
     if(!effect)return;
-    if(effect.type==='chain-cleave-start'){
+    if(effect.type==='nitrate-mark'){
+      if(effect.wordIds?.length)pushMsg(`NITRATE · WRATH MARKED (${effect.wordIds.length})`,true);
+    }else if(effect.type==='chain-cleave-start'){
       startChainCleaveHex(effect);
     }else if(effect.type==='shield-advance'){
       // Push only the snapshot of falling words present at the HP crossing.
@@ -4074,6 +4086,8 @@ let stage5Phase = 1;
     playerBonusFillW: null,
     playerBonusLeft: null,
     maraHpActive: null,
+    nitrateShield: null,
+    nitrateVisible: null,
     mistakes: null,
     continuesLeft: null,
     overflow: null,
@@ -4197,6 +4211,26 @@ function updateUI(){
       uiCache.playerBonusLeft=hpVisual.bonusLeft;
       playerBonusFill.style.left=hpVisual.bonusLeft;
       playerMeter.style.setProperty('--mara-base-share',hpVisual.bonusLeft);
+    }
+
+    const nitrateVisible=operatorPassive?.rule?.id==='nitrate';
+    const nitrateShield=nitrateVisible?(operatorPassive.getNitrateShield?.()||0):0;
+    if(nitrateVisible!==uiCache.nitrateVisible){
+      uiCache.nitrateVisible=nitrateVisible;
+      if(nitrateShieldEl)nitrateShieldEl.hidden=!nitrateVisible;
+      if(!nitrateVisible)wordLane?.classList?.remove('operator-nitrate-ready');
+    }
+    if(nitrateShield!==uiCache.nitrateShield){
+      uiCache.nitrateShield=nitrateShield;
+      for(let i=0;i<nitrateShieldSegments.length;i++){
+        nitrateShieldSegments[i].classList.toggle('filled',i<nitrateShield);
+      }
+      if(nitrateShieldEl){
+        nitrateShieldEl.classList.toggle('awakened',nitrateShield>=3);
+        nitrateShieldEl.classList.toggle('charged',nitrateShield>=5);
+        nitrateShieldEl.setAttribute('aria-label',`Wrath Shield ${nitrateShield} of 5`);
+      }
+      wordLane?.classList?.toggle('operator-nitrate-ready',nitrateVisible&&nitrateShield>=5);
     }
 
     if(mistakes !== uiCache.mistakes){
@@ -5754,7 +5788,8 @@ if(state === "landed"){
     if(obj.challengeComet) challengeUpdateCometGlow(obj, 0);
     setWordY(el, obj.y);
     wordsOnField.push(obj);
-    operatorPassive?.onWordSpawn?.(obj,playerHp);
+    const nitrateSpawnMark=operatorPassive?.onWordSpawn?.(obj,playerHp);
+    if(nitrateSpawnMark?.type==='nitrate-mark')applyOperatorFieldEffect(nitrateSpawnMark);
     // Hex new timed spawns immediately, without modifying the spawn schedule.
     if(!operatorHexSummoned&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
@@ -6013,6 +6048,7 @@ if(state === "landed"){
     // Only manual onCorrect awards these, never automatic clears or spawns.
     if(passiveEffect?.bonusDamage)bonusDamage+=passiveEffect.bonusDamage;
     if(passiveEffect?.type==='boss-bonus')bonusDamage+=passiveEffect.damage;
+    if(passiveEffect?.type==='nitrate-release')bonusDamage+=passiveEffect.damage||0;
     if(passiveEffect?.type==='lupa-hit'||passiveEffect?.type==='lupa-complete')bonusDamage+=passiveEffect.damage||0;
     if(passiveEffect?.type==='aveline-cleave'){
       bossHpText?.classList?.remove('operator-weak-point-ready');
@@ -6286,6 +6322,22 @@ function togglePause(fromGesture=false){
     else if(gameState === "playing") pauseGame();
   }
 
+function nitrateReleaseVisual(){
+    if(!wordLane)return;
+    const hit=document.createElement('div');
+    hit.className='operator-nitrate-release';
+    hit.setAttribute('aria-hidden','true');
+    hit.textContent='WRATH · +7';
+    wordLane.appendChild(hit);
+    setTimeout(()=>hit.remove(),800);
+  }
+  function nitrateBlockVisual(blocked){
+    if(!nitrateShieldEl)return;
+    nitrateShieldEl.classList.remove('nitrate-block-impact');
+    void nitrateShieldEl.offsetWidth;
+    nitrateShieldEl.classList.add('nitrate-block-impact');
+    pushMsg(`NITRATE · SHIELD BLOCKED ${blocked} DAMAGE`,true);
+  }
 function damagePlayer(amount, reason){
     if(amount <= 0) return;
     if(operatorPassive?.isInvulnerable(stageElapsedSec())&&gameState==='playing'){
@@ -6295,10 +6347,16 @@ function damagePlayer(amount, reason){
     }
 
     const scaled = Math.max(1, Math.round(amount));
-    damageTakenThisStage += scaled;
-    damageTakenThisRun += scaled;
+    // Wrath's Shield HP absorbs first; only the remainder reaches ordinary HP.
+    // No player-damage stage hooks fire on a fully shielded hit.
+    const shieldAbsorbed=operatorPassive?.nitrateAbsorbDamage?.(scaled)||0;
+    const hpDamage=scaled-shieldAbsorbed;
+    if(shieldAbsorbed)nitrateBlockVisual(shieldAbsorbed);
+    if(hpDamage<=0){updateUI();return;}
+    damageTakenThisStage += hpDamage;
+    damageTakenThisRun += hpDamage;
     const previousHp=playerHp;
-    playerHp = Math.max(0, playerHp - scaled);
+    playerHp = Math.max(0, playerHp - hpDamage);
     const passiveEffect=operatorPassive?.onPlayerDamage(previousHp,playerHp,stageElapsedSec(),wordsOnField);
     if(passiveEffect?.type==='slowdown')pushMsg('ALDEN · SECOND WIND (5s)',true);
     else if(passiveEffect?.type==='shield-advance')applyOperatorFieldEffect(passiveEffect);
@@ -6308,10 +6366,10 @@ function damagePlayer(amount, reason){
       pushMsg('FLETCHER · LAST STAND (3s INVULNERABLE)',true);
       renderFletcherStatus(stageElapsedSec());
     }
-    if(currentMode !== 'shared') mechanicEvent('onPlayerDamage',null,{damage:scaled,reason});
+    if(currentMode !== 'shared') mechanicEvent('onPlayerDamage',null,{damage:hpDamage,reason});
     playPlayerHitSfx();
     flashPlayerDamage();
-    pushMsg(`Player takes ${scaled} dmg (${reason})`, true);
+    pushMsg(`Player takes ${hpDamage} dmg (${reason})`, true);
     updateUI();
 
     if(playerHp === 0) onPlayerDeath();
