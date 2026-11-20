@@ -69,3 +69,22 @@ export function applyShortRename(chapters,plan){
   for(const key of ['bossSprite','battleBackground'])if(st.battle?.[key])st.battle[key]=map.get(st.battle[key])||st.battle[key];
  }
 }
+
+// Audio is a separate asset library; files can be shared by several stages.
+export const storyAudioPath = filename => 'story/audio/'+filename;
+export function nextBgmName(paths,ext='webm'){
+ if(!['webm','mp3','m4a','opus','ogg','wav'].includes(ext))throw Error('Unsupported music extension.');
+ const names=new Set([...paths].map(p=>String(p||'').split('/').at(-1).toLowerCase()));
+ for(let n=1;n<=9999;n++){
+  if(!['webm','mp3','m4a','opus','ogg','wav'].some(x=>names.has(`bgm-${n}.${x}`)))return `bgm-${n}.${ext}`;
+ }
+ throw Error('Too many music files.');
+}
+export function referencedMusic(chapters){
+ return [...new Set((chapters||[]).flatMap(ch=>(ch.stages||[]).map(st=>st.battle?.bgmFile).filter(Boolean)))];
+}
+export function musicOptions(chapters,knownNames=[],stagedPaths=[]){
+ return [...new Set([...referencedMusic(chapters),...knownNames.map(x=>String(x).startsWith('story/audio/')?x:storyAudioPath(x)),...stagedPaths])]
+  .filter(x=>/^story\/audio\/[a-zA-Z0-9][\w.-]*\.(?:mp3|m4a|webm|opus|ogg|wav)$/i.test(x))
+  .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+}

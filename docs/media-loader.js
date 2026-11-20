@@ -13,8 +13,9 @@
     const entry=catalog[path];
     if(!entry){
       // Story Editor assets are published later via GitHub and won't exist in
-      // the build-time asset manifest. Permit safe same-origin Story images.
-      if(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(path))
+      // the build-time asset manifest. Permit safe same-origin Story media.
+      if(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(path) ||
+         /^story\/audio\/[a-zA-Z0-9][\w.-]*\.(?:mp3|m4a|webm|opus|ogg|wav)$/i.test(path))
         return {present:true,url:u.href,path,bytes:0};
       return {present:false,url:'',missing:path};
     }
