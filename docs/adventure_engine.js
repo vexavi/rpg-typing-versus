@@ -4294,6 +4294,7 @@ function updateUI(){
   }
 
   function resetField(opts = {}){
+    window.RPG_CH1_SPECIAL?.reset();
     clearChainCleaveHex();
     cancelFoxfireRewind();
     const preservePermafrost = !!opts.preservePermafrost;
@@ -5793,6 +5794,8 @@ if(state === "landed"){
     // Hex new timed spawns immediately, without modifying the spawn schedule.
     if(!operatorHexSummoned&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
+    // Panic consumes a normal spawn; never generate extra words or interfere with operator marks.
+    if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&currentMode==='story')window.RPG_CH1_SPECIAL?.markSpawn(obj,stageElapsedSec(),wordsOnField);
     return obj;
   }
 
@@ -6190,6 +6193,7 @@ if(state === "landed"){
     }
 
     gameState = "paused";
+    window.RPG_CH1_SPECIAL?.suspend(); // Paused UI must remain visible even during blackout.
     pauseStageClock();
 
     pausedBgmState = {
@@ -6496,6 +6500,9 @@ function damagePlayer(amount, reason){
     overflow = false;
     overflowSpawnGraceUntilMs = 0;
     resumeStageClock();
+    // Continue clears the field; start a fresh Chapter 1 blink/Panic cycle
+    // using the CURRENT stage clock, not the original stage start time.
+    window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
     restoreBgmState();
     gameState = "playing";
     if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
@@ -6551,6 +6558,7 @@ function damagePlayer(amount, reason){
   }
   function hardLoseToReset(){ returnFromDefeatToModes(); }
   function onPlayerDeath(){
+    window.RPG_CH1_SPECIAL?.suspend(); // Never obscure Continue / Game Over.
     if(gameState !== "playing") return;
     if(continuesLeft > 0){ showContinuePrompt(); return; }
     hardLoseNoContinues();
@@ -6749,6 +6757,7 @@ function damagePlayer(amount, reason){
     if(currentMode !== "shared") mechanicEvent('onStageStart');
 
     stagePlayStartMs = nowMs();
+    window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'');
     // Normal/Extra carry HP. Fletcher can activate Last Stand at 1 HP;
     // Mara queues Emergency Readiness if already below her HP threshold.
     // Both are initialized after the countdown, with a fresh stage clock.
@@ -7057,6 +7066,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
   function onBossDefeated(){
     if(gameState !== "playing") return;
+    window.RPG_CH1_SPECIAL?.suspend(); // Never obscure the clear screen.
     if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
     // Ensure EX2 survival flag doesn't linger into clear screens/next stages
     resetEx2HackMechanic();
@@ -7189,6 +7199,8 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
   function submitAnswer(){
     if(gameState !== "playing") return;
+    // A blackout never penalizes a word the player could not see.
+    if(window.RPG_CH1_SPECIAL?.isFullyClosed()){answerInput.value="";return;}
     const raw = answerInput.value.trim();
     answerInput.value = "";
 
@@ -7290,6 +7302,13 @@ if(gameState === "paused"){
         scheduleTick(true);
         return;
       }
+      // Sleepy runs on the pause-aware stage clock. Delirium changes text once at full closure.
+      // Panic and normal word motion freeze only while the eyelids are fully closed.
+      const chapterBlackout=!!window.RPG_CH1_SPECIAL?.frame(elapsed,{
+        words:wordsOnField,vocabulary:currentMode==='story'?operatorStageWordEntries():[],
+        normalize:normalizeAnswer,onClosed:()=>{answerInput.value='';}
+      });
+      const battleDt=chapterBlackout?0:dt;
       ex4HandlePhaseTriggers(elapsed);
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
@@ -7309,7 +7328,7 @@ if(gameState === "paused"){
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
       if(!overflowSpawnPaused && !operatorPause){
-        spawnAccMs += dt * 1000;
+        spawnAccMs += battleDt * 1000;
       }else{
         spawnAccMs = 0;
       }
@@ -7341,7 +7360,7 @@ if(gameState === "paused"){
       // Apply after stage mechanics so both phases scale the actual stage pace.
       spawnMs = Math.max(80, Math.round(spawnMs * (operatorPassive?.getSpawnIntervalMultiplier?.(elapsed)||1)));
         let loops = 0;
-        if(!overflowSpawnPaused && !operatorPause){
+        if(!overflowSpawnPaused && !operatorPause && !chapterBlackout){
           while(spawnAccMs >= spawnMs && loops < 6){
             spawnWord();
             spawnAccMs -= spawnMs;
@@ -7403,9 +7422,9 @@ if(gameState === "paused"){
           ? w.fallSpeedOverride
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
-        if(!frozenByOperator)w.y += v * dt;
+        if(!frozenByOperator)w.y += v * battleDt;
         // Word-specific Shield Advance holds also suspend custom movement hooks.
-        if(!frozenByOperator&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt});
+        if(!frozenByOperator&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt:battleDt});
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
         const gIdx = (w.groupIndex || 0);
@@ -7418,6 +7437,14 @@ if(gameState === "paused"){
 
         if(w.y >= targetY){
           w.y = targetY;
+          // Panic is a falling hazard, never a stacked word. Exactly one hit at the floor.
+          if(w.chapterPanic){
+            const panicDamage=window.RPG_CH1_SPECIAL?.panicDamage()||1;
+            removeWord(w.id);
+            damagePlayer(panicDamage,'Panic word');
+            if(gameState!=='playing'){scheduleTick(true);return;}
+            i--;continue;
+          }
 
           if(w.challengeComet){
             challengeUpdateCometGlow(w, 1);
@@ -7468,7 +7495,7 @@ if(gameState === "paused"){
       overflow = landedCount >= laneCapacity();
       if(overflow){
         overflowSpawnGraceUntilMs = 0;
-        overflowAcc += dt;
+        overflowAcc += battleDt;
         if(overflowAcc >= 1){
           const ticks = Math.floor(overflowAcc);
           overflowAcc -= ticks;

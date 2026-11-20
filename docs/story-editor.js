@@ -5,17 +5,17 @@ import {currentTeacher,googleTeacher,teacherSignOut,errorMessage} from './cloud-
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getFirestore,doc,runTransaction,serverTimestamp,getDocFromServer} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 import {loadPublishedStory,missingStoryRule} from './story-content-cloud.js';
-import {cleanStory,safeStoryImage} from './story-format.mjs';
+import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
-import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath} from './story-asset-names.mjs';
+import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const DRAFT_KEY='rpg_story_teacher_draft_v87';
 const STAGE_BASE=[{fallSpeedPxPerSec:41,spawnEveryMs:2950,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,hitDamage:1}];
 const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Boss damage per word',1,100,1]};
-const stagedPhotos=new Map();let liveBalance={},liveRequestId=0;
+const stagedPhotos=new Map(),stagedAudio=new Map();let liveBalance={},liveRequestId=0;
 const REPO_KEY='rpg_story_github_repo_v90';
-let onlineImageNames=[],selectedLocalFiles=new Map();
+let onlineImageNames=[],selectedLocalFiles=new Map(),onlineAudioNames=[];
 let repairChoices=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -30,6 +30,7 @@ function updateAuth(){
  $('saveDraft').disabled=busy||!chapters.length;
  $('reload').disabled=busy;$('import').disabled=busy;
  $('downloadPhotos').disabled=busy||stagedPhotos.size===0;$('downloadPhotos').textContent=`Download Photo Pack (${stagedPhotos.size})`;
+ $('downloadAudio').disabled=busy||stagedAudio.size===0;$('downloadAudio').textContent=`Download Music Pack (${stagedAudio.size})`;
 }
 function markDirty(){dirty=true;status('Changes are not published. Save Draft or Publish when ready.');}
 function currentChapter(){return chapters[chapterIndex]||null;}
@@ -50,6 +51,12 @@ function optionMarkup(selected=''){return `<option value="">None</option>`+asset
 function stageArtPath(key){return currentStage()?.battle?.[key]||'';}
 function assetPreview(path){return stagedPhotos.get(path)?.url||(safeStoryImage(path)?path:'');}
 function updateStaged(path,blob){const old=stagedPhotos.get(path);if(old)URL.revokeObjectURL(old.url);stagedPhotos.set(path,{blob,url:URL.createObjectURL(blob)});}
+function audioPaths(){return referencedMusic(chapters);}
+function audioOptions(selected=''){const paths=musicOptions(chapters,onlineAudioNames,[...stagedAudio.keys()]);if(selected&&safeStoryAudio(selected)&&!paths.includes(selected))paths.unshift(selected);return paths;}
+function audioPreview(path){return stagedAudio.get(path)?.url||(safeStoryAudio(path)?path:'');}
+function dropUnusedAudio(){const used=new Set(audioPaths());for(const [path,item] of stagedAudio)if(!used.has(path)){URL.revokeObjectURL(item.url);stagedAudio.delete(path);}updateAuth();}
+function clearAudioSelection(){for(const item of stagedAudio.values())URL.revokeObjectURL(item.url);stagedAudio.clear();updateAuth();}
+function audioOptionsMarkup(selected=''){return `<option value="">None (silent)</option>`+audioOptions(selected).map(path=>`<option value="${esc(path)}" ${path===selected?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('');}
 function catalog(){return (window.RPG_MECHANICS?.list()||[]).filter(m=>!m.modes?.length||m.modes.includes('story'));}
 function inherited(key,st=currentStage()){
  const base=STAGE_BASE[Math.min(4,Math.max(0,(Number(st?.battle?.template)||1)-1))]||STAGE_BASE[0];
@@ -84,8 +91,8 @@ async function loadLiveValues(){
   fillLiveValues();
  }catch(error){if(token===liveRequestId)status('Could not read existing Game Settings: '+errorMessage(error),true)}
 }
-function mechanicMarkup(st){
- const plugins=catalog();if(!plugins.length)return '<p class="muted">No Story mechanics installed. New behaviors require a static code module; they appear here automatically once installed.</p>';
+function mechanicMarkup(st,onlyChapter1=false){
+ const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic'].includes(m.id):!['sleepy','delirium','panic'].includes(m.id));if(!plugins.length)return '<p class="muted">No Story mechanics installed. New behaviors require a static code module; they appear here automatically once installed.</p>';
  return plugins.map(m=>{
   const settings=st.battle?.mechanics?.[m.id]||{};
   const controls=m.fields.map(field=>{
@@ -134,6 +141,67 @@ async function addSharedArt(event,kind){
 }
 async function addBossSprite(event){return addSharedArt(event,'boss');}
 async function addBattleBackground(event){return addSharedArt(event,'bg');}
+async function addMusic(event){
+ const file=event.target.files?.[0];event.target.value='';if(!file)return;
+ const st=currentStage();if(!st)return;
+ try{
+  const ext=file.name.split('.').at(-1).toLowerCase();
+  if(!['mp3','m4a','webm','opus','ogg','wav'].includes(ext))throw Error('Choose MP3, M4A, WEBM, OPUS, OGG or WAV.');
+  if(!file.size||file.size>25*1024*1024)throw Error('Music must be 1 byte to 25 MB. Use compressed audio for smaller downloads.');
+  if(file.type&&!/^(audio\/|video\/webm|application\/octet-stream)/i.test(file.type))throw Error('The selected file is not an audio file.');
+  if(stagedAudio.size>=40)throw Error('Maximum 40 staged music tracks. Download the Music Pack first.');
+  if(currentStage()!==st)throw Error('Stage selection changed.');
+  // Reserve names already on GitHub, even if a song is not assigned to any stage.
+  // Never rename or overwrite previously uploaded tracks just to use a new one.
+  const repo=$('repoName').value.trim();
+  if(validGithubRepo(repo)){
+   try{
+    const r=await fetch(`https://api.github.com/repos/${repo}/contents/docs/story/audio`,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});
+    if(r.ok){const files=await r.json();if(Array.isArray(files))onlineAudioNames=[...new Set([...onlineAudioNames,...files.filter(x=>x.type==='file'&&safeStoryAudio(storyAudioPath(x.name))).map(x=>x.name)])];}
+   }catch(error){console.info('Music directory scan unavailable:',error)}
+  }
+  if(currentStage()!==st)throw Error('Stage selection changed while checking music names.');
+  const name=nextBgmName(audioOptions().concat(onlineAudioNames),ext),path=storyAudioPath(name);
+  const old=stagedAudio.get(path);if(old)URL.revokeObjectURL(old.url);
+  stagedAudio.set(path,{blob:file,url:URL.createObjectURL(file)});
+  st.battle.bgmFile=path;dropUnusedAudio();markDirty();renderFields();
+  status(`${name} selected. Download Music Pack, upload to GitHub, then Publish. You can reuse this track on other stages.`,false,true);
+ }catch(error){status('Music failed: '+error.message,true)}
+}
+async function downloadMusic(){
+ if(!stagedAudio.size||busy)return;
+ busy=true;updateAuth();status('Building Music Pack…');
+ try{const zip=await photoPackZip([...stagedAudio].map(([path,item])=>({name:'docs/'+path,blob:item.blob})),{kind:'audio'});
+  const url=URL.createObjectURL(zip),link=document.createElement('a');link.href=url;link.download='RPG_Story_Music.zip';link.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+  status('Music Pack downloaded. Extract it into the GitHub repository root, commit/push, then Check Music and Publish.',false,true);
+ }catch(error){status('Music Pack failed: '+error.message,true)}finally{busy=false;updateAuth()}
+}
+async function checkMusicOnline(path){
+ try{const url=new URL(path,document.baseURI);url.searchParams.set('check',String(Date.now()));
+  const response=await fetch(url.href,{method:'HEAD',cache:'no-store'});
+  if(response.status===405||response.status===501){const get=await fetch(url.href,{cache:'no-store'});return get.ok&&!/text\/html/i.test(get.headers.get('content-type')||'');}
+  return response.ok&&!/text\/html/i.test(response.headers.get('content-type')||'');
+ }catch{return false}
+}
+function showMusicReport(rows){const report=$('musicReport');report.innerHTML=rows.map(r=>`<li class="${r.ok?'photo-ok':'photo-bad'}">${esc(r.path.split('/').at(-1))} — ${esc(r.text)}</li>`).join('');$('musicReportPanel').hidden=!rows.length;}
+async function checkMusic(){
+ if(busy)return;busy=true;updateAuth();status('Checking music on the published website…');
+ try{const paths=audioPaths(),rows=[];
+  for(let i=0;i<paths.length;i+=6){const result=await Promise.all(paths.slice(i,i+6).map(async path=>({path,ok:await checkMusicOnline(path)})));for(const r of result)rows.push({...r,text:r.ok?'Online ✓':stagedAudio.has(r.path)?'Only selected in browser — upload the Music Pack first':'Not found on GitHub Pages'});}
+  showMusicReport(rows);const count=rows.filter(r=>r.ok).length;
+  status(rows.length===count?`All ${count} music tracks are online. You may publish.`:`${count}/${rows.length} music tracks online. Upload the missing music files before publishing.`,rows.length!==count,rows.length===count);
+ }catch(error){status('Music check failed: '+error.message,true)}finally{busy=false;updateAuth()}
+}
+async function findExistingMusic(){
+ const repo=$('repoName').value.trim();if(!validGithubRepo(repo)){status('Enter your GitHub username/repository under Chapter Images first.',true);return;}
+ if(busy)return;busy=true;updateAuth();status('Finding music on GitHub…');
+ try{const r=await fetch(`https://api.github.com/repos/${repo}/contents/docs/story/audio`,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});
+  if(!r.ok)throw Error(r.status===404?'No docs/story/audio folder was found yet. Upload a Music Pack or create that folder first.':`GitHub returned ${r.status}.`);
+  const files=await r.json();if(!Array.isArray(files))throw Error('GitHub did not return the music folder.');
+  onlineAudioNames=files.filter(x=>x.type==='file'&&safeStoryAudio(storyAudioPath(x.name))).map(x=>x.name);renderFields();
+  status(`Found ${onlineAudioNames.length} music files. Choose any of them in Battle Settings → Music.`,false,true);
+ }catch(error){status('Could not find existing music: '+error.message,true)}finally{busy=false;updateAuth()}
+}
 async function downloadPhotos(){
  if(!stagedPhotos.size)return;
  try{busy=true;updateAuth();status('Building photo ZIP…');
@@ -181,7 +249,7 @@ async function checkPhotos(){
 }
 function repairUsingNames(filenames,source){
  const plan=planImageRepairs(chapters,filenames,[]); // Explicit repair must include previously selected images (v89's double-prefix bug).
- if(plan.repairs.length){applyImageRepairs(plan);dropUnusedPhotos();markDirty();render();}
+ if(plan.repairs.length){applyImageRepairs(plan);dropUnusedPhotos();dropUnusedAudio();markDirty();render();}
  const extra=plan.ambiguous.length?` ${plan.ambiguous.length} entries have multiple candidate filenames and were not changed.`:'';
  const other=plan.missing.length?` ${plan.missing.length} paths had no matching filename.`:'';
  status(`${source}: corrected ${plan.repairs.length} image paths in your draft.${extra}${other} Click Check Images to verify the actual website before publishing.`,plan.ambiguous.length>0||plan.missing.length>0,false);
@@ -267,7 +335,7 @@ async function shortenExistingImages(){
    const old=stagedPhotos.get(item.from);
    if(old){stagedPhotos.delete(item.from);updateStaged(item.to,old.blob);URL.revokeObjectURL(old.url);}
   }
-  dropUnusedPhotos();markDirty();render();writeDraft();
+  dropUnusedPhotos();dropUnusedAudio();markDirty();render();writeDraft();
   status(`${plan.length} images renamed in the draft and saved locally. Extract RPG_Story_Short_Images.zip into the GitHub repository root, push once, then Check Images and Publish. Keep your old files until publishing succeeds.`,false,true);
  }catch(error){status('Short-name export stopped without changing your draft: '+error.message,true)}
  finally{busy=false;updateAuth()}
@@ -292,6 +360,16 @@ function renderNav(){
  $('addStage').disabled=!ch||busy;$('addChapter').disabled=busy;
 }
 function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${esc(scenePreview(scene))}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image file</label><details class="advanced-image-path"><summary>${esc(scene.image?.split('/').at(-1)||'No image selected')}</summary><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></details></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><label class="filebutton small">Select Photo<input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-photo-phase="${phase}" data-photo-index="${i}" hidden></label><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
+function musicEditor(st){
+ const selected=st.battle?.bgmFile||'',src=audioPreview(selected);
+ return `<div class="boss-sprite-panel music-panel"><h4>Battle Music (BGM)</h4><p class="muted">Choose a shared track for this stage. Short names: bgm-1.webm, bgm-2.mp3, etc.</p>
+ <div class="field"><label>Use Existing Music (reusable)</label><select data-music-select="bgmFile">${audioOptionsMarkup(selected)}</select></div>
+ <div class="field"><details class="advanced-image-path"><summary>Advanced music path</summary><input data-battle-field="bgmFile" aria-label="Music path" value="${esc(selected)}" placeholder="story/audio/bgm-1.webm" maxlength="180"></details></div>
+ <label class="music-loop"><input type="checkbox" data-battle-field="bgmLoop" ${st.battle?.bgmLoop!==false?'checked':''}> Loop during battle</label>
+ <audio id="stage-bgm-preview" controls preload="none" ${src?`src="${esc(src)}"`:''} aria-label="Preview stage BGM"></audio>
+ <div class="boss-sprite-actions"><label class="filebutton">Upload New Music<input type="file" data-audio-file accept="audio/*,.mp3,.m4a,.webm,.opus,.ogg,.wav" hidden></label><button type="button" data-action="remove-music" class="danger" ${!selected?'disabled':''}>Remove from Stage</button></div>
+ <p class="muted">MP3, M4A, WEBM/Opus, OGG or WAV · max 25 MB per file. Download Music Pack once, add to GitHub, then publish. No paid Firebase storage.</p></div>`;
+}
 function artEditor(st,key,title,kind,help){
  const value=st.battle?.[key]||'';
  return `<div class="boss-sprite-panel"><h4>${esc(title)}</h4><p class="muted">${esc(help)}</p><div class="boss-sprite-row">
@@ -303,6 +381,8 @@ function artEditor(st,key,title,kind,help){
  <p class="muted">Using an existing image does not upload, rename, or copy it. Removing it from this stage won't delete the shared file.</p></div></div></div>`;
 }
 function renderFields(){
+ // A preview must stop when changing stages; detached audio elements can keep playing.
+ const previousAudio=$('stage-bgm-preview');if(previousAudio){previousAudio.pause();previousAudio.removeAttribute('src');previousAudio.load();}
  const ch=currentChapter(),st=currentStage();
  if(!ch||!st){$('chapterFields').textContent='Select a chapter and stage.';$('stageFields').textContent='';$('slidesEditor').textContent='';return;}
  $('chapterFields').innerHTML=`<div class="editheading"><h2>Chapter ${esc(ch.id)}</h2><button class="danger" data-action="delete-chapter">Delete Chapter</button></div><div class="grid"><div class="field"><label for="ch-title">Chapter title</label><input id="ch-title" data-chapter-field="title" maxlength="80" value="${esc(ch.title)}"></div><div class="field"><label for="ch-subtitle">Subtitle</label><input id="ch-subtitle" data-chapter-field="subtitle" maxlength="150" value="${esc(ch.subtitle||'')}"></div></div>`;
@@ -316,7 +396,9 @@ function renderFields(){
  <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status">Current values shown below. Stage overrides are saved with this chapter.</p>
  <div class="grid"><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"><span class="muted">Current: ${esc(st.battle?.bossHp??20)} HP</span></div>${numericFields}</div>
  ${artEditor(st,'bossSprite','Boss Sprite','boss','Boss art for this stage. Select the same existing image in any other stage to reuse it.')} 
- ${artEditor(st,'battleBackground','Battle Background','bg','Background shown behind the fight in this stage. Backgrounds can also be reused.')} </div>
+ ${artEditor(st,'battleBackground','Battle Background','bg','Background shown behind the fight in this stage. Backgrounds can also be reused.')}
+ ${musicEditor(st)} </div>
+ ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>Chapter 1 · Special Stage Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy settings to all Chapter 1 stages</button></div><p class="muted">Enable and tune each effect for this stage (${esc(st.id)}). All three start OFF. Delirium only works while Sleepy is enabled. During complete darkness, words and spawn timers pause.</p>${mechanicMarkup(st,true)}</div>`:''}
  <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Story-specific settings are published with the chapter; no code comes from Firebase.</p></div>
  <p class="muted">Stage ID ${esc(st.id)} is fixed because it identifies student progress. Chapter changes take effect the next time a student starts Story Mode.</p></section>`;
  fillLiveValues()
@@ -341,8 +423,9 @@ function handleNavClick(event){const btn=event.target.closest('button[data-actio
 function handleEditorInput(event){const t=event.target,st=currentStage(),ch=currentChapter();if(!ch||!st)return;
  if(t.dataset.chapterField)ch[t.dataset.chapterField]=t.value;
  else if(t.dataset.stageField)st[t.dataset.stageField]=t.value;
+ else if(t.dataset.musicSelect){st.battle.bgmFile=t.value;dropUnusedAudio();markDirty();renderFields();return;}
  else if(t.dataset.assetSelect){st.battle[t.dataset.assetSelect]=t.value;dropUnusedPhotos();markDirty();renderFields();return;}
- else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else fillLiveValues();}
+ else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='checkbox'?t.checked:t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(t.dataset.battleField==='bgmFile'){dropUnusedAudio();const a=$('stage-bgm-preview');if(a){a.pause();if(safeStoryAudio(t.value))a.src=audioPreview(t.value);else a.removeAttribute('src');}}else if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else fillLiveValues();}
  else if(t.dataset.mechanicId){
   const m=catalog().find(x=>x.id===t.dataset.mechanicId),field=m?.fields.find(x=>x.key===t.dataset.mechanicKey);if(!field)return;
   const value=field.type==='boolean'?t.value==='true':Number(t.value);
@@ -358,6 +441,16 @@ function handleEditorInput(event){const t=event.target,st=currentStage(),ch=curr
  if(t.dataset.chapterField==='title'||t.dataset.stageField==='title')renderNav();
 }
 function editorAction(event){const btn=event.target.closest('button[data-action]');if(!btn||busy)return;const a=btn.dataset.action,ch=currentChapter(),st=currentStage(),phase=btn.dataset.phase,i=Number(btn.dataset.i);
+ if(a==='copy-ch1-mechanics'){
+  if(ch.id!=='1'||!st)return;
+  if(!confirm(`Copy Sleepy, Delirium and Panic from ${st.id} to every other stage in Chapter 1? Existing settings for those three mechanics will be replaced.`))return;
+  const ids=['sleepy','delirium','panic'];const defs=catalog();
+  for(const target of ch.stages){if(target===st)continue;target.battle.mechanics ||= {};
+   for(const id of ids){const def=defs.find(x=>x.id===id);if(!def)continue;target.battle.mechanics[id]={};
+    for(const field of def.fields)target.battle.mechanics[id][field.key]=st.battle.mechanics?.[id]?.[field.key]??field.default;
+   }
+  }markDirty();renderFields();status(`Chapter 1 mechanics copied from ${st.id} to ${ch.stages.length-1} other stages. Save Draft or Publish to apply.`,false,true);return;
+ }
  if(a==='delete-chapter'){
   if(chapters.length===1){status('At least one chapter must remain.',true);return;}
   if(!confirm(`Delete Chapter ${ch.id} and all its stages from the next publication?`))return;
@@ -367,12 +460,13 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
   if(!confirm(`Delete stage ${st.id} from the next publication? Existing progress for this stage will remain in student records.`))return;
   retiredStages.add(st.id);ch.stages.splice(stageIndex,1);stageIndex=Math.min(stageIndex,ch.stages.length-1);
  }else if(a==='remove-art'&&['bossSprite','battleBackground'].includes(btn.dataset.artKey)){st.battle[btn.dataset.artKey]='';
+ }else if(a==='remove-music'){st.battle.bgmFile='';
  }else if(a==='add-slide'){st[phase].push({image:'',caption:''});
  }else if(a==='delete-slide'){st[phase].splice(i,1);
  }else if(a==='slide-up'){if(!swap(st[phase],i,i-1))return;
  }else if(a==='slide-down'){if(!swap(st[phase],i,i+1))return;
  }else return;
- dropUnusedPhotos();markDirty();render();
+ dropUnusedPhotos();dropUnusedAudio();markDirty();render();
 }
 function setLoaded(manifest,revision=0){const normalized=cleanStory(manifest);chapters=normalized.chapters;loadedRevision=revision;chapterIndex=0;stageIndex=0;dirty=false;}
 function restoreRetired(source){retiredStages=new Set((source.retiredStageIds||[]).filter(s=>/^[1-9]\d{0,3}-[1-9]\d{0,3}$/.test(String(s))));retiredChapters=new Set((source.retiredChapterIds||[]).filter(s=>/^[1-9]\d{0,3}$/.test(String(s))));}
@@ -405,9 +499,12 @@ async function publish(){
  const previous=publishedOrder.join('|'),newOrder=currentOrder().join('|');
  if(previous!==newOrder&&loadedRevision>0&&!confirm('You changed or deleted published stage order. Unlock progression may change for existing students. Publish anyway?'))return;
  if(!confirm(`Publish ${chapters.length} chapters / ${newOrder.split('|').length} stages to students?`))return;
- busy=true;updateAuth();status('Checking chapter photos…');
+ busy=true;updateAuth();status('Checking chapter photos and music…');
  try{
   await verifyImageFiles(payload);
+  const missingMusic=[];const paths=referencedMusic(payload.chapters);
+  for(let i=0;i<paths.length;i+=6){const group=await Promise.all(paths.slice(i,i+6).map(async path=>({path,ok:await checkMusicOnline(path)})));missingMusic.push(...group.filter(item=>!item.ok).map(item=>item.path));}
+  if(missingMusic.length){showMusicReport(missingMusic.map(path=>({path,ok:false,text:stagedAudio.has(path)?'Only in browser — download and upload Music Pack':'Not found on GitHub Pages'})));throw Error(`${missingMusic.length} music file(s) are not yet online. Download Music Pack and push to GitHub first.`);}
   status('Publishing to Firebase…');
   const reference=doc(db,'storyContent','published');let next;
   if(currentOrder().some(id=>retiredStages.has(id)))throw Error('The story contains a retired stage ID. Change the imported file to use a new ID, or undo the deletion.');
@@ -429,18 +526,19 @@ function exportFile(){try{const payload=cleanStory({chapters});const output={...
 async function importFile(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;
  try{if(file.size>750000)throw Error('JSON file exceeds 750 KB.');const incoming=JSON.parse(await file.text());const normalized=cleanStory(incoming);
   if(!confirm(`Replace the editor draft with ${normalized.chapters.length} imported chapters? Nothing is published yet.`))return;
-  clearPhotoSelection();chapters=normalized.chapters;restoreRetired(incoming);chapterIndex=0;stageIndex=0;markDirty();render();
+  clearPhotoSelection();clearAudioSelection();chapters=normalized.chapters;restoreRetired(incoming);chapterIndex=0;stageIndex=0;markDirty();render();
  }catch(e){status('Import failed: '+e.message,true);}}
 async function boot(){
  $('chapterList').addEventListener('click',handleNavClick);$('stageList').addEventListener('click',handleNavClick);
  $('chapterFields').addEventListener('input',handleEditorInput);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
- $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('select[data-asset-select]'))handleEditorInput(event);});
+ $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('input[type=file][data-audio-file]'))void addMusic(event);else if(event.target.matches('select[data-asset-select],select[data-music-select],input[data-battle-field=bgmLoop]'))handleEditorInput(event);});
  $('slidesEditor').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-photo-phase]'))void addPhoto(event);});
  $('chapterFields').addEventListener('click',editorAction);$('stageFields').addEventListener('click',editorAction);$('slidesEditor').addEventListener('click',editorAction);
  $('addChapter').onclick=()=>{const id=nextChapterId(),ch={id,title:`Chapter ${id}`,subtitle:'',stages:[]};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();};
  $('addStage').onclick=()=>{const ch=currentChapter();if(!ch)return;if(ch.stages.length>=60){status('Maximum 60 stages per chapter.',true);return;}ch.stages.push(newStage(ch));stageIndex=ch.stages.length-1;markDirty();render();};
  $('saveDraft').onclick=()=>{try{writeDraft()}catch(e){status('Could not save local draft: '+e.message,true)}};
  $('downloadPhotos').onclick=downloadPhotos;
+ $('downloadAudio').onclick=downloadMusic;$('checkMusic').onclick=()=>void checkMusic();$('findMusic').onclick=()=>void findExistingMusic();
  $('checkPhotos').onclick=()=>void checkPhotos();
  $('repairGithub').onclick=()=>void repairFromGithub();
  $('repairFolder').onchange=repairFromLocalFolder;
@@ -465,7 +563,7 @@ async function boot(){
  $('repoName').addEventListener('change',()=>{if(validGithubRepo($('repoName').value))localStorage.setItem(REPO_KEY,$('repoName').value.trim());});
  $('export').onclick=exportFile;$('import').onchange=importFile;$('publish').onclick=publish;
  $('google').onclick=signIn;$('signout').onclick=async()=>{try{await teacherSignOut();teacher=null;liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
- $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard local edits and the saved draft, then reload published chapters?'))return;}localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();await loadRemote(false);};
+ $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard local edits and the saved draft, then reload published chapters?'))return;}localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();clearAudioSelection();await loadRemote(false);};
  try{teacher=await currentTeacher();}catch(e){status(errorMessage(e),true)}
  updateAuth();await loadRemote(true);
  if(teacher&&!checkAuth())status('The current Google account is not authorized to publish. Sign out, then use the teacher account.',true);

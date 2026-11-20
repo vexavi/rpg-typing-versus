@@ -2,6 +2,7 @@
  * Stable identifiers are essential to player progress and Game Settings overrides.
  */
 export const safeStoryImage = s => /^story\/images\/[\w.-]+\.(png|webp|jpg|jpeg|svg)$/i.test(String(s||''));
+export const safeStoryAudio = s => /^story\/audio\/[a-zA-Z0-9][\w.-]*\.(mp3|m4a|webm|opus|ogg|wav)$/i.test(String(s||''));
 export function cleanStory(raw){
  if(!raw||!Array.isArray(raw.chapters)||!raw.chapters.length||raw.chapters.length>40)throw Error('Story must have 1–40 chapters.');
  const seen=new Set(),chapters=[],chapterIds=new Set();let totalStages=0;
@@ -27,6 +28,13 @@ export function cleanStory(raw){
    const battleBackground=String(st.battle?.battleBackground||'').trim();
    if(battleBackground&&!safeStoryImage(battleBackground))throw Error(`Stage ${id}: battle background must be a static story/images/... image path.`);
    if(battleBackground)battle.battleBackground=battleBackground;
+   const bgmFile=String(st.battle?.bgmFile||'').trim();
+   if(bgmFile&&!safeStoryAudio(bgmFile))throw Error(`Stage ${id}: BGM must be a static story/audio/... music path.`);
+   if(bgmFile)battle.bgmFile=bgmFile;
+   if(st.battle?.bgmLoop!==undefined){
+    if(typeof st.battle.bgmLoop!=='boolean')throw Error(`Stage ${id}: BGM loop must be true or false.`);
+    battle.bgmLoop=st.battle.bgmLoop;
+   }
    const numericRanges={fallSpeedPxPerSec:[5,250],spawnEveryMs:[180,15000],hitDamage:[1,100]};
    for(const [key,[min,max]] of Object.entries(numericRanges)){
     const rawValue=st.battle?.[key];
@@ -45,6 +53,14 @@ export function cleanStory(raw){
      clean[key]=value;
     }
     battle.mechanics[mechanicId]=clean;
+   }
+   // Known Chapter 1 mechanics: reject manipulated imports and impossible intervals before publish.
+   const chapter1Ranges={sleepy:{minIntervalSec:[4,120],maxIntervalSec:[4,120],closingSec:[0.2,4],closedSec:[0.2,4],openingSec:[0.2,4]},delirium:{changePercent:[0,100]},panic:{chancePct:[0,100],maxActive:[1,8],minGapSec:[0,30],damage:[1,10]}};
+   if(chId==='1')for(const [name,ranges] of Object.entries(chapter1Ranges)){
+    const values=battle.mechanics[name];if(!values)continue;
+    if(values.enabled!==undefined&&typeof values.enabled!=='boolean')throw Error(`Stage ${id}: ${name}.enabled must be true or false.`);
+    for(const [key,[min,max]] of Object.entries(ranges))if(values[key]!==undefined&&(typeof values[key]!=='number'||!Number.isFinite(values[key])||values[key]<min||values[key]>max))throw Error(`Stage ${id}: ${name}.${key} must be ${min}–${max}.`);
+    if(name==='sleepy'&&(values.minIntervalSec??16)>(values.maxIntervalSec??22))throw Error(`Stage ${id}: Sleepy shortest interval cannot exceed longest interval.`);
    }
    if(!Number.isInteger(battle.template)||battle.template<1||battle.template>5||!battle.bossName||battle.bossName.length>40||!Number.isInteger(battle.bossHp)||battle.bossHp<1||battle.bossHp>999)throw Error(`Stage ${id}: invalid battle template, boss name or HP.`);
    function scenes(items,phase){
