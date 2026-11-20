@@ -19,3 +19,6 @@
 .chapter-special-editor{border:1px solid #b8cbea;border-radius:12px;padding:15px;background:#f8fbff}
 .chapter-special-editor .mechanicgroup{border-left:4px solid #6c87bb;background:#fff}
 .chapter-special-editor .editheading button{white-space:normal}
+
+/* Keep chapter navigation and editing above auxiliary media tools. */
+.layout{margin:0 0 14px}
