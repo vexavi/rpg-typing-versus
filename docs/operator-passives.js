@@ -23,8 +23,8 @@
       description:'Every 6 correct words, charge the next manually typed word: +2 boss damage, or clear one extra falling word in survival stages (no extra rewards).'}),
     isolde: Object.freeze({id:'isolde',name:'Isolde',rarity:5,title:'Frozen Domain',every:6,freezeSec:2.5,slowSec:3,slowPct:15,
       description:'Every 6 consecutive correct words, freeze all falling words and spawns for 2.5 seconds, then slow falling words 15% for 3 seconds. Mistakes reset the streak.'}),
-    shield: Object.freeze({id:'shield',name:'Mara',rarity:5,title:'Reinforced Vitality / Shield Advance',maxHpBonus:3,upperHp:10,lowerHp:3,upperPushPct:10,lowerPushPct:35,freezeSec:2,
-      description:'Passive 1: +3 maximum HP. Passive 2: below 10 HP, push falling words up 10%; below 3 HP, push them up 35% and freeze affected words for 2 seconds. Each threshold triggers once per stage. Stacked words and spawn pacing are unchanged.'}),
+    shield: Object.freeze({id:'shield',name:'Mara',rarity:5,title:'Reinforced Vitality / Shield Advance',maxHpBonus:3,upperHp:10,lowerHp:3,upperPushPct:10,lowerPushPct:35,freezeSec:4,emergencyDepthPct:40,
+      description:'Passive 1: +3 maximum HP. Passive 2: below 10 HP, push falling words up 10%; below 3 HP, push them up 35% and freeze affected words for 4 seconds. Stage-start low HP prepares the strongest available push until a falling word reaches 40% depth. Empty fields do not consume a charge. Continue does not recharge used thresholds. Stacked words and spawn pacing are unchanged.'}),
     crossbow: Object.freeze({id:'crossbow',name:'Fletcher',rarity:5,title:'Show-Off / Adrenaline Rush',every:5,showOffDamage:1,adrenalineHp:1,adrenalineDamage:1,momentumWords:3,
       lastStandSeconds:3,lastStandSpeedMultiplier:0.1,lastStandSpawnFrequency:0.1,overdriveSpeedMultiplier:1.25,overdriveSpawnFrequency:1.2,
       description:'Show-Off: every 5 consecutive correct words mark the longest typeable word (+1 boss damage if typed). Adrenaline Rush: at 1 HP, gain 3 seconds of invulnerability with 90% slower falling and 90% fewer spawns. Afterward, while at 1 HP, falling speed increases by 25% and spawning frequency by 20%; type 3 consecutive correct words while vulnerable to unlock +1 boss damage on subsequent correctly typed words, stacking with Show-Off; mistakes reset progress. Last Stand never grants this damage. A fresh Last Stand activates at stage start if already at 1 HP. Last Stand triggers once per stage.'}),
@@ -120,7 +120,40 @@
     }
     // Only words present at the below-3-HP activation are frozen; later spawns remain unaffected.
     let shieldUpperUsed=false,shieldLowerUsed=false;
+    // One deferred charge at a time. Lower priority never overrides the 35% push.
+    // The trigger is consumed only when at least one currently falling word is affected.
+    let shieldPending=null;
     const shieldFrozenWords=new Map();
+    function shieldLevelForHp(hp){
+      if(rule?.id!=='shield'||!Number.isFinite(Number(hp))||Number(hp)<=0)return null;
+      if(Number(hp)<rule.lowerHp&&!shieldLowerUsed)return 'lower';
+      if(Number(hp)<rule.upperHp&&!shieldUpperUsed)return 'upper';
+      return null;
+    }
+    function queueShield(level){
+      if(!level)return;
+      if(shieldPending!=='lower'||level==='lower')shieldPending=level;
+    }
+    function executeShield(level,time,words){
+      const available=(Array.isArray(words)?words:[]).filter(fallingWord);
+      if(!available.length){queueShield(level);return null;}
+      // A stronger pending charge supersedes a weaker one. Consuming the lower
+      // charge also consumes the upper charge, so two pushes cannot stack.
+      if(level==='lower'){shieldLowerUsed=true;shieldUpperUsed=true;}
+      else shieldUpperUsed=true;
+      shieldPending=null;
+      const percent=level==='lower'?rule.lowerPushPct:rule.upperPushPct;
+      const freezeSeconds=level==='lower'?rule.freezeSec:0;
+      if(freezeSeconds){
+        const until=validTime(time)+freezeSeconds;
+        for(const word of available){
+          shieldFrozenWords.set(word.id,{word,until});
+          word.el?.classList?.add('operator-shield-hold');
+        }
+      }
+      activations++;
+      return {type:'shield-advance',percent,freezeSeconds,wordIds:available.map(w=>w.id),characterId:rule.id};
+    }
     function releaseShieldFrozen(){
       for(const {word} of shieldFrozenWords.values())word.el?.classList?.remove('operator-shield-hold');
       shieldFrozenWords.clear();
@@ -193,7 +226,7 @@
       foxfireProgress=0;foxfirePrimed=false;foxfireActive=false;foxfireQueue=[];foxfireCurrentId=null;
       endLupa();
       endHound();cassianProgress=0;cassianGuardUntil=0;anodyneProgress=0;
-      shieldUpperUsed=false;shieldLowerUsed=false;releaseShieldFrozen();
+      shieldUpperUsed=false;shieldLowerUsed=false;shieldPending=null;releaseShieldFrozen();
       releaseCrossbowTarget();crossbowCombo=0;adrenalineActive=false;adrenalineTriggered=false;adrenalineLastStandUntil=0;
       adrenalineMomentumStreak=0;adrenalineMomentumUnlocked=false;
     }
@@ -296,6 +329,15 @@
     // Fletcher's old life/temporary VFX, but keep adrenalineTriggered so the
     // 3-second invulnerability can never be farmed with Continue hearts.
     function onRevive(hp,time,words=[]){
+      if(rule?.id==='shield'){
+        shieldPending=null;
+        releaseShieldFrozen();
+        for(const word of (Array.isArray(words)?words:[])){
+          word?.el?.classList?.remove('operator-shield-pushing','operator-shield-hold');
+          word?.el?.style?.removeProperty?.('--mara-shield-push-distance');
+        }
+        return null; // Continue is not a new stage; used thresholds stay used.
+      }
       if(rule?.id!=='crossbow')return null;
       releaseCrossbowTarget();
       crossbowCombo=0;
@@ -315,6 +357,13 @@
     // counters. Trigger a fresh emergency shield if Fletcher enters at 1 HP.
     // Called after the stage countdown: its 3 seconds are all playable time.
     function onStageStart(hp,time,words=[]){
+      if(rule?.id==='shield'){
+        // Stage carryover can start below a threshold with no fresh HP loss.
+        // Arm (do not spend) the strongest applicable charge; updateField
+        // waits for words to reach the middle of the playfield.
+        queueShield(shieldLevelForHp(hp));
+        return null;
+      }
       if(rule?.id!=='crossbow')return null;
       syncAdrenaline(words,hp);
       return Number(hp)===rule.adrenalineHp?activateFletcherLastStand(time):null;
@@ -334,26 +383,21 @@
         return null;
       }
       if(rule?.id==='shield'){
-        // Thresholds are strictly below 10/3 (not at them). A fatal hit cannot
-        // save the player; if one hit crosses both, only the stronger push runs.
+        // Thresholds are strictly below 10/3. A fatal hit cannot save Mara.
+        // A low-HP start may already have queued a charge; any new HP damage
+        // with falling words can spend it immediately (stronger always wins).
         if(!(nextHp>0&&nextHp<previousHp))return null;
-        const low=nextHp<rule.lowerHp&&!shieldLowerUsed;
-        const high=nextHp<rule.upperHp&&!shieldUpperUsed;
-        if(!low&&!high)return null;
-        if(low){shieldLowerUsed=true;shieldUpperUsed=true;}
-        else shieldUpperUsed=true;
-        const percent=low?rule.lowerPushPct:rule.upperPushPct;
-        const freezeSeconds=low?rule.freezeSec:0;
-        const affected=(Array.isArray(words)?words:[]).filter(fallingWord);
-        if(freezeSeconds){
-          const until=validTime(time)+freezeSeconds;
-          for(const word of affected){
-            shieldFrozenWords.set(word.id,{word,until});
-            word.el?.classList?.add('operator-shield-hold');
-          }
-        }
-        activations++;
-        return {type:'shield-advance',percent,freezeSeconds,wordIds:affected.map(w=>w.id),characterId:rule.id};
+        // Damage must CROSS a threshold; being below it is not enough.
+        // A low-HP stage-start charge remains prepared until the field reaches
+        // 40% depth, unless a fresh hit crosses a stronger threshold.
+        const crossedLow=previousHp>=rule.lowerHp&&nextHp<rule.lowerHp&&!shieldLowerUsed;
+        const crossedUpper=previousHp>=rule.upperHp&&nextHp<rule.upperHp&&!shieldUpperUsed;
+        const level=crossedLow?'lower':crossedUpper?'upper':null;
+        if(!level)return null;
+        // Only the current HP crossing can spend the charge immediately; any
+        // stale pending tier from before healing cannot override this one.
+        shieldPending=level;
+        return executeShield(level,time,words);
       }
       if(rule?.id!=='alden'||used||previousHp<=1||nextHp!==1)return null;
       used=true;activations++;slowUntil=validTime(time)+rule.durationSec;
@@ -557,7 +601,24 @@
       return null;
     }
     // Called once per gameplay frame, after spawns. Automatic clears never call onCorrect.
-    function updateField(words,time){
+    function updateField(words,time,context={}){
+      if(rule?.id==='shield'){
+        tick(time);
+        if(!shieldPending)return null;
+        // Healing can cancel a stronger emergency before it has been spent.
+        // If Mara is still below 10, downgrade to the remaining 10% charge.
+        if(Number.isFinite(Number(context.hp))){
+          const applicable=shieldLevelForHp(context.hp);
+          if(!applicable){shieldPending=null;return null;}
+          shieldPending=applicable;
+        }
+        const available=(Array.isArray(words)?words:[]).filter(fallingWord);
+        const height=Number(context.laneHeight);
+        // Deferred effects require a meaningful field position. The same
+        // rule covers low-HP stage starts and empty-field damage triggers.
+        if(!(height>0)||!available.some(w=>w.y>=height*rule.emergencyDepthPct/100))return null;
+        return executeShield(shieldPending,time,available);
+      }
       if(rule?.id==='crossbow'){
         // If the target was removed by a stage mechanic, never leave a stale marker.
         tick(time);
@@ -627,7 +688,7 @@
       foxfireProgress,foxfirePrimed,foxfireActive,foxfireQueue:foxfireQueue.slice(),foxfireCurrentId,
       houndProgress,houndPhase,houndPreyId:houndMarked?.id??null,houndDeadline,houndChainHits,houndNeedSpawn,
       cassianProgress,cassianGuardUntil,anodyneProgress,
-      shieldUpperUsed,shieldLowerUsed,shieldFrozenIds:[...shieldFrozenWords.keys()],
+      shieldUpperUsed,shieldLowerUsed,shieldPending,shieldFrozenIds:[...shieldFrozenWords.keys()],
       crossbowCombo,crossbowTargetId:crossbowTarget?.id??null,adrenalineActive,
       adrenalineTriggered,adrenalineLastStandUntil,
       adrenalineMomentumStreak,adrenalineMomentumUnlocked};}

@@ -3772,7 +3772,7 @@ async function debugJumpTo(mode, idx){
         for(const el of moved)el?.classList?.add('operator-shield-pushing');
       }
       pushMsg(effect.freezeSeconds
-        ?'SHIELD ADVANCE · 35% PUSH + 2s HOLD'
+        ?`SHIELD ADVANCE · 35% PUSH + ${effect.freezeSeconds}s HOLD`
         :'SHIELD ADVANCE · 10% PUSH',true);
     }else if(effect.type==='lupa-start'){
       operatorApplyLupaVisuals(effect.wordIds,effect.seconds);
@@ -6330,8 +6330,8 @@ function damagePlayer(amount, reason){
     resetField({ preservePermafrost: isNormalStage5() });
     playerHp = Math.min(playerMaxHp,CONTINUE_HP);
     // Revive restores 3 HP in the same stage. Explicitly clear Fletcher's
-    // previous-life combo, bullseye, Adrenaline VFX and timer while preserving
-    // the once-per-stage Last Stand activation flag.
+    // previous-life effects. Mara also clears pending pushes and frozen marks
+    // without restoring the once-per-stage threshold charges.
     const reviveEffect=operatorPassive?.onRevive?.(playerHp,stageElapsedSec(),wordsOnField);
     lastFletcherPhase='off';
     renderFletcherStatus(stageElapsedSec());
@@ -6597,8 +6597,9 @@ function damagePlayer(amount, reason){
     if(currentMode !== "shared") mechanicEvent('onStageStart');
 
     stagePlayStartMs = nowMs();
-    // HP carries between Normal/Extra stages. Starting a new stage at 1 HP
-    // must trigger Fletcher's once-per-stage Last Stand *after* countdown.
+    // Normal/Extra carry HP. Fletcher can activate Last Stand at 1 HP;
+    // Mara queues Emergency Readiness if already below her HP threshold.
+    // Both are initialized after the countdown, with a fresh stage clock.
     const fletcherStageEffect=operatorPassive?.onStageStart?.(playerHp,stageElapsedSec(),wordsOnField);
     if(fletcherStageEffect?.type==='fletcher-last-stand'){
       spawnAccMs=0;
@@ -7197,7 +7198,7 @@ if(gameState === "paused"){
 
       // Operator effects advance after new spawns. Hidden Foxfire words cannot
       // be typed/moved until their turn, and Hound can force a chain target.
-      const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed);
+      const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed,{hp:playerHp,laneHeight:laneHeight()});
       // Lupa's focus/6-second countdown must advance with the live stage clock.
       // Do this AFTER updateField so a timeout removes the marks immediately.
       operatorRefreshLupaVisuals(elapsed);
