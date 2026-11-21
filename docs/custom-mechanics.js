@@ -39,6 +39,7 @@ window.RPG_MECHANICS?.register({
     {key:'enabled',label:'Enabled',type:'boolean',default:false},
     {key:'minIntervalSec',label:'Shortest time between blinks (sec)',type:'number',min:4,max:120,step:1,default:16},
     {key:'maxIntervalSec',label:'Longest time between blinks (sec)',type:'number',min:4,max:120,step:1,default:22},
+    {key:'bgmDipPct',label:'BGM reduction at full closure (%)',type:'number',min:0,max:90,step:5,default:45},
     {key:'closingSec',label:'Fighting sleep / closing (sec)',type:'number',min:0.2,max:4,step:0.1,default:1.8},
     {key:'closedSec',label:'Fully closed (sec)',type:'number',min:0.2,max:4,step:0.1,default:0.8},
     {key:'openingSec',label:'Eyelids reopening (sec)',type:'number',min:0.2,max:4,step:0.1,default:0.8}
@@ -58,9 +59,9 @@ window.RPG_MECHANICS?.register({
    ]}
  ];
  for(const item of definitions)window.RPG_MECHANICS?.register({...item,modes:['story'],defaultEnabled:false});
- let active=false,stageId='',nextBlink=Infinity,blink=null,fullyClosed=false,lastPanicAt=-Infinity,overlay=null,upperLid=null,lowerLid=null,upperFeather=null,lowerFeather=null;
+ let active=false,stageId='',nextBlink=Infinity,blink=null,fullyClosed=false,lastPanicAt=-Infinity,overlay=null,upperLid=null,lowerLid=null,upperFeather=null,lowerFeather=null,eyelidClosure=0;
  const settings={
-  sleepy:{enabled:false,minIntervalSec:16,maxIntervalSec:22,closingSec:1.8,closedSec:0.8,openingSec:0.8},
+  sleepy:{enabled:false,minIntervalSec:16,maxIntervalSec:22,bgmDipPct:45,closingSec:1.8,closedSec:0.8,openingSec:0.8},
   delirium:{enabled:false,changePercent:100},
   panic:{enabled:false,chancePct:15,maxActive:2,minGapSec:5,damage:1}
  };
@@ -98,6 +99,7 @@ window.RPG_MECHANICS?.register({
  function setClosure(fraction){
   if(!overlay)return;
   const f=Math.max(0,Math.min(1,Number(fraction)||0));
+  eyelidClosure=f;
   overlay.hidden=f<=0.001;
   if(overlay.hidden)return;
   const topY=765*f, bottomY=1000-295*f;
@@ -129,7 +131,7 @@ window.RPG_MECHANICS?.register({
  function rollInterval(){
   const s=settings.sleepy;return s.minIntervalSec+Math.random()*(s.maxIntervalSec-s.minIntervalSec);
  }
- function reset(){active=false;stageId='';blink=null;nextBlink=Infinity;fullyClosed=false;lastPanicAt=-Infinity;setClosure(0);}
+ function reset(){active=false;stageId='';blink=null;nextBlink=Infinity;fullyClosed=false;lastPanicAt=-Infinity;eyelidClosure=0;setClosure(0);}
  function start(mode,id,elapsedAtStart=0){
   reset();if(mode!=='story'||!/^1-[1-9]\d*$/.test(String(id||'')))return;
   active=true;stageId=String(id);config();ensureOverlay();
@@ -162,7 +164,7 @@ window.RPG_MECHANICS?.register({
  function frame(elapsed,{words=[],vocabulary=[],normalize=s=>String(s).trim().toLowerCase(),onClosed=null}={}){
   if(!active||!settings.sleepy.enabled){fullyClosed=false;setClosure(0);return false;}
   if(!blink&&elapsed>=nextBlink)blink={start:elapsed,changed:false};
-  if(!blink){fullyClosed=false;return false;}
+  if(!blink){fullyClosed=false;setClosure(0);return false;}
   const s=settings.sleepy;
   const t=Math.max(0,elapsed-blink.start);
   const closing=s.closingSec,closed=s.closedSec,opening=s.openingSec,total=closing+closed+opening;
@@ -192,7 +194,10 @@ window.RPG_MECHANICS?.register({
   word.el?.classList?.add('chapter-panic-word');return true;
  }
  function panicDamage(){return settings.panic.damage;}
- function suspend(){setClosure(0);}
- const api=Object.freeze({start,reset,suspend,frame,markSpawn,panicDamage,isFullyClosed:()=>fullyClosed,inspect:()=>({active,stageId,fullyClosed,nextBlink,blinkStart:blink?.start??null,settings:JSON.parse(JSON.stringify(settings))})});
+ function suspend(){eyelidClosure=0;setClosure(0);}
+ // Multiplier follows the visual eyelids, including both groggy partial reopenings.
+ // At the default 45% dip, full closure retains 55% of the user's chosen BGM volume.
+ function bgmGain(){return active&&settings.sleepy.enabled?1-(settings.sleepy.bgmDipPct/100)*eyelidClosure:1;}
+ const api=Object.freeze({start,reset,suspend,frame,markSpawn,panicDamage,bgmGain,isFullyClosed:()=>fullyClosed,inspect:()=>({active,stageId,fullyClosed,eyelidClosure,nextBlink,blinkStart:blink?.start??null,settings:JSON.parse(JSON.stringify(settings))})});
  window.RPG_CH1_SPECIAL=api;
 })();

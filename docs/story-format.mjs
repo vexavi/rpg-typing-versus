@@ -55,7 +55,7 @@ export function cleanStory(raw){
     battle.mechanics[mechanicId]=clean;
    }
    // Known Chapter 1 mechanics: reject manipulated imports and impossible intervals before publish.
-   const chapter1Ranges={sleepy:{minIntervalSec:[4,120],maxIntervalSec:[4,120],closingSec:[0.2,4],closedSec:[0.2,4],openingSec:[0.2,4]},delirium:{changePercent:[0,100]},panic:{chancePct:[0,100],maxActive:[1,8],minGapSec:[0,30],damage:[1,10]}};
+   const chapter1Ranges={sleepy:{minIntervalSec:[4,120],maxIntervalSec:[4,120],bgmDipPct:[0,90],closingSec:[0.2,4],closedSec:[0.2,4],openingSec:[0.2,4]},delirium:{changePercent:[0,100]},panic:{chancePct:[0,100],maxActive:[1,8],minGapSec:[0,30],damage:[1,10]}};
    if(chId==='1')for(const [name,ranges] of Object.entries(chapter1Ranges)){
     const values=battle.mechanics[name];if(!values)continue;
     if(values.enabled!==undefined&&typeof values.enabled!=='boolean')throw Error(`Stage ${id}: ${name}.enabled must be true or false.`);

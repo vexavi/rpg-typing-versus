@@ -2465,6 +2465,15 @@ const bgm = new Audio();
   let currentBgm = "";
   let isMuted = false;
   let lastVol = 0.35;
+  let sleepyBgmGain = 1; // Temporary chapter Sleepy reduction, independent of user volume / mute.
+  function syncBgmVolume(){
+    try{ bgm.volume = Math.min(1, Math.max(0, lastVol * sleepyBgmGain)); }catch(_){/* ignore */}
+  }
+  function setSleepyBgmGain(gain){
+    const next = Number.isFinite(gain) ? Math.max(0,Math.min(1,gain)) : 1;
+    if(Math.abs(next-sleepyBgmGain)<0.001)return;
+    sleepyBgmGain=next;syncBgmVolume();
+  }
   let audioUnlocked = false;
 
   let savedBgmState = null;
@@ -2491,7 +2500,7 @@ const bgm = new Audio();
     const v = Math.max(0, Math.min(1, v01));
     lastVol = v;
     // Always keep the real volume in sync; muting is handled via bgm.muted.
-    bgm.volume = v;
+    syncBgmVolume();
     try{ bgm.muted = !!isMuted; }catch(_){/* ignore */}
     bgmVol.value = String(Math.round(v * 100));
     bgmVolText.textContent = `${Math.round(v * 100)}%`;
@@ -2499,7 +2508,7 @@ const bgm = new Audio();
   function toggleMute(){
     isMuted = !isMuted;
     try{ bgm.muted = !!isMuted; }catch(_){/* ignore */}
-    bgm.volume = lastVol;
+    syncBgmVolume();
     bgmMuteBtn.textContent = isMuted ? "UNMUTE" : "MUTE";
     // Helpful on iOS/Safari: unmuting is a user gesture, so retry play.
     if(!isMuted) tryPlayBgm();
@@ -2517,7 +2526,7 @@ const bgm = new Audio();
 
       // Keep element mute state consistent with the UI state.
       try{ bgm.muted = !!isMuted; }catch(_){/* ignore */}
-      if(!isMuted) bgm.volume = lastVol;
+      if(!isMuted) syncBgmVolume();
 
       const p = bgm.play();
       if(p && typeof p.catch === "function"){
@@ -2531,7 +2540,7 @@ const bgm = new Audio();
             isMuted = true;
             bgmMuteBtn.textContent = "UNMUTE";
             bgm.muted = true;
-            bgm.volume = lastVol;
+            syncBgmVolume();
 
             const p2 = bgm.play();
             if(p2 && typeof p2.catch === "function"){
@@ -2540,7 +2549,7 @@ const bgm = new Audio();
                 isMuted = prevUserMuted;
                 bgmMuteBtn.textContent = prevUserMuted ? "UNMUTE" : "MUTE";
                 bgm.muted = prevMutedProp;
-                if(!prevUserMuted) bgm.volume = lastVol;
+                if(!prevUserMuted) syncBgmVolume();
                 pushAudioHintOnce();
               });
             }else{
@@ -2563,7 +2572,7 @@ const bgm = new Audio();
     // Explicit user intent: default to unmuted.
     isMuted = false;
     bgmMuteBtn.textContent = "MUTE";
-    try{ bgm.volume = lastVol; }catch(_){/* ignore */}
+    syncBgmVolume();
 
     // If the track ended (non-loop), rewind so play() can restart.
     try{
@@ -2597,6 +2606,7 @@ function setBgm(src, loop=true, autoplay=true){
     if(!src || (asset && !asset.present)){ stopBgm(); return; }
     const url = asset?.url || src;
     if(currentBgm !== src){
+      setSleepyBgmGain(1);
       currentBgm = src;
       bgm.src = url;
       bgm.currentTime = 0;
@@ -2605,6 +2615,7 @@ function setBgm(src, loop=true, autoplay=true){
     if(autoplay) tryPlayBgm();
   }
   function stopBgm(){
+    setSleepyBgmGain(1);
     currentBgm = "";
     bgm.pause();
     bgm.removeAttribute("src");
@@ -4300,6 +4311,7 @@ function updateUI(){
 
   function resetField(opts = {}){
     window.RPG_CH1_SPECIAL?.reset();
+    setSleepyBgmGain(1);
     clearChainCleaveHex();
     cancelFoxfireRewind();
     const preservePermafrost = !!opts.preservePermafrost;
@@ -6199,6 +6211,7 @@ if(state === "landed"){
 
     gameState = "paused";
     window.RPG_CH1_SPECIAL?.suspend(); // Paused UI must remain visible even during blackout.
+    setSleepyBgmGain(1);
     pauseStageClock();
 
     pausedBgmState = {
@@ -6507,6 +6520,7 @@ function damagePlayer(amount, reason){
     resumeStageClock();
     // Continue clears the field; start a fresh Chapter 1 blink/Panic cycle
     // using the CURRENT stage clock, not the original stage start time.
+    setSleepyBgmGain(1);
     window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
     restoreBgmState();
     gameState = "playing";
@@ -6564,6 +6578,7 @@ function damagePlayer(amount, reason){
   function hardLoseToReset(){ returnFromDefeatToModes(); }
   function onPlayerDeath(){
     window.RPG_CH1_SPECIAL?.suspend(); // Never obscure Continue / Game Over.
+    setSleepyBgmGain(1);
     if(gameState !== "playing") return;
     if(continuesLeft > 0){ showContinuePrompt(); return; }
     hardLoseNoContinues();
@@ -6762,6 +6777,7 @@ function damagePlayer(amount, reason){
     if(currentMode !== "shared") mechanicEvent('onStageStart');
 
     stagePlayStartMs = nowMs();
+    setSleepyBgmGain(1);
     window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'');
     // Normal/Extra carry HP. Fletcher can activate Last Stand at 1 HP;
     // Mara queues Emergency Readiness if already below her HP threshold.
@@ -7072,6 +7088,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
   function onBossDefeated(){
     if(gameState !== "playing") return;
     window.RPG_CH1_SPECIAL?.suspend(); // Never obscure the clear screen.
+    setSleepyBgmGain(1);
     if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
     // Ensure EX2 survival flag doesn't linger into clear screens/next stages
     resetEx2HackMechanic();
@@ -7314,6 +7331,7 @@ if(gameState === "paused"){
         words:wordsOnField,vocabulary:currentMode==='story'?operatorStageWordEntries():[],
         normalize:normalizeAnswer,onClosed:()=>{answerInput.value='';}
       });
+      setSleepyBgmGain(window.RPG_CH1_SPECIAL?.bgmGain?.() ?? 1);
       const battleDt=dt; // No word-motion freeze during Sleepy darkness.
       const spawnDt=chapterBlackout?0:dt; // Do not spawn new, unseen words during the blackout.
       ex4HandlePhaseTriggers(elapsed);
