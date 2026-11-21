@@ -2904,7 +2904,11 @@ async function launchStoryStage(stage){
       bossDialogue:"Ready for battle?",midFightDialogue:"",
       bossMaxHp:Math.max(1,Math.min(999,Math.floor(Number(stage.battle?.bossHp)||20))),
       ...Object.fromEntries(['fallSpeedPxPerSec','spawnEveryMs','hitDamage'].filter(k=>typeof stage.battle?.[k]==='number'&&Number.isFinite(stage.battle[k])).map(k=>[k,stage.battle[k]])),
-      bossFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.bossSprite||""))?String(stage.battle.bossSprite):""),bossFile2:"",bgFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.battleBackground||""))?String(stage.battle.battleBackground):""),playBgmFile:(/^story\/audio\/[a-zA-Z0-9][\w.-]*\.(?:mp3|m4a|webm|opus|ogg|wav)$/i.test(String(stage.battle?.bgmFile||""))?String(stage.battle.bgmFile):""),playBgmLoop:stage.battle?.bgmLoop!==false,dialogueBgmFile:"",
+      bossFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.bossSprite||""))?String(stage.battle.bossSprite):""),bossFile2:"",bgFile:(/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(String(stage.battle?.battleBackground||""))?String(stage.battle.battleBackground):""),
+      // Default battle theme for all Chapter 1 stages, including existing Firestore publications.
+      // An explicitly selected stage BGM always wins. Slides, other chapters and modes are unaffected.
+      playBgmFile:(/^story\/audio\/[a-zA-Z0-9][\w.-]*\.(?:mp3|m4a|webm|opus|ogg|wav)$/i.test(String(stage.battle?.bgmFile||""))?String(stage.battle.bgmFile):(String(stage.id||"").startsWith("1-")?"story/audio/ch1-battle.webm":"")),
+      playBgmLoop:stage.battle?.bgmLoop!==false,dialogueBgmFile:"",
       words:WORDS};
   }else storyBattleStage=null;
   // Per-stage Story Editor values take priority over inherited Game Settings.

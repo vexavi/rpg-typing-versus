@@ -9,6 +9,7 @@ import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,image
 import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const DRAFT_KEY='rpg_story_teacher_draft_v87';
+const CHAPTER_1_BATTLE_THEME='story/audio/ch1-battle.webm';
 const STAGE_BASE=[{fallSpeedPxPerSec:41,spawnEveryMs:2950,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,hitDamage:1}];
 const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Boss damage per word',1,100,1]};
 const stagedPhotos=new Map(),stagedAudio=new Map();let liveBalance={},liveRequestId=0;
@@ -82,11 +83,11 @@ function stageArtPath(key){return currentStage()?.battle?.[key]||'';}
 function assetPreview(path){return stagedPhotos.get(path)?.url||(safeStoryImage(path)?path:'');}
 function updateStaged(path,blob){const old=stagedPhotos.get(path);if(old)URL.revokeObjectURL(old.url);stagedPhotos.set(path,{blob,url:URL.createObjectURL(blob)});}
 function audioPaths(){return referencedMusic(chapters);}
-function audioOptions(selected=''){const paths=musicOptions(chapters,onlineAudioNames,[...stagedAudio.keys()]);if(selected&&safeStoryAudio(selected)&&!paths.includes(selected))paths.unshift(selected);return paths;}
+function audioOptions(selected=''){const paths=musicOptions(chapters,[...onlineAudioNames,CHAPTER_1_BATTLE_THEME],[...stagedAudio.keys()]);if(selected&&safeStoryAudio(selected)&&!paths.includes(selected))paths.unshift(selected);return paths;}
 function audioPreview(path){return stagedAudio.get(path)?.url||(safeStoryAudio(path)?path:'');}
 function dropUnusedAudio(){const used=new Set(audioPaths());for(const [path,item] of stagedAudio)if(!used.has(path)){URL.revokeObjectURL(item.url);stagedAudio.delete(path);}updateAuth();}
 function clearAudioSelection(){for(const item of stagedAudio.values())URL.revokeObjectURL(item.url);stagedAudio.clear();updateAuth();}
-function audioOptionsMarkup(selected=''){return `<option value="">None (silent)</option>`+audioOptions(selected).map(path=>`<option value="${esc(path)}" ${path===selected?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('');}
+function audioOptionsMarkup(selected=''){return `<option value="">${String(currentChapter()?.id)==='1'?'Chapter 1 theme (default)':'None (silent)'}</option>`+audioOptions(selected).map(path=>`<option value="${esc(path)}" ${path===selected?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('');}
 function catalog(){return (window.RPG_MECHANICS?.list()||[]).filter(m=>!m.modes?.length||m.modes.includes('story'));}
 function inherited(key,st=currentStage()){
  const base=STAGE_BASE[Math.min(4,Math.max(0,(Number(st?.battle?.template)||1)-1))]||STAGE_BASE[0];
@@ -391,13 +392,15 @@ function renderNav(){
 }
 function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${esc(scenePreview(scene))}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image file</label><details class="advanced-image-path"><summary>${esc(scene.image?.split('/').at(-1)||'No image selected')}</summary><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></details></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><label class="filebutton small">Select Photo<input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-photo-phase="${phase}" data-photo-index="${i}" hidden></label><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
 function musicEditor(st){
- const selected=st.battle?.bgmFile||'',src=audioPreview(selected);
- return `<div class="boss-sprite-panel music-panel"><h4>Battle Music (BGM)</h4><p class="muted">Choose a shared track for this stage. Short names: bgm-1.webm, bgm-2.mp3, etc.</p>
+ const chapterOne=String(currentChapter()?.id)==='1';
+ const selected=st.battle?.bgmFile||'',src=audioPreview(selected||(chapterOne?CHAPTER_1_BATTLE_THEME:''));
+ const description=chapterOne?'Chapter 1 automatically uses ch1-battle.webm during battles. Choose a track below only to override this stage. Story slides and other modes are unaffected.':'Choose a shared track for this stage. Short names: bgm-1.webm, bgm-2.mp3, etc.';
+ return `<div class="boss-sprite-panel music-panel"><h4>Battle Music (BGM)</h4><p class="muted">${description}</p>
  <div class="field"><label>Use Existing Music (reusable)</label><select data-music-select="bgmFile">${audioOptionsMarkup(selected)}</select></div>
  <div class="field"><details class="advanced-image-path"><summary>Advanced music path</summary><input data-battle-field="bgmFile" aria-label="Music path" value="${esc(selected)}" placeholder="story/audio/bgm-1.webm" maxlength="180"></details></div>
  <label class="music-loop"><input type="checkbox" data-battle-field="bgmLoop" ${st.battle?.bgmLoop!==false?'checked':''}> Loop during battle</label>
  <audio id="stage-bgm-preview" controls preload="none" ${src?`src="${esc(src)}"`:''} aria-label="Preview stage BGM"></audio>
- <div class="boss-sprite-actions"><label class="filebutton">Upload New Music<input type="file" data-audio-file accept="audio/*,.mp3,.m4a,.webm,.opus,.ogg,.wav" hidden></label><button type="button" data-action="remove-music" class="danger" ${!selected?'disabled':''}>Remove from Stage</button></div>
+ <div class="boss-sprite-actions"><label class="filebutton">Upload New Music<input type="file" data-audio-file accept="audio/*,.mp3,.m4a,.webm,.opus,.ogg,.wav" hidden></label><button type="button" data-action="remove-music" class="danger" ${!selected?'disabled':''}>${chapterOne?'Use Chapter 1 Theme':'Remove from Stage'}</button></div>
  <p class="muted">MP3, M4A, WEBM/Opus, OGG or WAV · max 25 MB per file. Download Music Pack once, add to GitHub, then publish. No paid Firebase storage.</p></div>`;
 }
 function artEditor(st,key,title,kind,help){
@@ -428,7 +431,7 @@ function renderFields(){
  ${artEditor(st,'bossSprite','Boss Sprite','boss','Boss art for this stage. Select the same existing image in any other stage to reuse it.')} 
  ${artEditor(st,'battleBackground','Battle Background','bg','Background shown behind the fight in this stage. Backgrounds can also be reused.')}
  ${musicEditor(st)} </div>
- ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>Chapter 1 · Special Stage Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy settings to all Chapter 1 stages</button></div><p class="muted">Enable and tune each effect for this stage (${esc(st.id)}). All three start OFF. Delirium only works while Sleepy is enabled. During complete darkness, words and spawn timers pause.</p>${mechanicMarkup(st,true)}</div>`:''}
+ ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>Chapter 1 · Special Stage Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy settings to all Chapter 1 stages</button></div><p class="muted">Enable and tune each effect for this stage (${esc(st.id)}). All three start OFF. Delirium only works while Sleepy is enabled. During complete darkness, existing words continue falling but new spawns pause.</p>${mechanicMarkup(st,true)}</div>`:''}
  <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Story-specific settings are published with the chapter; no code comes from Firebase.</p></div>
  <p class="muted">Stage ID ${esc(st.id)} is fixed because it identifies student progress. Chapter changes take effect the next time a student starts Story Mode.</p></section>`;
  fillLiveValues()
@@ -455,7 +458,7 @@ function handleEditorInput(event){const t=event.target,st=currentStage(),ch=curr
  else if(t.dataset.stageField)st[t.dataset.stageField]=t.value;
  else if(t.dataset.musicSelect){st.battle.bgmFile=t.value;dropUnusedAudio();markDirty();renderFields();return;}
  else if(t.dataset.assetSelect){st.battle[t.dataset.assetSelect]=t.value;dropUnusedPhotos();markDirty();renderFields();return;}
- else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='checkbox'?t.checked:t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(t.dataset.battleField==='bgmFile'){dropUnusedAudio();const a=$('stage-bgm-preview');if(a){a.pause();if(safeStoryAudio(t.value))a.src=audioPreview(t.value);else a.removeAttribute('src');}}else if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else fillLiveValues();}
+ else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='checkbox'?t.checked:t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(t.dataset.battleField==='bgmFile'){dropUnusedAudio();const a=$('stage-bgm-preview');if(a){a.pause();if(safeStoryAudio(t.value))a.src=audioPreview(t.value);else if(!t.value&&String(currentChapter()?.id)==='1')a.src=audioPreview(CHAPTER_1_BATTLE_THEME);else a.removeAttribute('src');}}else if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else fillLiveValues();}
  else if(t.dataset.mechanicId){
   const m=catalog().find(x=>x.id===t.dataset.mechanicId),field=m?.fields.find(x=>x.key===t.dataset.mechanicKey);if(!field)return;
   const value=field.type==='boolean'?t.value==='true':Number(t.value);
