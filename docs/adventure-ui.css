@@ -926,3 +926,63 @@ body.adventure-client #overlay .overlayBox.storySquadPickBox .storySquadSearch{b
 /* The base game uses content-box sizing; constrain the fullscreen picker explicitly. */
 body.adventure-client #overlay .overlayBox.storySquadPickBox{box-sizing:border-box;width:min(1220px,calc(100vw - 32px));max-width:calc(100vw - 16px);height:min(730px,calc(100dvh - 55px));}
 @media(max-width:640px){body.adventure-client #overlay .overlayBox.storySquadPickBox{width:calc(100vw - 8px);max-width:calc(100vw - 8px);height:calc(100dvh - 8px);}}
+
+/* v118 — stand-alone full-viewport pre-battle squad screen.
+   This lives beside the game frame, not inside its height-limited overlay. */
+body.story-squad-picker-open{overflow:hidden}
+.storySquadSelectScreen[hidden]{display:none!important}
+.storySquadSelectScreen{
+ position:fixed;inset:0;z-index:2147483644;box-sizing:border-box;
+ display:flex;align-items:center;justify-content:center;
+ padding:clamp(6px,1.6vh,14px);
+ background:radial-gradient(ellipse at 54% 38%,#3e3349 0%,#181b2a 54%,#080c15 100%);
+ color:#f2e7cd;font-family:system-ui,"Segoe UI",sans-serif;
+}
+.storySquadSelectScreen,.storySquadSelectScreen *{box-sizing:border-box}
+.storySquadSelectShell{
+ width:min(1450px,100%);height:100%;min-height:0;max-height:960px;
+ display:flex;flex-direction:column;overflow:hidden;
+ border:1px solid #aaa3aa6d;border-radius:10px;
+ background:linear-gradient(145deg,#202435fa,#121622fa);
+ box-shadow:0 13px 58px #0009;
+ padding:clamp(9px,1.6vh,18px);
+}
+.storySquadSelectHeader{display:flex;align-items:end;gap:16px;justify-content:space-between;flex:0 0 auto;border-bottom:1px solid #9795a14c;padding-bottom:9px;margin-bottom:8px}
+.storySquadSelectEyebrow{display:block;font-size:11px;letter-spacing:.12em;color:#efc67f;font-weight:800}
+.storySquadSelectHeader h1{font-size:clamp(18px,2.4vw,29px);font-weight:950;letter-spacing:.06em;line-height:1.12;margin:2px 0 0;color:#fff1c8}
+.storySquadSelectHeader p{font-size:clamp(11px,1.2vw,13px);max-width:420px;text-align:right;color:#bcc7da;line-height:1.35;margin:0}
+.storySquadSelectMount{display:flex;flex:1 1 0;min-height:0;min-width:0}
+.storySquadSelectMount>.storySquadPicker{flex:1;min-width:0}
+.storySquadSelectScreen .storySquadPicker{grid-template-columns:minmax(0,1fr) minmax(235px,27%);grid-template-rows:minmax(0,1fr) auto;gap:10px;min-height:0}
+.storySquadSelectScreen .storySquadStages{min-height:0}
+.storySquadSelectScreen .storySquadPickerStage,.storySquadSelectScreen .storySquadPickerRoster{min-height:0}
+.storySquadSelectScreen .storySquadPickerActions{flex:0 0 auto;min-height:45px}
+.storySquadSelectScreen .storySquadSlotArt{height:100%;bottom:0}
+.storySquadSelectScreen .storySquadPickerList{min-height:0}
+@media(max-width:850px){
+ .storySquadSelectScreen .storySquadPicker{grid-template-columns:minmax(0,1fr) 210px;gap:7px}
+ .storySquadSelectHeader p{max-width:300px}
+}
+@media(max-width:640px){
+ .storySquadSelectScreen{padding:3px;align-items:stretch}
+ .storySquadSelectShell{height:100%;padding:7px;border-radius:6px}
+ .storySquadSelectHeader{align-items:start;padding-bottom:5px;margin-bottom:5px;gap:4px}
+ .storySquadSelectHeader h1{font-size:17px}
+ .storySquadSelectEyebrow{font-size:9px}
+ .storySquadSelectHeader p{font-size:9px;max-width:46%;line-height:1.25}
+ .storySquadSelectScreen .storySquadPicker{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(165px,43%) minmax(0,1fr) auto;gap:5px}
+ .storySquadSelectScreen .storySquadPickerStage{padding:4px}
+ .storySquadSelectScreen .storySquadPickerRoster{padding:5px;gap:4px}
+ .storySquadSelectScreen .storySquadSlotArt{height:100%;bottom:0}
+ .storySquadSelectScreen .storySquadPickerActions{padding-top:4px;gap:5px;flex-wrap:wrap}
+ .storySquadSelectScreen .storySquadPickerActions .storySquadPickerError{flex:1 0 100%;min-height:0}
+ .storySquadSelectScreen .storySquadAction{min-height:35px}
+}
+@media(max-height:610px) and (min-width:641px){
+ .storySquadSelectShell{padding:7px}
+ .storySquadSelectHeader{padding-bottom:4px;margin-bottom:4px}
+ .storySquadSelectScreen .storySquadPreviewNote{display:none}
+ .storySquadSelectScreen .storySquadPickerStage{padding:5px}
+ .storySquadSelectScreen .storySquadSlotControls button{min-height:22px}
+ .storySquadSelectScreen .storySquadPickerActions{padding-top:3px}
+}

@@ -884,3 +884,16 @@ body.adventure-client.story-squad-layout .storyEnemySlot .bgmBtn{min-height:25px
 body.adventure-client.story-squad-layout .storyPlayerPanel .menuList li{flex:1 1 0;min-width:0}
 body.adventure-client.story-squad-layout .storyPlayerPanel .menuItem{width:100%;justify-content:center}
 body.adventure-client.story-squad-layout .storyEnemySlot .bgmRow input{max-width:none}
+
+/* v118 — Story battles keep their 3-column HUD after the independent squad screen. */
+body.adventure-client.story-squad-layout .storySquadVisual{display:flex;left:1%;width:23%}
+body.adventure-client.story-squad-layout .wordLane{left:26%;width:47%;max-width:none}
+body.adventure-client.story-squad-layout .inputBar{left:26%;width:47%;max-width:none}
+body.adventure-client.story-squad-layout .bossWrap{left:auto;right:0;width:26%;max-width:none}
+body.adventure-client.story-squad-layout .storyEnemyPanel{display:block}
+@media(min-width:641px){
+ body.adventure-client.story-squad-layout .uiRow{grid-template-columns:minmax(0,24fr) minmax(0,49fr) minmax(0,27fr)}
+ body.adventure-client.story-squad-layout .uiRow>.storyStatusPanel{grid-column:1!important;grid-row:1!important}
+ body.adventure-client.story-squad-layout .uiRow>.storyPlayerPanel{grid-column:2!important;grid-row:1!important}
+ body.adventure-client.story-squad-layout .uiRow>.storyEnemyPanel{grid-column:3!important;grid-row:1!important}
+}

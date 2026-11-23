@@ -3528,6 +3528,9 @@ async function debugJumpTo(mode, idx){
   }
   function renderStorySquad(){
     const on=storySquad.enabled&&storyThreeLifeStage();
+    // Keep the arena in the proper three-column Story layout after any
+    // overlay, async stage preload, or operator switch.
+    document.body.classList.toggle('story-squad-layout',on);
     if(storySquadVisual)storySquadVisual.hidden=!on;
     if(storyContinuesLine)storyContinuesLine.hidden=on;
     if(storyActiveLabel)storyActiveLabel.textContent=on?` · ${storyOperatorName(activeOperatorId)}`:'';
@@ -3575,12 +3578,16 @@ async function debugJumpTo(mode, idx){
     const primary=getSelectedOperator();
     const defaults=[...(available.includes(primary)?[primary]:[]),...available.filter(id=>id!==primary)].slice(0,3);
     return await new Promise(resolve=>{
-      showOverlay(true);
-      setOverlayText('SQUAD ASSEMBLY','Choose three operators. The first enters battle; the others take over when an operator is defeated.','');
-      overlay.classList.add('story-squad-select-active');
-      overlayBox.classList.add('storySquadPickBox');
-      overlay.style.cursor='default';
-      overlayChoices.classList.add('show');
+      // The squad picker is a dedicated pre-battle screen, not a child of
+      // the gameplay overlay. This removes its clipping/height dependency.
+      const selectScreen=document.getElementById('storySquadSelectScreen');
+      const selectMount=document.getElementById('storySquadSelectMount');
+      if(!selectScreen||!selectMount){resolve(null);return;}
+      showOverlay(false);
+      selectMount.replaceChildren();
+      selectScreen.hidden=false;
+      selectScreen.setAttribute('aria-hidden','false');
+      document.body.classList.add('story-squad-picker-open');
       const make=(tag,cls,text)=>{
         const el=document.createElement(tag);
         if(cls)el.className=cls;
@@ -3662,7 +3669,7 @@ async function debugJumpTo(mode, idx){
       const cancel=make('button','storySquadAction secondary','BACK');cancel.type='button';
       const begin=make('button','storySquadAction primary','DEPLOY SQUAD');begin.type='button';
       footer.append(message,helper,cancel,begin);
-      wrap.append(stage,side,footer);overlayChoices.appendChild(wrap);
+      wrap.append(stage,side,footer);selectMount.appendChild(wrap);
 
       function renderRoster(){
         filterButtons.forEach(({btn,value})=>{btn.classList.toggle('active',value===rarityFilter);btn.setAttribute('aria-pressed',String(value===rarityFilter));});
@@ -3714,9 +3721,10 @@ async function debugJumpTo(mode, idx){
         if(done)return;
         done=true;
         window.removeEventListener('keydown',keys);
-        overlay.classList.remove('story-squad-select-active');
-        overlayBox.classList.remove('storySquadPickBox');
-        showOverlay(false);
+        selectMount.replaceChildren();
+        selectScreen.hidden=true;
+        selectScreen.setAttribute('aria-hidden','true');
+        document.body.classList.remove('story-squad-picker-open');
         resolve(result);
       };
       const keys=e=>{if(e.key==='Escape'){e.preventDefault();finish(null);}};
@@ -7199,6 +7207,7 @@ function damagePlayer(amount, reason){
     resetRunScoring();
     if(currentMode === "shared") resetSharedBuckets();
     prepareOperatorForRun();
+    if(storySquad.enabled)document.body.classList.add('story-squad-layout');
     startRankedRun();
     playerMaxHp = BASE_PLAYER_MAX_HP + (operatorPassive?.getMaxHpBonus()||0);
     playerHp = playerMaxHp;
