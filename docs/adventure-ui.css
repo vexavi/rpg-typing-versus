@@ -1009,3 +1009,54 @@ body.story-squad-picker-open{overflow:hidden}
  .storySquadSelectScreen .storySquadSlotControls button{min-height:22px}
  .storySquadSelectScreen .storySquadStage.empty .storySquadSlotLabel{padding:9px 1px 10px}
 }
+
+
+/* v120: selector art/style cleanup, ready button below lineup, no arrow controls, larger operator thumbnails. */
+.storySquadSelectHeader p{max-width:none;color:#c6cfde}
+.storySquadSelectScreen .storySquadPicker{grid-template-columns:minmax(0,1fr) minmax(320px,31%)}
+.storySquadSelectScreen .storySquadPickerStage,.storySquadSelectScreen .storySquadPickerRoster{background:linear-gradient(180deg,#1b2232 0%,#121826 100%);border:1px solid #8e97ae57;box-shadow:inset 0 0 0 1px #ffffff0a}
+.storySquadSelectScreen .storySquadPickerLegend{font-size:11px;letter-spacing:.11em;padding:0 2px 2px}
+.storySquadSelectScreen .storySquadEyebrow,.storySquadSelectScreen .storySquadRosterHeading strong{color:#f5d79a}
+.storySquadSelectScreen .storySquadSubhead{font-size:11px;color:#d2d9e6}
+.storySquadSelectScreen .storySquadStages{gap:8px;padding:4px 0 2px}
+.storySquadSelectScreen .storySquadStage{gap:0}
+.storySquadSelectScreen .storySquadSlot{min-height:310px;border-radius:10px;border:1px solid #8f98aa;box-shadow:inset 0 0 26px #090e19bf,0 6px 18px #00000026}
+.storySquadSelectScreen .storySquadStage.selected .storySquadSlot{border:2px solid #f0cf8b;box-shadow:0 0 0 1px #ffe6b247, inset 0 0 26px #11192cc9, 0 8px 22px #0006}
+.storySquadSelectScreen .storySquadStage.empty .storySquadSlot{border-style:solid}
+.storySquadSelectScreen .storySquadSlotNumber{left:10px;top:8px;font-size:clamp(19px,2vw,28px)}
+.storySquadSelectScreen .storySquadSlotLabel{padding:22px 6px 11px;background:linear-gradient(transparent,rgba(8,12,22,.78) 42%,#0b1324 100%)}
+.storySquadSelectScreen .storySquadSlotName{font-size:clamp(13px,1.15vw,18px)}
+.storySquadSelectScreen .storySquadSlotState{font-size:10px;color:#c7d3e2}
+.storySquadSelectScreen .storySquadPreviewNote{display:none}
+.storySquadStageActions{display:flex;justify-content:flex-end;padding-top:8px;border-top:1px solid #7d85974a;margin-top:8px}
+.storySquadReadyBtn{min-width:170px;min-height:42px;font-size:13px;letter-spacing:.09em}
+.storySquadSelectScreen .storySquadPickerRoster{padding:10px;gap:8px}
+.storySquadSelectScreen .storySquadRosterHeading span{display:none}
+.storySquadSelectScreen .storySquadSearch{min-height:38px;border-radius:7px;background:#1d2738;border:1px solid #808aa0}
+.storySquadSelectScreen .storySquadFilters{gap:6px}
+.storySquadSelectScreen .storySquadFilter{padding:7px 1px;border-radius:6px;background:#1d2738;border-color:#5f6e86}
+.storySquadSelectScreen .storySquadPickerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:2px 1px 4px}
+.storySquadSelectScreen .storySquadRosterCard{padding:7px 5px 20px;border-radius:9px;gap:6px;background:linear-gradient(180deg,#202a3c 0%,#182031 100%);border:1px solid #66748d;min-height:148px;justify-content:flex-start}
+.storySquadSelectScreen .storySquadRosterCard:hover{background:linear-gradient(180deg,#27334a 0%,#1d273b 100%)}
+.storySquadSelectScreen .storySquadRosterCard.inSquad{background:linear-gradient(180deg,#3f3840 0%,#2b2935 100%);border-color:#ceae68}
+.storySquadSelectScreen .storySquadRosterCard img{width:100%;max-width:none;aspect-ratio:1;object-fit:cover;object-position:center 24%;border-radius:7px;border:1px solid #8793ac;background:#121826}
+.storySquadSelectScreen .storySquadRosterName{font-size:12px;line-height:1.05;text-align:center;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:26px}
+.storySquadSelectScreen .storySquadRosterBadge{right:6px;bottom:5px;font-size:10px}
+.storySquadSelectScreen .storySquadPickerActions{padding-top:8px;justify-content:space-between}
+.storySquadSelectScreen .storySquadPickerError{margin-right:0;min-height:16px}
+.storySquadSelectScreen .storySquadPickerHelper{display:none!important}
+@media(max-width:920px){
+ .storySquadSelectScreen .storySquadPicker{grid-template-columns:minmax(0,1fr) 280px}
+ .storySquadSelectScreen .storySquadSlot{min-height:270px}
+}
+@media(max-width:640px){
+ .storySquadSelectHeader p{font-size:9px;max-width:none}
+ .storySquadSelectScreen .storySquadPicker{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(205px,42%) minmax(0,1fr) auto}
+ .storySquadSelectScreen .storySquadSlot{min-height:0}
+ .storySquadStageActions{padding-top:5px;margin-top:5px}
+ .storySquadReadyBtn{width:100%;min-height:36px}
+ .storySquadSelectScreen .storySquadPickerList{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .storySquadSelectScreen .storySquadRosterCard{min-height:112px;padding:4px 3px 16px}
+ .storySquadSelectScreen .storySquadRosterName{font-size:10px;min-height:22px}
+ .storySquadSelectScreen .storySquadRosterBadge{font-size:9px;right:4px;bottom:4px}
+}

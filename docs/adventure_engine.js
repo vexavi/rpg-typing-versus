@@ -3614,7 +3614,7 @@ async function debugJumpTo(mode, idx){
       const lineup=make('div','storySquadStages');
       lineup.setAttribute('role','group');
       lineup.setAttribute('aria-label','Three operator lives in deployment order');
-      const info=make('div','storySquadPreviewNote','Choose your first operator.');
+      const info=make('div','storySquadPreviewNote','');
       const cards=[];
       for(let i=0;i<3;i++){
         const holder=make('div','storySquadStage');
@@ -3630,23 +3630,14 @@ async function debugJumpTo(mode, idx){
         label.append(stars,name,state);
         card.append(number,image,label);
         card.addEventListener('click',()=>{if(i>selected.length)return;activeSlot=i;message.textContent='';render();});
-        const controls=make('div','storySquadSlotControls');
-        const left=make('button','','←');left.type='button';left.setAttribute('aria-label',`Move operator ${i+1} earlier`);
-        const right=make('button','','→');right.type='button';right.setAttribute('aria-label',`Move operator ${i+1} later`);
-        const move=dir=>{
-          const j=i+dir;
-          if(i>=selected.length||j<0||j>=selected.length)return;
-          [selected[i],selected[j]]=[selected[j],selected[i]];
-          activeSlot=j;
-          render();
-        };
-        left.addEventListener('click',()=>move(-1));right.addEventListener('click',()=>move(1));
-        controls.append(left,right);
-        holder.append(card,controls);
+        holder.append(card);
         lineup.appendChild(holder);
-        cards.push({holder,card,image,name,stars,state,left,right});
+        cards.push({holder,card,image,name,stars,state});
       }
-      stage.append(heading,lineup,info);
+      const stageActions=make('div','storySquadStageActions');
+      const ready=make('button','storySquadAction primary storySquadReadyBtn','READY');ready.type='button';
+      stageActions.append(ready);
+      stage.append(heading,lineup,info,stageActions);
 
       const side=make('aside','storySquadPickerRoster');
       const sideHeading=make('div','storySquadRosterHeading');
@@ -3668,10 +3659,8 @@ async function debugJumpTo(mode, idx){
       const message=make('div','storySquadPickerError');message.setAttribute('role','status');message.setAttribute('aria-live','polite');
       side.append(sideHeading,searchBox,filters,rosterList);
       const footer=make('div','storySquadPickerActions');
-      const helper=make('span','storySquadPickerHelper','3 distinct operators · No changes to your saved roster');
       const cancel=make('button','storySquadAction secondary','BACK');cancel.type='button';
-      const begin=make('button','storySquadAction primary','DEPLOY SQUAD');begin.type='button';
-      footer.append(message,helper,cancel,begin);
+      footer.append(message,cancel);
       wrap.append(stage,side,footer);selectMount.appendChild(wrap);
 
       function renderRoster(){
@@ -3685,8 +3674,8 @@ async function debugJumpTo(mode, idx){
           card.classList.toggle('inSquad',pos!==-1);
           card.classList.toggle('highlighted',selected[activeSlot]===op.id);
           card.setAttribute('aria-label',`${op.name}, ${op.rarity} stars${op.trial?', trial':''}${pos>=0?', deployed as '+(pos+1):''}`);
-          const pic=make('img','');pic.alt='';pic.loading='lazy';pic.src=storyIconUrl(op.id);
-          pic.onerror=()=>{pic.onerror=null;pic.src='assets/profile-icons/mc.webp';};
+          const pic=make('img','');pic.alt='';pic.loading='lazy';pic.src=storyDeploymentArtUrl(op.id)||storyIconUrl(op.id);
+          pic.onerror=()=>{pic.onerror=null;pic.src=storyIconUrl(op.id);};
           const details=make('span','storySquadRosterName',op.name);
           const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':`${op.rarity}★`);
           card.append(pic,details,status);
@@ -3712,7 +3701,7 @@ async function debugJumpTo(mode, idx){
         }
       }
       function render(){
-        cards.forEach(({holder,card,image,name,stars,state,left,right},i)=>{
+        cards.forEach(({holder,card,image,name,stars,state},i)=>{
           const id=selected[i],op=roster.find(o=>o.id===id);
           const locked=i>selected.length;
           holder.classList.toggle('selected',i===activeSlot);
@@ -3735,11 +3724,9 @@ async function debugJumpTo(mode, idx){
           name.textContent=op?.name||(locked?'LOCKED':`SELECT ${['FIRST','SECOND','THIRD'][i]}`);
           stars.textContent=op?'★'.repeat(op.rarity):'';
           state.textContent=op?(['FIRST','SECOND','THIRD'][i]+(op.trial?' · TRIAL':'')):(locked?'AWAITING PREVIOUS':'CHOOSE OPERATOR');
-          left.disabled=i===0||i>=selected.length;right.disabled=i===2||i>=selected.length-1;
         });
         countText.textContent=`${selected.length} / 3 SELECTED`;
-        info.textContent=selected.length===3?'Squad ready. Select a filled slot to replace an operator.':`Choose your ${['first','second','third'][selected.length]} operator from the roster.`;
-        begin.disabled=selected.length!==3||new Set(selected).size!==3;
+        ready.disabled=selected.length!==3||new Set(selected).size!==3;
         renderRoster();
       }
       searchBox.addEventListener('input',()=>{search=searchBox.value;renderRoster();});
@@ -3756,7 +3743,7 @@ async function debugJumpTo(mode, idx){
       const keys=e=>{if(e.key==='Escape'){e.preventDefault();finish(null);}};
       window.addEventListener('keydown',keys);
       cancel.addEventListener('click',()=>finish(null));
-      begin.addEventListener('click',()=>{
+      ready.addEventListener('click',()=>{
         if(new Set(selected).size!==3){message.textContent='Select three different operators.';return;}
         finish(selected.slice());
       });
