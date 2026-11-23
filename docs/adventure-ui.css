@@ -790,3 +790,27 @@ body.story-squad-layout #storyContinuesLine[hidden]{display:none!important}
 .storySquadFallen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%;margin:9px 0 13px}
 .storySquadFallenCell{display:flex;flex-direction:column;align-items:center;gap:5px;filter:grayscale(1);opacity:.65;color:#ddd2d7;font-size:12px;font-weight:800}
 .storySquadFallenCell img{height:56px;width:56px;max-width:100%;object-fit:contain;border:2px solid #635464;background:#101020}
+
+/* v116 — Story chapters 1/2: restore visual balance to the boss sprite.
+   The old 24% boss column and overflow clipping made many boss sprites appear
+   substantially smaller than the active squad character. Only the Story squad
+   layout is touched; other modes retain their original boss sizing. */
+body.adventure-client.story-squad-layout .bossWrap{
+  right:0;left:auto;top:0;bottom:0;width:26%;max-width:none;
+  overflow:visible;
+}
+body.adventure-client.story-squad-layout .bossInner{
+  width:100%;height:100%;overflow:visible;
+}
+body.adventure-client.story-squad-layout .bossImg{
+  display:none; /* original battle engine reveals the image on load */
+  width:100%;height:100%;object-fit:contain;object-position:center center;
+  transform:scale(1.17);
+  transform-origin:center center;
+  max-width:none;max-height:none;
+}
+@media(max-width:640px){
+  body.adventure-client.story-squad-layout .bossWrap{right:0;top:1%;bottom:1%;width:26%}
+  body.adventure-client.story-squad-layout .bossImg{transform:scale(1.10)}
+}
+
