@@ -3521,6 +3521,9 @@ async function debugJumpTo(mode, idx){
   const storyOperatorName=id=>id==='mc'?adventurePlayerDisplayName():String(window.RPG_OPERATOR_PASSIVES?.RULES?.[id]?.name||id).replace(/_/g,' ');
   const storyArtUrl=id=>window.RPG_MEDIA?.url?.(id==='mc'?'assets/characters/mc.webp':`assets/recruitment/${id}.webp`)|| (id==='mc'?'assets/characters/mc.webp':`assets/recruitment/${id}.webp`);
   const storyIconUrl=id=>window.RPG_MEDIA?.url?.(`assets/profile-icons/${id}.webp`)||`assets/profile-icons/${id}.webp`;
+  // v119: smaller pre-framed lineup art, independently cropped from the originals.
+  // Original recruitment art and boss sprites remain untouched.
+  const storyDeploymentArtUrl=id=>window.RPG_MEDIA?.url?.(`assets/deployment/${id}.webp`)||`assets/deployment/${id}.webp`;
   function clearStorySquadSwitch(){
     if(storySquadSwitchTimer!==null){clearTimeout(storySquadSwitchTimer);storySquadSwitchTimer=null;}
     storySquadDeploy?.classList.remove('show');
@@ -3575,8 +3578,6 @@ async function debugJumpTo(mode, idx){
       if(available.length<3&&window.RPG_OPERATOR_PASSIVES?.RULES?.[id]&&!available.includes(id))available.push(id);
     }
     if(available.length<3)return null;
-    const primary=getSelectedOperator();
-    const defaults=[...(available.includes(primary)?[primary]:[]),...available.filter(id=>id!==primary)].slice(0,3);
     return await new Promise(resolve=>{
       // The squad picker is a dedicated pre-battle screen, not a child of
       // the gameplay overlay. This removes its clipping/height dependency.
@@ -3599,7 +3600,8 @@ async function debugJumpTo(mode, idx){
         rarity:Number(window.RPG_OPERATOR_PASSIVES?.RULES?.[id]?.rarity||4),
         trial:!owned.includes(id)
       })).sort((a,b)=>Number(a.trial)-Number(b.trial)||b.rarity-a.rarity||a.name.localeCompare(b.name));
-      let selected=defaults.slice();
+      // Start with all three slots empty: selections must be made 1 -> 2 -> 3.
+      let selected=[];
       let activeSlot=0;
       let rarityFilter='all';
       let search='';
@@ -3607,11 +3609,12 @@ async function debugJumpTo(mode, idx){
       const wrap=make('div','storySquadPicker');
       const stage=make('section','storySquadPickerStage');
       const heading=make('div','storySquadPickerLegend');
-      heading.append(make('span','storySquadEyebrow','DEPLOYMENT ORDER'),make('span','storySquadSubhead','01 → 02 → 03'));
+      const countText=make('span','storySquadSubhead','0 / 3 SELECTED');
+      heading.append(make('span','storySquadEyebrow','DEPLOYMENT ORDER'),countText);
       const lineup=make('div','storySquadStages');
       lineup.setAttribute('role','group');
       lineup.setAttribute('aria-label','Three operator lives in deployment order');
-      const info=make('div','storySquadPreviewNote','Operators enter from left to right. Select a slot, then choose its character.');
+      const info=make('div','storySquadPreviewNote','Choose your first operator.');
       const cards=[];
       for(let i=0;i<3;i++){
         const holder=make('div','storySquadStage');
@@ -3626,13 +3629,13 @@ async function debugJumpTo(mode, idx){
         const state=make('span','storySquadSlotState',i===0?'FIRST':'RESERVE');
         label.append(stars,name,state);
         card.append(number,image,label);
-        card.addEventListener('click',()=>{activeSlot=i;render();});
+        card.addEventListener('click',()=>{if(i>selected.length)return;activeSlot=i;message.textContent='';render();});
         const controls=make('div','storySquadSlotControls');
         const left=make('button','','←');left.type='button';left.setAttribute('aria-label',`Move operator ${i+1} earlier`);
         const right=make('button','','→');right.type='button';right.setAttribute('aria-label',`Move operator ${i+1} later`);
         const move=dir=>{
           const j=i+dir;
-          if(j<0||j>=selected.length)return;
+          if(i>=selected.length||j<0||j>=selected.length)return;
           [selected[i],selected[j]]=[selected[j],selected[i]];
           activeSlot=j;
           render();
@@ -3689,10 +3692,20 @@ async function debugJumpTo(mode, idx){
           card.append(pic,details,status);
           card.addEventListener('click',()=>{
             const occupied=selected.indexOf(op.id);
-            if(occupied!==-1&&occupied!==activeSlot){
-              // Picking an existing squad member swaps the two positions instead of duplicating them.
+            if(occupied>=0){
+              if(occupied===activeSlot)return;
+              if(activeSlot>=selected.length){
+                message.textContent=`${op.name} is already operator ${occupied+1}. Choose a different operator.`;return;
+              }
+              // Reordering existing, filled slots swaps instead of duplicating.
               [selected[activeSlot],selected[occupied]]=[selected[occupied],selected[activeSlot]];
-            }else selected[activeSlot]=op.id;
+            }else if(activeSlot===selected.length){
+              // Progress strictly in deployment order, then highlight the next empty slot.
+              selected.push(op.id);
+              activeSlot=Math.min(selected.length,2);
+            }else if(activeSlot<selected.length){
+              selected[activeSlot]=op.id;
+            }else return;
             message.textContent='';render();
           });
           rosterList.appendChild(card);
@@ -3701,19 +3714,32 @@ async function debugJumpTo(mode, idx){
       function render(){
         cards.forEach(({holder,card,image,name,stars,state,left,right},i)=>{
           const id=selected[i],op=roster.find(o=>o.id===id);
+          const locked=i>selected.length;
           holder.classList.toggle('selected',i===activeSlot);
+          holder.classList.toggle('empty',!id);
+          holder.classList.toggle('locked',locked);
+          card.disabled=locked;
           card.setAttribute('aria-pressed',String(i===activeSlot));
-          card.setAttribute('aria-label',`Life ${i+1}: ${op?.name||'Empty'}${i===activeSlot?', selected':''}`);
-          const art=storyArtUrl(id);
-          if(image.dataset.src!==art){
-            image.dataset.src=art;image.src=art;
-            image.onerror=()=>{image.onerror=null;image.src=storyIconUrl(id);};
+          card.setAttribute('aria-label',`Life ${i+1}: ${op?.name||'Empty'}${locked?', select previous operator first':i===activeSlot?', selected':''}`);
+          if(id){
+            // Cropped lineup art centers faces and upper bodies even on wide 6-star illustrations.
+            const art=storyDeploymentArtUrl(id)||storyArtUrl(id);
+            image.hidden=false;
+            if(image.dataset.src!==art){
+              image.dataset.src=art;image.src=art;
+              image.onerror=()=>{image.onerror=null;image.src=storyArtUrl(id);};
+            }
+          }else{
+            image.hidden=true;image.removeAttribute('src');delete image.dataset.src;image.onerror=null;
           }
-          name.textContent=op?.name||'Empty';stars.textContent='★'.repeat(op?.rarity||4);
-          state.textContent=(i===0?'FIRST':i===1?'SECOND':'THIRD')+(op?.trial?' · TRIAL':'');
-          left.disabled=i===0;right.disabled=i===2;
+          name.textContent=op?.name||(locked?'LOCKED':`SELECT ${['FIRST','SECOND','THIRD'][i]}`);
+          stars.textContent=op?'★'.repeat(op.rarity):'';
+          state.textContent=op?(['FIRST','SECOND','THIRD'][i]+(op.trial?' · TRIAL':'')):(locked?'AWAITING PREVIOUS':'CHOOSE OPERATOR');
+          left.disabled=i===0||i>=selected.length;right.disabled=i===2||i>=selected.length-1;
         });
-        begin.disabled=new Set(selected).size!==3;
+        countText.textContent=`${selected.length} / 3 SELECTED`;
+        info.textContent=selected.length===3?'Squad ready. Select a filled slot to replace an operator.':`Choose your ${['first','second','third'][selected.length]} operator from the roster.`;
+        begin.disabled=selected.length!==3||new Set(selected).size!==3;
         renderRoster();
       }
       searchBox.addEventListener('input',()=>{search=searchBox.value;renderRoster();});

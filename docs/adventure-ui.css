@@ -986,3 +986,26 @@ body.story-squad-picker-open{overflow:hidden}
  .storySquadSelectScreen .storySquadSlotControls button{min-height:22px}
  .storySquadSelectScreen .storySquadPickerActions{padding-top:3px}
 }
+
+
+/* v119: ordered, empty-first squad deployment with focal-point portraits. */
+.storySquadSelectScreen .storySquadPickerStage{padding:6px 7px 5px;gap:3px}
+.storySquadSelectScreen .storySquadPickerLegend{min-height:20px;padding:0 3px;font-size:10px;letter-spacing:.075em}
+.storySquadSelectScreen .storySquadStages{gap:7px;padding:3px 0 0}
+.storySquadSelectScreen .storySquadStage{gap:3px}
+.storySquadSelectScreen .storySquadSlot{background:radial-gradient(ellipse at 50% 56%,#425169,#1b2538 75%);}
+.storySquadSelectScreen .storySquadSlotArt{inset:0;width:100%;height:100%;object-fit:cover;object-position:center 22%;filter:drop-shadow(0 2px 5px #090d18be);transform:none}
+.storySquadSelectScreen .storySquadStage.selected .storySquadSlotArt{transform:scale(1.008)}
+.storySquadSelectScreen .storySquadStage.empty .storySquadSlot{background:radial-gradient(ellipse at 50% 60%,#36405688,#151d2e 78%);border-style:dashed}
+.storySquadSelectScreen .storySquadStage.locked .storySquadSlot{opacity:.55;cursor:not-allowed;border-color:#53617b}
+.storySquadSelectScreen .storySquadStage.empty .storySquadSlotLabel{background:linear-gradient(transparent,#0e1526bb 45%,#111c2e);padding:15px 3px 22px}
+.storySquadSelectScreen .storySquadStage.empty .storySquadSlotName{font-size:clamp(12px,1.2vw,16px);letter-spacing:.05em}
+.storySquadSelectScreen .storySquadPreviewNote{min-height:14px;padding:0;line-height:1.15}
+.storySquadSelectScreen .storySquadSlotControls button{min-height:25px}
+.storySquadSelectScreen .storySquadSlotArt[hidden]{display:none!important}
+@media(max-width:640px){
+ .storySquadSelectScreen .storySquadPickerStage{padding:3px;gap:2px}
+ .storySquadSelectScreen .storySquadStages{gap:4px;padding:2px 0 0}
+ .storySquadSelectScreen .storySquadSlotControls button{min-height:22px}
+ .storySquadSelectScreen .storySquadStage.empty .storySquadSlotLabel{padding:9px 1px 10px}
+}
