@@ -2340,7 +2340,7 @@ const iconDef = PROFILE_ICON_PRESETS.find(x=>x.id===iconId) || PROFILE_ICON_PRES
 
     e.preventDefault();
     e.stopPropagation();
-    resetGame();
+    resetGame(false);
   }, true);
   const stageNameEl = document.getElementById("stageName");
   const bossNameEl = document.getElementById("bossName");
@@ -2921,14 +2921,14 @@ async function launchStoryStage(stage){
   }catch(error){console.warn('Story battle settings:',error)}
   // Show pictures first. The scene overlay is independent of the battle engine.
   const scenesOk = await window.RPG_STORY.showSlides(stage.intro,stage.id,'intro');
-  if(!scenesOk){ window.RPG_STORY.openMap(launchStoryStage); return }
+  if(!scenesOk){ showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage); return }
   if(!wantsBattle){
     await completeStoryStage(stage,null);
     return;
   }
   if(/^[12]-/.test(String(stage.id||''))){
     const chosen=await chooseStorySquad();
-    if(!chosen){window.RPG_STORY.openMap(launchStoryStage);return;}
+    if(!chosen){showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage);return;}
     storySquad.ids=chosen;
   }else storySquad.ids=[];
   setMode("story");
@@ -2963,6 +2963,9 @@ async function completeStoryStage(stage,damage=null){
   const next=(i>=0&&stages[i+1])?stages[i+1].id:completedId;
   window.RPG_STORY.openMap(launchStoryStage,next);
 }
+// v122: mode navigation always ends in a real menu state, never an empty arena.
+// Story map's own Back/Escape path calls this same exit route.
+window.RPG_STORY_EXIT_TO_MODES = () => resetGame(false);
 function showModeSelectScreen(){
   window.RPG_V66_COMPETITIVE_ACTIVE=false;window.dispatchEvent(new Event("rpg-v66-unlock-settings"));
   rankingRequest++;
@@ -2982,6 +2985,7 @@ function showModeSelectScreen(){
 
   gameState = "modeselect";
   setInputsEnabled(false);
+  document.body.classList.remove("story-squad-layout");
 
   showOverlay(true);
   overlay.classList.remove("defeat-active");
@@ -3584,7 +3588,9 @@ async function debugJumpTo(mode, idx){
       const selectScreen=document.getElementById('storySquadSelectScreen');
       const selectMount=document.getElementById('storySquadSelectMount');
       if(!selectScreen||!selectMount){resolve(null);return;}
-      showOverlay(false);
+      // Keep Mode Select underneath the picker so BACK -> Story Map ->
+      // MODE SELECT cannot expose the inert battlefield.
+      showModeSelectScreen();
       selectMount.replaceChildren();
       selectScreen.hidden=false;
       selectScreen.setAttribute('aria-hidden','false');
@@ -7165,7 +7171,13 @@ function damagePlayer(amount, reason){
     }
   }
 
+  // A cloud/balance fetch can finish after the player has pressed BACK.
+  // Invalidate that pending launch before any stale continuation reopens battle UI.
+  let pendingRunSerial=0;
+  const cancelPendingRun=()=>{pendingRunSerial++;};
   async function startGame(){
+    const thisRun=++pendingRunSerial;
+    const stillStarting=()=>thisRun===pendingRunSerial;
     window.RPG_PERF?.begin('Start run (cloud + art)');
     // Overlap the first stage's static assets with the required Firebase data request.
     void window.RPG_MEDIA?.stage(STAGES[0],true);
@@ -7190,14 +7202,14 @@ function damagePlayer(amount, reason){
     let live=false;
     if(connectionOkay){
       if(!needsRefresh&&currentMode!=='shared')live=true;
-      else live=await refreshVocabFromServer(currentMode);
+      else { live=await refreshVocabFromServer(currentMode);if(!stillStarting())return; }
     }
     // A connection interrupted after successful loading is still unranked.
     const canRank=Boolean(live&&!window.RPG_V66_DISCONNECTED&&navigator.onLine);
     if(!canRank){
       // A successful authoritative rejection must not be overridden by an older cache.
       if(vocabServerRejected || !supportsCache || !restoreVerifiedVocab()){
-        showModeSelectScreen();
+        resetGame(false);
         const reason=vocabServerRejected?vocabLastError:
           (!connectionOkay?'No verified class vocabulary is stored on this Chromebook. Reconnect and sign in once.':
           (vocabLastError||'Class vocabulary has not downloaded. Check your class assignment in the Teacher Dashboard and try again.'));
@@ -7209,27 +7221,28 @@ function damagePlayer(amount, reason){
     if(currentMode==='story'&&storyBattleStage)storyBattleStage.words=WORDS;
     if(currentMode==='shared'?SHARED_WORDS.length===0:WORDS.length===0){
       setLocalOnlyRun(false);
-      showModeSelectScreen();
+      resetGame(false);
       alert('No active vocabulary in this group. Ask your teacher to add words in Vocabulary Manager.');
       return;
     }
     // Do not pretend a cached/unverified snapshot is an official ranked game.
     if(['normal','extra'].includes(currentMode)&&!runLocalOnly){
-      try{await window.RPG_V66.prepareBalanceRun(currentMode,['1','2','3','4','5']);}
+      try{await window.RPG_V66.prepareBalanceRun(currentMode,['1','2','3','4','5']);if(!stillStarting())return;}
       catch(e){
         if(supportsCache&&restoreVerifiedVocab())setLocalOnlyRun(true);
-        else{showModeSelectScreen();alert('Cannot load game settings. '+String(e.message||e));return;}
+        else{resetGame(false);alert('Cannot load game settings. '+String(e.message||e));return;}
       }
     }
     if(['practice','story'].includes(currentMode)&&!runLocalOnly){
       const storyId=storySelectedStage?.id||'1-1';
       const stageIds=currentMode==='story'?[storyId]:['1','2','3','4','5'];
       const chapterId=currentMode==='story'?storyId.split('-')[0]:null;
-      try{await window.RPG_V66?.fetchSoloBalance?.(currentMode,stageIds,chapterId);}catch(e){
+      try{await window.RPG_V66?.fetchSoloBalance?.(currentMode,stageIds,chapterId);if(!stillStarting())return;}catch(e){
         console.info('Using saved teacher difficulty settings:',e?.message||e);
       }
       if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
     }
+    if(!stillStarting())return;
     continuesLeft = (currentMode === "practice") ? Infinity : (currentMode === "shared" ? 0 : MAX_CONTINUES);
     resetRunScoring();
     if(currentMode === "shared") resetSharedBuckets();
@@ -7243,12 +7256,14 @@ function damagePlayer(amount, reason){
     showOverlay(false);
     if(runLocalOnly)pushMsg('CACHED VOCAB · UNRANKED · NOT SAVED',true);
     await startStage(0);
+    if(!stillStarting())return;
     window.RPG_PERF?.end('Start run (cloud + art)');
   }
 
   // ---- Global jump to the *first launch* intro screen (LOAD → START) ----
   // Used by the memory wipe cheat and can be safely called from anywhere.
   function hardResetCoreToIdle(){
+    cancelPendingRun();
     stopStorySquad();
     stopDefeatUI();
     cleanupPauseListeners();
@@ -7324,9 +7339,11 @@ setMode("normal");
   }
 
 
-  function resetGame(reopenStoryMap = true){
+  function resetGame(reopenStoryMap = false){
+    cancelPendingRun();
     stopStorySquad();
     const returnToStoryMap = currentMode === "story" && reopenStoryMap;
+    if(!returnToStoryMap){storySelectedStage=null;storyBattleStage=null;}
     stopDefeatUI();
     cleanupPauseListeners();
     clearResumeCountdown();
@@ -7513,7 +7530,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
   overlayChoices.classList.add("show");
   overlayChoices.innerHTML = `${guildEligible?'<div class="guild-result" id="guildResult" role="status">SAVING GUILD COINS…</div>':''}<button type="button" class="choiceBtn victory-continue" ${guildEligible?'disabled':''}>MENU</button>`;
   const menuButton=overlayChoices.querySelector('.victory-continue');
-  menuButton?.addEventListener('click',event=>{event.stopPropagation();if(gameState==='victory')resetGame();});
+  menuButton?.addEventListener('click',event=>{event.stopPropagation();if(gameState==='victory')resetGame(false);});
   if(guildEligible)void Promise.resolve(guildSync).then(data=>{
     if(gameState!=='victory')return;
     const msg=overlayChoices.querySelector('#guildResult');
@@ -7919,7 +7936,7 @@ window.addEventListener("keydown", (e) => {
       ex4PlayResetScare();
       return;
     }
-    resetGame();
+    resetGame(false);
   });
 runCmd.addEventListener("click", () => {
     if(gameState === "playing" && isExtraStage4() && ex4Phase === 4){
@@ -7929,7 +7946,7 @@ runCmd.addEventListener("click", () => {
       return;
     }
     if(gameState === 'playing' && !window.confirm('Leave this run and return to Mode Select?')) return;
-    resetGame();
+    resetGame(false);
   });
 
   answerForm.addEventListener("submit", (e) => {
