@@ -907,6 +907,7 @@ function setMode(mode){
   if(currentMode === "story" && STAGES[0]) STAGES[0].words = WORDS;
   if(currentMode !== "story" && currentMode !== "shared") applyCachedStageConfigToStageLists();
   if(currentMode !== "shared") try{window.RPG_BALANCE?.setActive(currentMode,currentMode==='story'?String(storySelectedStage?.id||'1-1'):String(stageIndex+1),currentMode==='story'?String(storySelectedStage?.id||'1').split('-')[0]:null);}catch(_){}
+  document.body.classList.toggle('story-squad-layout',currentMode==='story'&&/^[12]-/.test(String(storySelectedStage?.id||'')));
   updateUI();
 }
 
@@ -2925,6 +2926,11 @@ async function launchStoryStage(stage){
     await completeStoryStage(stage,null);
     return;
   }
+  if(/^[12]-/.test(String(stage.id||''))){
+    const chosen=await chooseStorySquad();
+    if(!chosen){window.RPG_STORY.openMap(launchStoryStage);return;}
+    storySquad.ids=chosen;
+  }else storySquad.ids=[];
   setMode("story");
   showOverlay(false);
   startGame();
@@ -3494,6 +3500,137 @@ async function debugJumpTo(mode, idx){
 }
 
 
+  // v114 — Chapters 1 and 2 only. The three existing lives are three operators.
+  // This is isolated from the normal/extra/practice/tournament battle rules.
+  const storySquad={ids:[],index:0,knockedOut:[],enabled:false};
+  let storySquadSwitchTimer=null;
+  let storySquadGraceUntil=0;
+  const storyThreeLifeStage=()=>currentMode==='story'&&/^[12]-/.test(String(storySelectedStage?.id||''));
+  const storySquadVisual=document.getElementById('storySquadVisual');
+  const storySquadArt=document.getElementById('storySquadArt');
+  const storySquadRoster=document.getElementById('storySquadRoster');
+  const storySquadName=document.getElementById('storySquadHeroName');
+  const storySquadCount=document.getElementById('storySquadCount');
+  const storySquadDeploy=document.getElementById('storySquadDeploy');
+  const storyActiveLabel=document.getElementById('storyActiveLabel');
+  const storyBossHpRow=document.getElementById('storyBossHpRow');
+  const storyEnemySlot=document.getElementById('storyEnemySlot');
+  const storyStatusList=document.querySelector('#storyStatusPanel .statusList');
+  const storyBgmRow=document.querySelector('#storyStatusPanel .bgmRow');
+  const storyContinuesLine=document.getElementById('storyContinuesLine');
+  const storyOperatorName=id=>id==='mc'?adventurePlayerDisplayName():String(window.RPG_OPERATOR_PASSIVES?.RULES?.[id]?.name||id).replace(/_/g,' ');
+  const storyArtUrl=id=>window.RPG_MEDIA?.url?.(id==='mc'?'assets/characters/mc.webp':`assets/recruitment/${id}.webp`)|| (id==='mc'?'assets/characters/mc.webp':`assets/recruitment/${id}.webp`);
+  const storyIconUrl=id=>window.RPG_MEDIA?.url?.(`assets/profile-icons/${id}.webp`)||`assets/profile-icons/${id}.webp`;
+  function clearStorySquadSwitch(){
+    if(storySquadSwitchTimer!==null){clearTimeout(storySquadSwitchTimer);storySquadSwitchTimer=null;}
+    storySquadDeploy?.classList.remove('show');
+    storySquadGraceUntil=0;
+  }
+  function renderStorySquad(){
+    const on=storySquad.enabled&&storyThreeLifeStage();
+    if(storySquadVisual)storySquadVisual.hidden=!on;
+    if(storyContinuesLine)storyContinuesLine.hidden=on;
+    if(storyActiveLabel)storyActiveLabel.textContent=on?` · ${storyOperatorName(activeOperatorId)}`:'';
+    if(!on){
+      if(storyBossHpRow&&storyStatusList&&storyBossHpRow.parentElement!==storyStatusList)storyStatusList.prepend(storyBossHpRow);
+      if(storyBgmRow&&storyStatusList&&storyBgmRow.parentElement!==storyStatusList)storyStatusList.append(storyBgmRow);
+      return;
+    }
+    if(storyBossHpRow&&storyEnemySlot&&storyBossHpRow.parentElement!==storyEnemySlot)storyEnemySlot.append(storyBossHpRow);
+    if(storyBgmRow&&storyEnemySlot&&storyBgmRow.parentElement!==storyEnemySlot)storyEnemySlot.append(storyBgmRow);
+    if(storySquadArt){
+      const src=storyArtUrl(activeOperatorId);
+      if(storySquadArt.dataset.src!==src){storySquadArt.dataset.src=src;storySquadArt.src=src;}
+      storySquadArt.onerror=()=>{if(!storySquadArt.src.endsWith('mc.webp'))storySquadArt.src='assets/characters/mc.webp';};
+      storySquadArt.alt=storyOperatorName(activeOperatorId);
+    }
+    if(storySquadName)storySquadName.textContent=storyOperatorName(activeOperatorId);
+    if(storySquadCount)storySquadCount.textContent=`${Math.max(0,storySquad.ids.length-storySquad.knockedOut.length)}/${storySquad.ids.length}`;
+    if(storySquadRoster){
+      storySquadRoster.replaceChildren();
+      storySquad.ids.forEach((id,i)=>{
+        const cell=document.createElement('div');
+        cell.className='storySquadCell'+(storySquad.knockedOut.includes(i)?' ko':i===storySquad.index?' active':'');
+        const portrait=document.createElement('img');portrait.alt='';portrait.src=storyIconUrl(id);
+        portrait.onerror=()=>{portrait.onerror=null;portrait.src='assets/profile-icons/mc.webp';};
+        const name=document.createElement('span');name.textContent=storyOperatorName(id);
+        const state=document.createElement('small');state.textContent=storySquad.knockedOut.includes(i)?'KO':i===storySquad.index?'ACTIVE':'NEXT';
+        cell.append(portrait,name,state);storySquadRoster.appendChild(cell);
+      });
+    }
+  }
+  function stopStorySquad(){
+    clearStorySquadSwitch();storySquad.enabled=false;storySquad.ids=[];storySquad.index=0;storySquad.knockedOut=[];
+    document.body.classList.remove('story-squad-layout');renderStorySquad();
+  }
+  async function chooseStorySquad(){
+    // Existing ownership controls selection; basic trial operators allow 3 lives for new players.
+    const owned=ownedOperatorIds();
+    const available=[...owned];
+    for(const id of ['alden','livia','kade'])if(available.length<3&&window.RPG_OPERATOR_PASSIVES?.RULES?.[id]&&!available.includes(id))available.push(id);
+    if(available.length<3)return null;
+    const primary=getSelectedOperator();
+    const defaults=[primary,...available.filter(id=>id!==primary)].slice(0,3);
+    return await new Promise(resolve=>{
+      showOverlay(true);
+      setOverlayText('SELECT SQUAD','Three operators. Each character is one life. Their order decides who enters next.','');
+      overlay.style.cursor='default';overlayChoices.classList.add('show');
+      const wrap=document.createElement('div');wrap.className='storySquadPicker';
+      const selects=[];
+      for(let i=0;i<3;i++){
+        const label=document.createElement('label');label.textContent=`LIFE ${i+1}`;
+        const selector=document.createElement('select');selector.setAttribute('aria-label',`Life ${i+1} operator`);
+        for(const id of available){const option=document.createElement('option');option.value=id;option.textContent=storyOperatorName(id)+(owned.includes(id)?'':' (TRIAL)');selector.appendChild(option);}
+        selector.value=defaults[i];label.appendChild(selector);wrap.appendChild(label);selects.push(selector);
+      }
+      const message=document.createElement('div');message.className='storySquadPickerError';message.setAttribute('role','status');wrap.appendChild(message);
+      const buttons=document.createElement('div');buttons.className='storySquadPickerActions';
+      const begin=document.createElement('button');begin.type='button';begin.className='choiceBtn';begin.textContent='DEPLOY';
+      const cancel=document.createElement('button');cancel.type='button';cancel.className='choiceBtn';cancel.textContent='BACK';
+      buttons.append(begin,cancel);wrap.appendChild(buttons);overlayChoices.appendChild(wrap);
+      let done=false;
+      const finish=result=>{if(done)return;done=true;window.removeEventListener('keydown',keys);showOverlay(false);resolve(result);};
+      const keys=e=>{if(e.key==='Escape'){e.preventDefault();finish(null);}};
+      window.addEventListener('keydown',keys);
+      cancel.addEventListener('click',e=>{e.stopPropagation();finish(null);});
+      begin.addEventListener('click',e=>{
+        e.stopPropagation();const ids=selects.map(s=>s.value);
+        if(new Set(ids).size!==3){message.textContent='Select three different characters.';return;}
+        finish(ids);
+      });
+      selects[0].focus();
+    });
+  }
+  function swapToNextStoryOperator(){
+    if(!storySquad.enabled||gameState!=='playing')return false;
+    storySquad.knockedOut.push(storySquad.index);
+    const next=storySquad.index+1;
+    if(next>=storySquad.ids.length){renderStorySquad();return false;}
+    storySquad.index=next;
+    gameState='squad-deploy';setInputsEnabled(false);answerInput.value='';
+    pauseStageClock();setSleepyBgmGain(1);
+    resetOperatorForStage(); // Safely remove old operator marks; retain normal falling words and boss HP.
+    renderStorySquad();
+    if(storySquadDeploy){storySquadDeploy.textContent=`${storyOperatorName(storySquad.ids[next])} DEPLOYING`;storySquadDeploy.classList.add('show');}
+    storySquadSwitchTimer=setTimeout(()=>{
+      storySquadSwitchTimer=null;
+      if(!storySquad.enabled||gameState!=='squad-deploy'||currentMode!=='story')return;
+      activeOperatorId=storySquad.ids[next];
+      operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
+      playerMaxHp=BASE_PLAYER_MAX_HP+(operatorPassive?.getMaxHpBonus?.()||0);
+      playerHp=playerMaxHp;
+      // Grant a short grace window, without resetting or deleting the falling words.
+      resumeStageClock();storySquadGraceUntil=stageElapsedSec()+2;
+      window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
+      const stageEffect=operatorPassive?.onStageStart?.(playerHp,stageElapsedSec(),wordsOnField);
+      if(stageEffect?.type==='fletcher-last-stand')renderFletcherStatus(stageElapsedSec());
+      gameState='playing';setInputsEnabled(true);renderStorySquad();renderProfileHeader();
+      storySquadDeploy?.classList.remove('show');
+      uiCache.playerHpStr=null;uiCache.nitrateVisible=null;uiCache.nitrateShield=null;
+      updateUI();answerInput.focus();
+    },1600);
+    return true;
+  }
   // v86.31 — choose an owned operator for this run; passive effects reset each stage.
   const operatorModeEligible=()=>['normal','extra','practice','story','challenge','shared'].includes(currentMode);
   const ownedOperatorIds=()=>{
@@ -3598,6 +3735,7 @@ async function debugJumpTo(mode, idx){
   }
   function equippedOperatorIconSrc(){
     const id=getSelectedOperator();
+    if(storySquad.enabled&&storyThreeLifeStage())return `assets/profile-icons/${activeOperatorId}.webp`;
     return `assets/profile-icons/${id}.webp`;
   }
   function getSelectedOperator(){
@@ -3617,8 +3755,12 @@ async function debugJumpTo(mode, idx){
     renderProfileHeader();
   }
   function prepareOperatorForRun(){
-    activeOperatorId=operatorModeEligible()?getSelectedOperator():'mc';
+    clearStorySquadSwitch();
+    storySquad.enabled=storyThreeLifeStage()&&storySquad.ids.length===3;
+    storySquad.index=0;storySquad.knockedOut=[];
+    activeOperatorId=storySquad.enabled?storySquad.ids[0]:(operatorModeEligible()?getSelectedOperator():'mc');
     operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
+    renderStorySquad();
   }
   // Keeps one unobtrusive visible 3-second countdown inside the word lane.
   function renderFletcherStatus(time){
@@ -6366,6 +6508,7 @@ function nitrateReleaseVisual(){
   }
 function damagePlayer(amount, reason){
     if(amount <= 0) return;
+    if(storySquad.enabled&&(gameState==='squad-deploy'||(gameState==='playing'&&stageElapsedSec()<storySquadGraceUntil)))return;
     if(operatorPassive?.isInvulnerable(stageElapsedSec())&&gameState==='playing'){
       // Invulnerability means no lost HP and no recorded damage (including
       // special mechanics, overflow and incorrect submissions).
@@ -6565,8 +6708,18 @@ function damagePlayer(amount, reason){
     pauseStageClock();
     setBgm(AUDIO.deathBgm, true);
     prepareDefeatScreen("GAME OVER");
-    overlayChoices.innerHTML = (currentMode==='shared'?'':heartRow(MAX_CONTINUES,true)) +
+    overlayChoices.innerHTML = (currentMode==='shared'||storySquad.enabled?'':heartRow(MAX_CONTINUES,true)) +
       `<button type="button" class="choiceBtn defeat-okay">OK</button>`;
+    if(storySquad.enabled){
+      const fallen=document.createElement('div');fallen.className='storySquadFallen';
+      for(const id of storySquad.ids){
+        const cell=document.createElement('div');cell.className='storySquadFallenCell';
+        const face=document.createElement('img');face.src=storyIconUrl(id);face.alt='';
+        const label=document.createElement('span');label.textContent=storyOperatorName(id);
+        cell.append(face,label);fallen.appendChild(cell);
+      }
+      overlayChoices.prepend(fallen);
+    }
     overlayChoices.querySelector('.defeat-okay').addEventListener('click',(e)=>{
       e.stopPropagation();returnFromDefeatToModes();
     });
@@ -6584,6 +6737,10 @@ function damagePlayer(amount, reason){
     window.RPG_CH1_SPECIAL?.suspend(); // Never obscure Continue / Game Over.
     setSleepyBgmGain(1);
     if(gameState !== "playing") return;
+    if(storySquad.enabled){
+      if(swapToNextStoryOperator())return;
+      hardLoseNoContinues();return;
+    }
     if(continuesLeft > 0){ showContinuePrompt(); return; }
     hardLoseNoContinues();
   }
@@ -6917,7 +7074,7 @@ function damagePlayer(amount, reason){
     startRankedRun();
     playerMaxHp = BASE_PLAYER_MAX_HP + (operatorPassive?.getMaxHpBonus()||0);
     playerHp = playerMaxHp;
-
+    if(storySquad.enabled)renderStorySquad();
 
     showOverlay(false);
     if(runLocalOnly)pushMsg('CACHED VOCAB · UNRANKED · NOT SAVED',true);
@@ -6928,6 +7085,7 @@ function damagePlayer(amount, reason){
   // ---- Global jump to the *first launch* intro screen (LOAD → START) ----
   // Used by the memory wipe cheat and can be safely called from anywhere.
   function hardResetCoreToIdle(){
+    stopStorySquad();
     stopDefeatUI();
     cleanupPauseListeners();
     clearResumeCountdown();
@@ -7003,6 +7161,7 @@ setMode("normal");
 
 
   function resetGame(reopenStoryMap = true){
+    stopStorySquad();
     const returnToStoryMap = currentMode === "story" && reopenStoryMap;
     stopDefeatUI();
     cleanupPauseListeners();

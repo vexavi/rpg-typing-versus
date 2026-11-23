@@ -1753,9 +1753,9 @@ width:min(600px, calc(100% - 30px));
   <link rel="preload" as="script" href="story-mode.js?v=92.0">
   <link rel="preload" as="script" href="adventure_rewards.js?v=73">
   <link rel="preload" as="script" href="guild-coins.js?v=73">
-  <link rel="preload" as="script" href="adventure_engine.js?v=113.0">
+  <link rel="preload" as="script" href="adventure_engine.js?v=114.0">
   <link rel="stylesheet" href="rpg-theme.css" />
-  <link rel="stylesheet" href="adventure-ui.css?v=106.0" />
+  <link rel="stylesheet" href="adventure-ui.css?v=114.0" />
 <link rel="stylesheet" href="story-mode.css">
 <link rel="stylesheet" href="chapter-special.css?v=111.0">
 <link rel="stylesheet" href="student-ui.css?v=109.0">
@@ -1774,6 +1774,13 @@ width:min(600px, calc(100% - 30px));
 
       <div class="damageFlash" id="damageFlash"></div>
 
+      <!-- Story chapters 1 and 2: three lives, each one a character. -->
+      <aside class="storySquadVisual" id="storySquadVisual" hidden aria-label="Story squad">
+        <div class="storySquadHeading">SQUAD <span id="storySquadCount">3/3</span></div>
+        <div class="storySquadHero"><img id="storySquadArt" alt="Active operator" decoding="async" /><div class="storySquadHeroName" id="storySquadHeroName">—</div></div>
+        <div class="storySquadRoster" id="storySquadRoster"></div>
+        <div class="storySquadDeploy" id="storySquadDeploy" aria-live="polite"></div>
+      </aside>
       <div class="laneLabel" aria-hidden="true">Words</div>
       <div class="wordLane" id="wordLane"></div>
 
@@ -1844,7 +1851,7 @@ width:min(600px, calc(100% - 30px));
       </div>
 
     <div class="uiRow">
-      <div class="panel">
+      <div class="panel storyPlayerPanel" id="storyPlayerPanel">
         <div class="panelHeader">
           <span class="playerHeaderWrap"><img id="playerIcon" class="playerIcon" alt="icon" /><span class="playerMeta"><span class="playerNameRow"><b id="playerLabel">Player</b><span class="playerLevel muted" id="playerLevelText"></span></span><span class="playerExp muted" id="playerExpText"></span></span></span>
           <span class="muted">PLAYER</span>
@@ -1858,14 +1865,14 @@ width:min(600px, calc(100% - 30px));
 
       <div id="msgBox" class="adventure-hidden-log" role="log" aria-live="polite"></div>
 
-      <div class="panel">
+      <div class="panel storyStatusPanel" id="storyStatusPanel">
         <div class="panelHeader">
-          <span>STATUS</span>
+          <span>STATUS <strong id="storyActiveLabel" class="storyActiveLabel"></strong></span>
           <span>Miss: <b id="mistakesText">0</b></span>
         </div>
 
         <div class="statusList">
-          <div class="statRow">
+          <div class="statRow" id="storyBossHpRow">
             <div class="name">Boss</div>
             <div class="bars">
               <div class="barLine bossHpLine" id="bossHpLine">
@@ -1894,7 +1901,7 @@ width:min(600px, calc(100% - 30px));
             </div>
           </div>
 
-          <div class="small">
+          <div class="small" id="storyContinuesLine">
             Continues: <b id="continuesText">3</b>
           </div>
 
@@ -1910,6 +1917,10 @@ width:min(600px, calc(100% - 30px));
             <button class="bgmBtn" id="bgmMuteBtn">MUTE</button>
           </div>
 </div>
+      </div>
+      <div class="panel storyEnemyPanel" id="storyEnemyPanel" aria-label="Enemy status">
+        <div class="panelHeader"><span>ENEMY STATUS</span></div>
+        <div class="storyEnemySlot" id="storyEnemySlot"></div>
       </div>
     </div>
   </div>
@@ -1975,9 +1986,9 @@ width:min(600px, calc(100% - 30px));
 // An old offline shell may cache old JavaScript even after GitHub Pages publishes new files.
 // Request the updated worker from fresh HTML before starting the application.
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./offline-sw.js?v=113',{scope:'./'}).catch(()=>{});
+  navigator.serviceWorker.register('./offline-sw.js?v=114',{scope:'./'}).catch(()=>{});
 }
 </script>
-<script type="module">await import("./online-boot-v66.js?v=113.0");</script>
+<script type="module">await import("./online-boot-v66.js?v=114.0");</script>
 </body>
 </html>
