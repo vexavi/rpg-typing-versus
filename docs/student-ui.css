@@ -760,3 +760,127 @@ body.adventure-client .operator-selection-equip:hover{background:#f3f88b}
 body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>#overlayDesc,
 body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>#overlayHint,
 body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>#countdownText{display:none!important}
+
+/* v109 — Aura Workshop: direct entry from Mode Select, with compact action rows. */
+body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card.aura-mode-card:not(:disabled){
+ background:#f1f4c9;border-left-color:#899200;border-color:#acb45f;border-left-width:4px}
+body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card.aura-mode-card:not(:disabled):hover{background:#e4ef9a}
+@media(min-width:801px){
+ body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>.overlayChoices{gap:5px;padding-top:9px;padding-bottom:11px}
+ body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card{min-height:40px;padding:6px 12px}
+}
+@media(max-width:800px){
+ body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>.overlayChoices{gap:5px}
+ body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card{min-height:38px;padding:6px 11px}
+}
+
+
+/* v115 — Chapter 1/2 compact story HUD. Keep the student UI's light style,
+   but let the three bottom boxes fit their information instead of reserving
+   a fixed 158–164px height. The liberated height goes back to the battlefield. */
+body.adventure-client.story-squad-layout{box-sizing:border-box;width:100%;min-height:100dvh;overflow-x:clip}
+body.adventure-client.story-squad-layout .uiRow{
+  flex:0 0 auto;
+  height:auto;
+  min-height:0;
+  grid-template-columns:minmax(0,24fr) minmax(0,49fr) minmax(0,27fr);
+  grid-auto-rows:auto;
+  align-items:stretch;
+  gap:4px;
+  padding:4px;
+  background:#e7e8e6;
+}
+body.adventure-client.story-squad-layout .uiRow>.panel{
+  height:auto;min-height:0;min-width:0;
+  margin:0;padding:6px 9px 7px;
+  overflow:visible;
+  border:1px solid #c1c5c5;
+  background:#fff;
+  color:#242629;
+  box-shadow:none;
+}
+body.adventure-client.story-squad-layout .uiRow .panelHeader{
+  display:flex;align-items:center;justify-content:space-between;
+  min-height:0;
+  margin:0 0 4px;padding:0 0 3px;
+  color:#383b40;line-height:1.2;
+  border-bottom:1px solid #d9dddd;
+  font-size:11px;
+}
+body.adventure-client.story-squad-layout .storyStatusPanel .statusList{
+  display:flex!important;flex-direction:column;align-items:stretch;gap:2px
+}
+body.adventure-client.story-squad-layout .storyStatusPanel .statRow{
+  display:grid;grid-template-columns:43px minmax(0,1fr);
+  min-width:0;gap:3px;align-items:center;
+}
+body.adventure-client.story-squad-layout .storyStatusPanel .statRow .name{
+  width:auto;color:#393d40;font-weight:800
+}
+body.adventure-client.story-squad-layout .storyStatusPanel .barLine,
+body.adventure-client.story-squad-layout #storyBossHpRow .barLine{
+  display:grid;grid-template-columns:20px minmax(0,1fr) auto;
+  align-items:center;min-width:0;gap:4px
+}
+body.adventure-client.story-squad-layout .uiRow #bossMeter,
+body.adventure-client.story-squad-layout .uiRow #playerMeter{height:18px;min-height:18px}
+body.adventure-client.story-squad-layout .uiRow .small{font-size:10px;line-height:1.2}
+body.adventure-client.story-squad-layout .uiRow .operator-nitrate-shield{padding-top:2px;gap:4px}
+body.adventure-client.story-squad-layout .uiRow .operator-nitrate-shield .nitrate-shield-segment{height:9px}
+body.adventure-client.story-squad-layout .storyPlayerPanel{
+  display:flex;flex-direction:column;justify-content:flex-start;gap:1px
+}
+/* The left artwork already shows the active operator: no duplicate thumbnail. */
+body.adventure-client.story-squad-layout .storyPlayerPanel .playerIcon{display:none}
+body.adventure-client.story-squad-layout .storyPlayerPanel .playerHeaderWrap{gap:0;min-width:0}
+body.adventure-client.story-squad-layout .storyPlayerPanel .playerNameRow b{font-size:12px}
+body.adventure-client.story-squad-layout .storyPlayerPanel .playerLevel{font-size:10px}
+body.adventure-client.story-squad-layout .storyPlayerPanel .menuList{
+  display:flex;flex-wrap:wrap;align-items:center;gap:3px 7px;
+  margin:0;padding:0
+}
+body.adventure-client.story-squad-layout .storyPlayerPanel .menuList li{margin:0;padding:0}
+body.adventure-client.story-squad-layout .storyPlayerPanel .menuItem{
+  display:flex;align-items:center;gap:4px;
+  min-height:28px;padding:3px 7px;
+  border:1px solid #c5c8c8;background:#f8f9f8;
+  color:#26292c;font-size:12px;white-space:nowrap;
+}
+body.adventure-client.story-squad-layout .storyPlayerPanel .menuItem:hover,
+body.adventure-client.story-squad-layout .storyPlayerPanel .menuItem:focus-visible{
+  background:#e9edea;border-color:#828889
+}
+body.adventure-client.story-squad-layout .storyEnemySlot{gap:4px}
+body.adventure-client.story-squad-layout #storyBossHpRow{
+  display:grid;grid-template-columns:35px minmax(0,1fr);gap:4px;align-items:center
+}
+body.adventure-client.story-squad-layout .storyEnemySlot .bgmRow{
+  display:flex!important;flex-wrap:wrap;gap:4px;align-items:center;
+  margin:0;padding:0;
+  color:#4d5356;font-size:10px;
+}
+body.adventure-client.story-squad-layout .storyEnemySlot .bgmRow input{
+  flex:1 1 65px;min-width:38px;max-width:130px
+}
+body.adventure-client.story-squad-layout .storyEnemySlot .bgmBtn{min-height:25px;padding:2px 5px}
+@media (max-width:900px){
+  body.adventure-client.story-squad-layout .uiRow{
+    flex:0 0 auto;height:auto;min-height:0;
+    grid-template-columns:minmax(0,25fr) minmax(0,47fr) minmax(0,28fr);
+    gap:4px;padding:3px
+  }
+  body.adventure-client.story-squad-layout .uiRow>.panel{padding:6px 5px}
+  body.adventure-client.story-squad-layout .storyPlayerPanel .menuList{gap:3px}
+  body.adventure-client.story-squad-layout .storyPlayerPanel .menuItem{font-size:10px;padding:3px 4px;min-height:27px}
+}
+@media (max-width:640px){
+  body.adventure-client.story-squad-layout .uiRow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  body.adventure-client.story-squad-layout .uiRow>.storyStatusPanel{grid-column:1!important;grid-row:1!important}
+  body.adventure-client.story-squad-layout .uiRow>.storyEnemyPanel{grid-column:2!important;grid-row:1!important}
+  body.adventure-client.story-squad-layout .uiRow>.storyPlayerPanel{grid-column:1/-1!important;grid-row:2!important}
+  body.adventure-client.story-squad-layout .storyPlayerPanel .menuItem{font-size:12px}
+}
+/* Use the available control-row width instead of leaving a large blank right side. */
+body.adventure-client.story-squad-layout .storyPlayerPanel .menuList li{flex:1 1 0;min-width:0}
+body.adventure-client.story-squad-layout .storyPlayerPanel .menuItem{width:100%;justify-content:center}
+body.adventure-client.story-squad-layout .storyEnemySlot .bgmRow input{max-width:none}
