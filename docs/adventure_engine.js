@@ -3564,41 +3564,169 @@ async function debugJumpTo(mode, idx){
     document.body.classList.remove('story-squad-layout');renderStorySquad();
   }
   async function chooseStorySquad(){
-    // Existing ownership controls selection; basic trial operators allow 3 lives for new players.
+    // v117: cinematic party setup inspired by character-lineup RPGs.
+    // Selection is restricted to genuinely owned operators plus the same three starter trials.
     const owned=ownedOperatorIds();
-    const available=[...owned];
-    for(const id of ['alden','livia','kade'])if(available.length<3&&window.RPG_OPERATOR_PASSIVES?.RULES?.[id]&&!available.includes(id))available.push(id);
+    const available=[...new Set(owned)];
+    for(const id of ['alden','livia','kade']){
+      if(available.length<3&&window.RPG_OPERATOR_PASSIVES?.RULES?.[id]&&!available.includes(id))available.push(id);
+    }
     if(available.length<3)return null;
     const primary=getSelectedOperator();
-    const defaults=[primary,...available.filter(id=>id!==primary)].slice(0,3);
+    const defaults=[...(available.includes(primary)?[primary]:[]),...available.filter(id=>id!==primary)].slice(0,3);
     return await new Promise(resolve=>{
       showOverlay(true);
-      setOverlayText('SELECT SQUAD','Three operators. Each character is one life. Their order decides who enters next.','');
-      overlay.style.cursor='default';overlayChoices.classList.add('show');
-      const wrap=document.createElement('div');wrap.className='storySquadPicker';
-      const selects=[];
-      for(let i=0;i<3;i++){
-        const label=document.createElement('label');label.textContent=`LIFE ${i+1}`;
-        const selector=document.createElement('select');selector.setAttribute('aria-label',`Life ${i+1} operator`);
-        for(const id of available){const option=document.createElement('option');option.value=id;option.textContent=storyOperatorName(id)+(owned.includes(id)?'':' (TRIAL)');selector.appendChild(option);}
-        selector.value=defaults[i];label.appendChild(selector);wrap.appendChild(label);selects.push(selector);
-      }
-      const message=document.createElement('div');message.className='storySquadPickerError';message.setAttribute('role','status');wrap.appendChild(message);
-      const buttons=document.createElement('div');buttons.className='storySquadPickerActions';
-      const begin=document.createElement('button');begin.type='button';begin.className='choiceBtn';begin.textContent='DEPLOY';
-      const cancel=document.createElement('button');cancel.type='button';cancel.className='choiceBtn';cancel.textContent='BACK';
-      buttons.append(begin,cancel);wrap.appendChild(buttons);overlayChoices.appendChild(wrap);
+      setOverlayText('SQUAD ASSEMBLY','Choose three operators. The first enters battle; the others take over when an operator is defeated.','');
+      overlay.classList.add('story-squad-select-active');
+      overlayBox.classList.add('storySquadPickBox');
+      overlay.style.cursor='default';
+      overlayChoices.classList.add('show');
+      const make=(tag,cls,text)=>{
+        const el=document.createElement(tag);
+        if(cls)el.className=cls;
+        if(text!==undefined)el.textContent=text;
+        return el;
+      };
+      const roster=available.map(id=>({
+        id,name:storyOperatorName(id),
+        rarity:Number(window.RPG_OPERATOR_PASSIVES?.RULES?.[id]?.rarity||4),
+        trial:!owned.includes(id)
+      })).sort((a,b)=>Number(a.trial)-Number(b.trial)||b.rarity-a.rarity||a.name.localeCompare(b.name));
+      let selected=defaults.slice();
+      let activeSlot=0;
+      let rarityFilter='all';
+      let search='';
       let done=false;
-      const finish=result=>{if(done)return;done=true;window.removeEventListener('keydown',keys);showOverlay(false);resolve(result);};
+      const wrap=make('div','storySquadPicker');
+      const stage=make('section','storySquadPickerStage');
+      const heading=make('div','storySquadPickerLegend');
+      heading.append(make('span','storySquadEyebrow','DEPLOYMENT ORDER'),make('span','storySquadSubhead','01 → 02 → 03'));
+      const lineup=make('div','storySquadStages');
+      lineup.setAttribute('role','group');
+      lineup.setAttribute('aria-label','Three operator lives in deployment order');
+      const info=make('div','storySquadPreviewNote','Operators enter from left to right. Select a slot, then choose its character.');
+      const cards=[];
+      for(let i=0;i<3;i++){
+        const holder=make('div','storySquadStage');
+        const card=make('button','storySquadSlot');
+        card.type='button';
+        const number=make('span','storySquadSlotNumber',String(i+1).padStart(2,'0'));
+        const image=make('img','storySquadSlotArt');
+        image.alt='';image.decoding='async';
+        const label=make('div','storySquadSlotLabel');
+        const stars=make('span','storySquadSlotStars');
+        const name=make('strong','storySquadSlotName');
+        const state=make('span','storySquadSlotState',i===0?'FIRST':'RESERVE');
+        label.append(stars,name,state);
+        card.append(number,image,label);
+        card.addEventListener('click',()=>{activeSlot=i;render();});
+        const controls=make('div','storySquadSlotControls');
+        const left=make('button','','←');left.type='button';left.setAttribute('aria-label',`Move operator ${i+1} earlier`);
+        const right=make('button','','→');right.type='button';right.setAttribute('aria-label',`Move operator ${i+1} later`);
+        const move=dir=>{
+          const j=i+dir;
+          if(j<0||j>=selected.length)return;
+          [selected[i],selected[j]]=[selected[j],selected[i]];
+          activeSlot=j;
+          render();
+        };
+        left.addEventListener('click',()=>move(-1));right.addEventListener('click',()=>move(1));
+        controls.append(left,right);
+        holder.append(card,controls);
+        lineup.appendChild(holder);
+        cards.push({holder,card,image,name,stars,state,left,right});
+      }
+      stage.append(heading,lineup,info);
+
+      const side=make('aside','storySquadPickerRoster');
+      const sideHeading=make('div','storySquadRosterHeading');
+      const sideTitle=make('strong','','OPERATORS');
+      const rosterCount=make('span','',`${roster.length} available`);
+      sideHeading.append(sideTitle,rosterCount);
+      const searchBox=make('input','storySquadSearch');
+      searchBox.type='search';searchBox.placeholder='Search operators';searchBox.setAttribute('aria-label','Search available operators');
+      searchBox.autocomplete='off';searchBox.spellcheck=false;
+      const filters=make('div','storySquadFilters');
+      const filterButtons=[];
+      for(const [value,title] of [['all','ALL'],['6','6★'],['5','5★'],['4','4★']]){
+        const btn=make('button','storySquadFilter',title);
+        btn.type='button';btn.addEventListener('click',()=>{rarityFilter=value;renderRoster();});
+        filters.appendChild(btn);filterButtons.push({btn,value});
+      }
+      const rosterList=make('div','storySquadPickerList');
+      rosterList.setAttribute('role','group');rosterList.setAttribute('aria-label','Available operators');
+      const message=make('div','storySquadPickerError');message.setAttribute('role','status');message.setAttribute('aria-live','polite');
+      side.append(sideHeading,searchBox,filters,rosterList);
+      const footer=make('div','storySquadPickerActions');
+      const helper=make('span','storySquadPickerHelper','3 distinct operators · No changes to your saved roster');
+      const cancel=make('button','storySquadAction secondary','BACK');cancel.type='button';
+      const begin=make('button','storySquadAction primary','DEPLOY SQUAD');begin.type='button';
+      footer.append(message,helper,cancel,begin);
+      wrap.append(stage,side,footer);overlayChoices.appendChild(wrap);
+
+      function renderRoster(){
+        filterButtons.forEach(({btn,value})=>{btn.classList.toggle('active',value===rarityFilter);btn.setAttribute('aria-pressed',String(value===rarityFilter));});
+        const filtered=roster.filter(o=>(rarityFilter==='all'||String(o.rarity)===rarityFilter)&&o.name.toLowerCase().includes(search.toLowerCase().trim()));
+        rosterList.replaceChildren();
+        if(!filtered.length)rosterList.append(make('p','storySquadRosterEmpty','No matching operators.'));
+        for(const op of filtered){
+          const card=make('button','storySquadRosterCard');card.type='button';
+          const pos=selected.indexOf(op.id);
+          card.classList.toggle('inSquad',pos!==-1);
+          card.classList.toggle('highlighted',selected[activeSlot]===op.id);
+          card.setAttribute('aria-label',`${op.name}, ${op.rarity} stars${op.trial?', trial':''}${pos>=0?', deployed as '+(pos+1):''}`);
+          const pic=make('img','');pic.alt='';pic.loading='lazy';pic.src=storyIconUrl(op.id);
+          pic.onerror=()=>{pic.onerror=null;pic.src='assets/profile-icons/mc.webp';};
+          const details=make('span','storySquadRosterName',op.name);
+          const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':`${op.rarity}★`);
+          card.append(pic,details,status);
+          card.addEventListener('click',()=>{
+            const occupied=selected.indexOf(op.id);
+            if(occupied!==-1&&occupied!==activeSlot){
+              // Picking an existing squad member swaps the two positions instead of duplicating them.
+              [selected[activeSlot],selected[occupied]]=[selected[occupied],selected[activeSlot]];
+            }else selected[activeSlot]=op.id;
+            message.textContent='';render();
+          });
+          rosterList.appendChild(card);
+        }
+      }
+      function render(){
+        cards.forEach(({holder,card,image,name,stars,state,left,right},i)=>{
+          const id=selected[i],op=roster.find(o=>o.id===id);
+          holder.classList.toggle('selected',i===activeSlot);
+          card.setAttribute('aria-pressed',String(i===activeSlot));
+          card.setAttribute('aria-label',`Life ${i+1}: ${op?.name||'Empty'}${i===activeSlot?', selected':''}`);
+          const art=storyArtUrl(id);
+          if(image.dataset.src!==art){
+            image.dataset.src=art;image.src=art;
+            image.onerror=()=>{image.onerror=null;image.src=storyIconUrl(id);};
+          }
+          name.textContent=op?.name||'Empty';stars.textContent='★'.repeat(op?.rarity||4);
+          state.textContent=(i===0?'FIRST':i===1?'SECOND':'THIRD')+(op?.trial?' · TRIAL':'');
+          left.disabled=i===0;right.disabled=i===2;
+        });
+        begin.disabled=new Set(selected).size!==3;
+        renderRoster();
+      }
+      searchBox.addEventListener('input',()=>{search=searchBox.value;renderRoster();});
+      const finish=result=>{
+        if(done)return;
+        done=true;
+        window.removeEventListener('keydown',keys);
+        overlay.classList.remove('story-squad-select-active');
+        overlayBox.classList.remove('storySquadPickBox');
+        showOverlay(false);
+        resolve(result);
+      };
       const keys=e=>{if(e.key==='Escape'){e.preventDefault();finish(null);}};
       window.addEventListener('keydown',keys);
-      cancel.addEventListener('click',e=>{e.stopPropagation();finish(null);});
-      begin.addEventListener('click',e=>{
-        e.stopPropagation();const ids=selects.map(s=>s.value);
-        if(new Set(ids).size!==3){message.textContent='Select three different characters.';return;}
-        finish(ids);
+      cancel.addEventListener('click',()=>finish(null));
+      begin.addEventListener('click',()=>{
+        if(new Set(selected).size!==3){message.textContent='Select three different operators.';return;}
+        finish(selected.slice());
       });
-      selects[0].focus();
+      render();cards[0].card.focus();
     });
   }
   function swapToNextStoryOperator(){
