@@ -3603,6 +3603,7 @@ async function debugJumpTo(mode, idx){
       // Start with all three slots empty: selections must be made 1 -> 2 -> 3.
       let selected=[];
       let activeSlot=0;
+      let lockedCount=0; // number of confirmed operators; only the next slot can be edited
       let rarityFilter='all';
       let search='';
       let done=false;
@@ -3614,7 +3615,6 @@ async function debugJumpTo(mode, idx){
       const lineup=make('div','storySquadStages');
       lineup.setAttribute('role','group');
       lineup.setAttribute('aria-label','Three operator lives in deployment order');
-      const info=make('div','storySquadPreviewNote','');
       const cards=[];
       for(let i=0;i<3;i++){
         const holder=make('div','storySquadStage');
@@ -3629,21 +3629,19 @@ async function debugJumpTo(mode, idx){
         const state=make('span','storySquadSlotState',i===0?'FIRST':'RESERVE');
         label.append(stars,name,state);
         card.append(number,image,label);
-        card.addEventListener('click',()=>{if(i>selected.length)return;activeSlot=i;message.textContent='';render();});
-        holder.append(card);
+        card.addEventListener('click',()=>{if(i!==lockedCount)return;activeSlot=i;message.textContent='';render();});
+        const slotAction=make('div','storySquadSlotAction');
+        holder.append(card,slotAction);
         lineup.appendChild(holder);
-        cards.push({holder,card,image,name,stars,state});
+        cards.push({holder,card,image,name,stars,state,slotAction});
       }
-      const stageActions=make('div','storySquadStageActions');
       const ready=make('button','storySquadAction primary storySquadReadyBtn','READY');ready.type='button';
-      stageActions.append(ready);
-      stage.append(heading,lineup,info,stageActions);
+      stage.append(heading,lineup);
 
       const side=make('aside','storySquadPickerRoster');
       const sideHeading=make('div','storySquadRosterHeading');
       const sideTitle=make('strong','','OPERATORS');
-      const rosterCount=make('span','',`${roster.length} available`);
-      sideHeading.append(sideTitle,rosterCount);
+      sideHeading.append(sideTitle);
       const searchBox=make('input','storySquadSearch');
       searchBox.type='search';searchBox.placeholder='Search operators';searchBox.setAttribute('aria-label','Search available operators');
       searchBox.autocomplete='off';searchBox.spellcheck=false;
@@ -3660,7 +3658,8 @@ async function debugJumpTo(mode, idx){
       side.append(sideHeading,searchBox,filters,rosterList);
       const footer=make('div','storySquadPickerActions');
       const cancel=make('button','storySquadAction secondary','BACK');cancel.type='button';
-      footer.append(message,cancel);
+      const reset=make('button','storySquadAction secondary','RESET');reset.type='button';
+      footer.append(message,reset,cancel);
       wrap.append(stage,side,footer);selectMount.appendChild(wrap);
 
       function renderRoster(){
@@ -3674,39 +3673,37 @@ async function debugJumpTo(mode, idx){
           card.classList.toggle('inSquad',pos!==-1);
           card.classList.toggle('highlighted',selected[activeSlot]===op.id);
           card.setAttribute('aria-label',`${op.name}, ${op.rarity} stars${op.trial?', trial':''}${pos>=0?', deployed as '+(pos+1):''}`);
-          const pic=make('img','');pic.alt='';pic.loading='lazy';pic.src=storyDeploymentArtUrl(op.id)||storyIconUrl(op.id);
-          pic.onerror=()=>{pic.onerror=null;pic.src=storyIconUrl(op.id);};
+          // Existing square headshot assets have consistent focal framing.
+          // Do not squeeze the tall full-body deployment crops into square roster cards.
+          const pic=make('img','');pic.alt='';pic.loading='lazy';pic.src=storyIconUrl(op.id);
+          pic.onerror=()=>{pic.onerror=null;pic.src='assets/profile-icons/mc.webp';};
           const details=make('span','storySquadRosterName',op.name);
           const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':`${op.rarity}★`);
           card.append(pic,details,status);
           card.addEventListener('click',()=>{
+            if(lockedCount>2)return;
             const occupied=selected.indexOf(op.id);
-            if(occupied>=0){
-              if(occupied===activeSlot)return;
-              if(activeSlot>=selected.length){
-                message.textContent=`${op.name} is already operator ${occupied+1}. Choose a different operator.`;return;
-              }
-              // Reordering existing, filled slots swaps instead of duplicating.
-              [selected[activeSlot],selected[occupied]]=[selected[occupied],selected[activeSlot]];
-            }else if(activeSlot===selected.length){
-              // Progress strictly in deployment order, then highlight the next empty slot.
-              selected.push(op.id);
-              activeSlot=Math.min(selected.length,2);
-            }else if(activeSlot<selected.length){
-              selected[activeSlot]=op.id;
-            }else return;
+            if(occupied>=0 && occupied!==lockedCount){
+              message.textContent='Already selected.';return;
+            }
+            // A choice only previews the operator in the current slot.
+            // READY is the explicit lock-in; the next slot stays empty until then.
+            selected[lockedCount]=op.id;
+            activeSlot=lockedCount;
             message.textContent='';render();
           });
           rosterList.appendChild(card);
         }
       }
       function render(){
-        cards.forEach(({holder,card,image,name,stars,state},i)=>{
+        cards.forEach(({holder,card,image,name,stars,state,slotAction},i)=>{
           const id=selected[i],op=roster.find(o=>o.id===id);
-          const locked=i>selected.length;
-          holder.classList.toggle('selected',i===activeSlot);
+          const confirmed=i<lockedCount;
+          const locked=i!==lockedCount;
+          holder.classList.toggle('selected',i===lockedCount);
+          holder.classList.toggle('confirmed',confirmed);
           holder.classList.toggle('empty',!id);
-          holder.classList.toggle('locked',locked);
+          holder.classList.toggle('locked',locked && !confirmed);
           card.disabled=locked;
           card.setAttribute('aria-pressed',String(i===activeSlot));
           card.setAttribute('aria-label',`Life ${i+1}: ${op?.name||'Empty'}${locked?', select previous operator first':i===activeSlot?', selected':''}`);
@@ -3723,10 +3720,13 @@ async function debugJumpTo(mode, idx){
           }
           name.textContent=op?.name||(locked?'LOCKED':`SELECT ${['FIRST','SECOND','THIRD'][i]}`);
           stars.textContent=op?'★'.repeat(op.rarity):'';
-          state.textContent=op?(['FIRST','SECOND','THIRD'][i]+(op.trial?' · TRIAL':'')):(locked?'AWAITING PREVIOUS':'CHOOSE OPERATOR');
+          state.textContent=confirmed?'LOCKED IN':op?(op.trial?'TRIAL':'SELECTED'):(locked?'':'PICK AN OPERATOR');
+          // There is only one READY button. It physically moves under the current slot.
+          slotAction.replaceChildren();
+          if(i===lockedCount)slotAction.appendChild(ready);
         });
-        countText.textContent=`${selected.length} / 3 SELECTED`;
-        ready.disabled=selected.length!==3||new Set(selected).size!==3;
+        countText.textContent=`${lockedCount} / 3 LOCKED IN`;
+        ready.disabled=!selected[lockedCount];
         renderRoster();
       }
       searchBox.addEventListener('input',()=>{search=searchBox.value;renderRoster();});
@@ -3743,9 +3743,23 @@ async function debugJumpTo(mode, idx){
       const keys=e=>{if(e.key==='Escape'){e.preventDefault();finish(null);}};
       window.addEventListener('keydown',keys);
       cancel.addEventListener('click',()=>finish(null));
+      reset.addEventListener('click',()=>{
+        selected=[];lockedCount=0;activeSlot=0;message.textContent='';render();
+        cards[0].card.focus();
+      });
       ready.addEventListener('click',()=>{
-        if(new Set(selected).size!==3){message.textContent='Select three different operators.';return;}
-        finish(selected.slice());
+        if(!selected[lockedCount])return;
+        const chosen=selected[lockedCount];
+        if(selected.slice(0,lockedCount).includes(chosen)){
+          message.textContent='Already selected.';return;
+        }
+        lockedCount++;
+        if(lockedCount===3){
+          finish(selected.slice());return;
+        }
+        activeSlot=lockedCount;
+        message.textContent='';render();
+        cards[lockedCount].card.focus();
       });
       render();cards[0].card.focus();
     });
