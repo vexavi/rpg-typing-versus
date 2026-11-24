@@ -19,10 +19,50 @@ const pool=Object.freeze([
  {id:'recovery',name:'Recovery',label:'HEAL AFTER VICTORY',values:[1,2,3],format:v=>`+${displayed(v)}`}
 ]);
 const caps={hp:12,atk:1,def:.6,crit:.55,critDmg:2,recovery:6};
+const names={mc:'Main Character',alden:'Alden',livia:'Livia',elise:'Elise',vern:'Vern',kade:'Kade',nora:'Nora',mira:'Mira',vex:'Vex',aveline:'Aveline',isolde:'Isolde',shield:'Mara',hexaxe:'Nyx',crossbow:'Fletcher',anodyne:'Anodyne',seraphine:'Seraphine',tavi:'Tavi',lupa:'Lupa',nitrate:'Nitrate',hound:'Hound',cassian:'Cassian'};
+const rewardScale=id=>id==='hp'||id==='recovery'?10:100;
+const defaultRewardValues=id=>pool.find(e=>e.id===id)?.values.map(n=>Math.round(n*rewardScale(id)));
+const rewardMax=id=>Math.round(caps[id]*rewardScale(id));
+const passiveHP={vern:1,shield:3};
+const defaultOperator=id=>{const [hp,atk,def]=roles[id]||roles.mc;return {hp:displayed(10+hp+(passiveHP[id]||0)),atk:Math.round(atk*100),def:Math.round(def*100),crit:5,critDmg:200};};
+const operatorRanges={hp:[10,500],atk:[10,300],def:[0,60],crit:[0,60],critDmg:[100,400]};
+function normalizeConfig(input,strict=false){
+ const fail=msg=>{if(strict)throw Error('Conquest settings: '+msg);};
+ const isObject=x=>x&&typeof x==='object'&&!Array.isArray(x);
+ const out={enabled:true,rewards:{max:6,weights:[70,25,5],types:pool.map(e=>e.id),values:{}},operators:{},banner:{color:'',icon:'',art:'',animate:true}};
+ if(input===undefined)return out;
+ if(!isObject(input)){fail('invalid configuration');return out;}
+ if(input.enabled!==undefined){if(typeof input.enabled==='boolean')out.enabled=input.enabled;else fail('territory enabled must be true or false');}
+ const b=input.banner;
+ if(b!==undefined){if(!isObject(b))fail('invalid banner settings');else{
+  if(b.color!==undefined){if(typeof b.color==='string'&&(!b.color||/^#[0-9a-f]{6}$/i.test(b.color)))out.banner.color=b.color;else fail('invalid banner color');}
+  if(b.icon!==undefined){if(['','rift','crown','star','gear','dna','leaf','waves','sun','snow'].includes(b.icon))out.banner.icon=b.icon;else fail('invalid banner emblem');}
+  if(b.art!==undefined){if(typeof b.art==='string'&&(!b.art||/^story\/images\/[\w.-]+\.(?:webp|png|jpg|jpeg|svg)$/i.test(b.art)))out.banner.art=b.art;else fail('invalid banner image');}
+  if(b.animate!==undefined){if(typeof b.animate==='boolean')out.banner.animate=b.animate;else fail('invalid banner animation');}
+ }}
+ const r=input.rewards;
+ if(r!==undefined){if(!isObject(r))fail('invalid enhancement settings');else{
+  if(r.max!==undefined){if(Number.isInteger(r.max)&&r.max>=0&&r.max<=6)out.rewards.max=r.max;else fail('maximum rewards must be 0–6');}
+  if(r.weights!==undefined){if(Array.isArray(r.weights)&&r.weights.length===3&&r.weights.every(n=>Number.isInteger(n)&&n>=0&&n<=100)&&r.weights.reduce((a,b)=>a+b,0)===100)out.rewards.weights=r.weights.slice();else fail('rarity chances must be whole percentages totaling 100');}
+  if(r.values!==undefined){if(!isObject(r.values))fail('invalid enhancement amounts');else for(const [id,values] of Object.entries(r.values)){
+   if(pool.some(e=>e.id===id)&&Array.isArray(values)&&values.length===3&&values.every(n=>Number.isInteger(n)&&n>=1&&n<=rewardMax(id)))out.rewards.values[id]=values.slice();else fail('invalid '+id+' reward amount');
+  }}
+  if(r.types!==undefined){if(Array.isArray(r.types)&&r.types.every(id=>pool.some(e=>e.id===id))&&new Set(r.types).size===r.types.length)out.rewards.types=r.types.slice();else fail('invalid enhancement pool');}
+ }}
+ if(input.operators!==undefined){if(!isObject(input.operators))fail('invalid operator stats');else for(const [id,row] of Object.entries(input.operators)){
+  if(!Object.hasOwn(roles,id)||!isObject(row)){fail('invalid operator '+id);continue;}
+  const result={};for(const [key,value] of Object.entries(row)){const range=operatorRanges[key];if(range&&Number.isInteger(value)&&value>=range[0]&&value<=range[1])result[key]=value;else fail(names[id]+' '+key+' is out of range');}
+  if(Object.keys(result).length)out.operators[id]=result;
+ }}
+ return out;
+}
+function rewardLimit(ch){const c=normalizeConfig(ch?.conquest);return c.rewards.types.length?Math.min(c.rewards.max,Math.max(0,(ch?.stages||[]).filter(s=>s.type!=='story-only').length-1)):0;}
 let run=null;
-function stats(id,passiveHp=0,bonuses=run?.bonuses||{}){
+function stats(id,passiveHp=0,bonuses=run?.bonuses||{},config=run?.config){
  const [hp,atk,def]=roles[id]||roles.mc;
- return {hp:q(10+hp+passiveHp+(bonuses.hp||0)),atk:atk*(1+(bonuses.atk||0)),def:Math.min(.6,def+(bonuses.def||0)),crit:Math.min(.6,.05+(bonuses.crit||0)),critDmg:2+(bonuses.critDmg||0),recovery:bonuses.recovery||0};
+ const override=config?.operators?.[id]||{};
+ const startingHp=override.hp!==undefined?override.hp/10:10+hp+passiveHp;
+ return {hp:q(startingHp+(bonuses.hp||0)),atk:(override.atk===undefined?atk:override.atk/100)*(1+(bonuses.atk||0)),def:Math.min(.6,(override.def===undefined?def:override.def/100)+(bonuses.def||0)),crit:Math.min(.6,(override.crit===undefined?.05:override.crit/100)+(bonuses.crit||0)),critDmg:(override.critDmg===undefined?2:override.critDmg/100)+(bonuses.critDmg||0),recovery:bonuses.recovery||0};
 }
 function manualDamage(answer,baseHit,bonus,st,random=Math.random){
  const raw=(5+letters(answer))*Math.max(0,Number(baseHit)||0)*st.atk;
@@ -34,18 +74,19 @@ function manualDamage(answer,baseHit,bonus,st,random=Math.random){
 function incomingDamage(amount,st){return Math.max(.1,q(amount*(1-st.def)));}
 function begin(ch,ids){
  const encounters=ch.stages.filter(s=>s.type!=='story-only');
- if(!encounters.length||ids.length!==3||new Set(ids).size!==3)throw Error('Invalid operation or squad');
- run={chapter:ch,encounters,position:0,ids:ids.slice(),index:0,knockedOut:[],hp:null,bonuses:{},rewards:[],records:[],unranked:false};
+ if(ch.conquest?.enabled===false||!encounters.length||ids.length!==3||new Set(ids).size!==3)throw Error('Invalid operation or squad');
+ run={chapter:ch,config:normalizeConfig(ch.conquest),encounters,position:0,ids:ids.slice(),index:0,knockedOut:[],hp:null,bonuses:{},rewards:[],records:[],unranked:false};
  return run;
 }
 function award(random=Math.random){
- if(!run||run.rewards.length>=6)return null;
- const candidates=pool.filter(e=>(run.bonuses[e.id]||0)<caps[e.id]-1e-8);
+ if(!run||run.rewards.length>=run.config.rewards.max)return null;
+ const candidates=pool.filter(e=>run.config.rewards.types.includes(e.id)&&(run.bonuses[e.id]||0)<caps[e.id]-1e-8);
  if(!candidates.length)return null;
  const e=candidates[Math.min(candidates.length-1,Math.floor(random()*candidates.length))];
- const roll=random(),tier=roll<.70?0:roll<.95?1:2;
+ const roll=random()*100,[four,five]=run.config.rewards.weights,tier=roll<four?0:roll<four+five?1:2;
  const old=run.bonuses[e.id]||0;
- const value=Math.min(e.values[tier],caps[e.id]-old);
+ const configured=run.config.rewards.values[e.id]?.[tier];
+ const value=Math.min(configured===undefined?e.values[tier]:configured/rewardScale(e.id),caps[e.id]-old);
  run.bonuses[e.id]=Math.round((old+value)*10000)/10000;
  const reward={id:e.id,name:e.name,label:e.label,rarity:4+tier,value,display:e.format(value)};
  run.rewards.push(reward);return reward;
@@ -68,5 +109,5 @@ function finishEncounter(state,random=Math.random){
  run.position++;
  return {final:false,reward,hp:run.hp,next:run.encounters[run.position],healed:displayed(heal)};
 }
-root.RPG_CONQUEST=Object.freeze({q,displayed,letters,stats,manualDamage,incomingDamage,begin,award,finishEncounter,abort:()=>{run=null;},get run(){return run;},get pool(){return pool;}});
+root.RPG_CONQUEST=Object.freeze({q,displayed,letters,normalizeConfig,defaultRewardValues,rewardMax,defaultOperator,operatorRanges,names,rewardLimit,stats,manualDamage,incomingDamage,begin,award,finishEncounter,abort:()=>{run=null;},get run(){return run;},get pool(){return pool;}});
 })(typeof window!=='undefined'?window:globalThis);

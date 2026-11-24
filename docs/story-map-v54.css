@@ -110,3 +110,49 @@ body.adventure-client #storyRoot .cq-actions button.story-start{background:#edf5
 body.adventure-client #storyRoot .cq-actions button.story-start:disabled{background:#45505a;color:#c0c8ce;opacity:1;cursor:not-allowed;font-size:15px}
 @media(max-width:700px){body.adventure-client #storyRoot .cq-atlas{height:auto;min-height:100dvh;overflow:visible}body.adventure-client #storyRoot .cq-atlas .story-map-title{font-size:16px}#storyRoot .cq-progress{font-size:10px}#storyRoot .cq-progress strong{font-size:15px;margin-left:4px}#storyRoot .cq-main{grid-template-columns:1fr;padding:6px;gap:6px}#storyRoot .cq-map-frame{flex:none;aspect-ratio:1.6}#storyRoot .cq-map-footer{padding:6px;gap:6px}#storyRoot .cq-legend{gap:7px;font-size:10px}#storyRoot .cq-jump{width:100%}#storyRoot .cq-jump select{width:100%}#storyRoot .cq-side{padding:8px;gap:6px}#storyRoot .cq-summary{grid-template-columns:repeat(3,minmax(0,1fr))}#storyRoot .cq-summary span{flex-direction:column;text-align:center;gap:1px;padding:6px;font-size:9px}#storyRoot .cq-encounters{max-height:160px}#storyRoot .cq-empty{padding:15px}}
 @media(min-width:701px) and (max-height:550px){#storyRoot .cq-main{padding:5px;gap:5px}#storyRoot .cq-side{padding:7px;gap:5px}#storyRoot .cq-summary{grid-template-columns:repeat(3,minmax(0,1fr))}#storyRoot .cq-summary span{flex-direction:column;gap:0;text-align:center;font-size:9px;padding:4px}}
+
+/* v131 Hall of Banners — vector cloth, no raster atlas or animation loop. */
+body.adventure-client #storyRoot .cq-hall{background:#101318;color:#f7f8fa;font-family:system-ui,sans-serif}
+body.adventure-client #storyRoot .cq-hall .story-world-top{background:linear-gradient(110deg,#242a32,#11151b);border-bottom-color:#68737e}
+#storyRoot .cq-hall .cq-banner-panel{background:radial-gradient(ellipse at 50% 20%,#323b47,#14191f 70%);border-color:#4b5561;position:relative}
+#storyRoot .cq-hall-heading{font-size:clamp(14px,2vw,24px);font-weight:900;letter-spacing:.12em;padding:14px 16px 0;color:#d6dde5}
+#storyRoot .cq-banner-row{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;align-items:center;gap:5px;flex:1;min-height:0;padding:8px 5px}
+#storyRoot .cq-banner-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch;gap:6px;min-width:0;min-height:0;height:100%;max-height:520px}
+#storyRoot .cq-banner-row>button{padding:8px 0;font:800 32px/1 system-ui;background:#2b3541;border:1px solid #66717b;color:white;min-width:0}
+#storyRoot button.cq-banner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:0;padding:8px 3px;background:transparent;border:2px solid transparent;color:#f4f6fa;font-family:system-ui;position:relative}
+#storyRoot button.cq-banner:is(:hover,:focus-visible,.selected){background:#ffffff08;border-color:#e8eaf0;outline:0}
+#storyRoot button.cq-banner.selected .cq-banner-art{filter:drop-shadow(0 0 5px #ffffff88)}
+.cq-banner-art{display:block;width:100%;height:auto;min-height:0;max-height:100%;overflow:visible}
+#storyRoot .cq-banner .cq-banner-art{width:100%;flex:1;max-height:calc(100% - 48px);object-fit:contain}
+#storyRoot .cq-banner:is(.locked,.disabled,.unpublished) .cq-banner-art{opacity:.48;filter:saturate(.55)}
+#storyRoot .cq-banner.unpublished .cq-banner-art{filter:grayscale(1)}
+#storyRoot .cq-banner-name{font-weight:950;font-size:clamp(11px,1.45vw,20px);text-align:center;text-transform:uppercase;line-height:1.12;overflow-wrap:anywhere}
+#storyRoot .cq-banner-state{font-size:clamp(9px,.9vw,13px);font-weight:800;letter-spacing:.04em;color:#abb5bf;text-align:center}
+#storyRoot .cq-banner.available .cq-banner-state{color:#eaf179}#storyRoot .cq-banner.captured .cq-banner-state{color:#f4d477}
+#storyRoot .cq-page{font-size:12px;color:#d3dce4;font-weight:800}
+#storyRoot .cq-hall .cq-side{background:#20262d;border-color:#525d69}#storyRoot .cq-hall .cq-side-head{background:#13191f}
+#storyRoot .cq-hall .conquest-encounter:has(small){border-left:4px solid #bf5366;background:#39232b}
+body.adventure-client #storyRoot .cq-banner-result{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:clamp(12px,3vw,40px);width:min(94vw,1000px);max-height:94dvh;overflow:auto;padding:clamp(14px,3vw,36px);border:1px solid #606d7c;border-top:5px solid #b2c1ce;background:linear-gradient(125deg,#1a2028,#303842);text-align:left;box-sizing:border-box;font-family:system-ui,sans-serif}
+.cq-result-banner{grid-row:1;grid-column:1;min-width:0;display:flex;justify-content:center;align-items:center;overflow:hidden;padding:0 0 8px}
+.cq-result-banner .cq-banner-art{width:min(100%,330px);max-height:70dvh}
+#storyRoot .cq-result-info{grid-column:2;grid-row:1;min-width:0}
+body.adventure-client #storyRoot .cq-result-info h2{font-size:clamp(20px,3vw,34px);margin:8px 0 12px;text-transform:uppercase;overflow-wrap:anywhere}
+#storyRoot .cq-result-count{font-size:clamp(38px,6vw,76px);font-weight:950;line-height:1.05;letter-spacing:-.05em}
+#storyRoot .cq-result-meter{height:8px;margin:12px 0;background:#10151c}#storyRoot .cq-result-meter i{display:block;height:100%;background:#e5c369}
+#storyRoot .cq-reward-box{border:1px solid #6f7b89;padding:10px 14px;background:#141920;margin:14px 0}
+body.adventure-client #storyRoot .cq-reward-box h2{font-size:18px;margin:5px 0}
+body.adventure-client #storyRoot .cq-banner-result .conquest-reward-stat{color:#f9e0a0;font-size:clamp(20px,3vw,36px);padding:0}
+body.adventure-client #storyRoot .cq-banner-result button{margin-top:15px;background:#e3e8ee;color:#13181e;border:0;font:900 22px system-ui;min-height:48px}
+.cq-cloth-fall{animation:cq-cloth-fall .7s ease-in forwards;transform-box:fill-box;transform-origin:center;pointer-events:none}
+@keyframes cq-cloth-fall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(70px) rotate(13deg)}}
+.cq-gold-reveal{grid-column:1;grid-row:1;min-width:0;animation:cq-gold-reveal .35s .68s both;pointer-events:none}
+@keyframes cq-gold-reveal{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+@media(max-width:700px){body.adventure-client #storyRoot:has(.cq-hall){overflow-y:auto}#storyRoot .cq-banner-grid{grid-template-columns:repeat(2,minmax(0,1fr));height:auto;max-height:none}#storyRoot .cq-banner .cq-banner-art{max-height:180px}#storyRoot .cq-banner-row{min-height:220px;flex:none}#storyRoot .cq-banner-name{font-size:12px}#storyRoot .cq-hall .cq-map-panel{overflow:visible}}
+@media(max-height:480px) and (min-width:701px){#storyRoot .cq-hall-heading{padding:6px;font-size:14px}#storyRoot .cq-banner-name{font-size:12px}#storyRoot .cq-banner-state{font-size:9px}#storyRoot .cq-banner-row{padding:2px}#storyRoot .cq-banner .cq-banner-art{max-height:calc(100% - 36px)}}
+@media(prefers-reduced-motion:reduce){.cq-cloth-fall{animation:none;opacity:0}.cq-gold-reveal{animation:none}}
+.cq-no-animation .cq-gold-reveal{animation:none}
+/* Keep labels attached to the fabric rather than stretched to the panel bottom. */
+#storyRoot .cq-banner .cq-banner-art{flex:0 1 auto;aspect-ratio:200/286;max-height:min(calc(100% - 48px),420px)}
+body.adventure-client #storyRoot:has(.cq-banner-result){background:radial-gradient(ellipse at 50% 30%,#3b4654,#101419 75%)}
+@media(max-width:700px){#storyRoot .cq-banner .cq-banner-art{max-height:180px}}
+@media(max-height:480px) and (min-width:701px){#storyRoot .cq-banner .cq-banner-art{max-height:calc(100% - 36px)}}

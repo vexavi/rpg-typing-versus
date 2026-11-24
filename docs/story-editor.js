@@ -1,18 +1,22 @@
-/* Teacher Story Editor — local drafts; one transactional Firestore publish.
+/* Teacher Conquest Editor — local drafts; one transactional Firestore publish.
  * No Cloud Storage, no polling, no function or Blaze dependencies.
  */
 // Firebase is loaded separately AFTER local chapters are displayed.
 // Static Firebase imports blocked the entire editor if the CDN was unavailable.
-import './conquest-map.js?v=129.0';
-import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=126.0';
+import './conquest-map.js?v=131.0';
+import './conquest-core.js?v=131.0';
+import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=131.0';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
-import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs';
+import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs?v=131.0';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const DRAFT_KEY='rpg_story_teacher_draft_v87';
 const CHAPTER_1_BATTLE_THEME='story/audio/ch1-battle.webm';
 const STAGE_BASE=[{fallSpeedPxPerSec:41,spawnEveryMs:2950,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,hitDamage:1}];
 const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Base attack multiplier (Conquest)',1,100,1],missDamage:['Incorrect answer damage',1,10,1],overflowDamage:['Overflow damage per second',1,10,1],cometDamage:['Comet impact damage',1,10,1],shootingStarDamage:['Shooting Star damage',1,10,1]};
+const CQ=window.RPG_CONQUEST;
+const damageScale=key=>['bossHp','missDamage','overflowDamage','cometDamage','shootingStarDamage'].includes(key)?10:1;
+const showDamage=(key,value)=>value*damageScale(key);
 const DAMAGE_DEFAULTS={hitDamage:1,missDamage:1,overflowDamage:1,cometDamage:2,shootingStarDamage:2};
 const stagedPhotos=new Map(),stagedAudio=new Map();let liveBalance={},liveRequestId=0;
 const REPO_KEY='rpg_story_github_repo_v90';
@@ -71,10 +75,10 @@ function currentStage(){return currentChapter()?.stages[stageIndex]||null;}
 function generateNumber(numbers){const set=new Set(numbers.map(String));for(let i=1;i<=9999;i++)if(!set.has(String(i)))return String(i);throw Error('No available IDs.');}
 function nextChapterId(){return generateNumber([...chapters.map(c=>c.id),...retiredChapters]);}
 function nextStageId(ch){const prefix=ch.id+'-';const used=[...ch.stages.map(s=>s.id),...retiredStages].filter(s=>s.startsWith(prefix)).map(s=>s.slice(prefix.length));return prefix+generateNumber(used);}
-function newStage(ch){const id=nextStageId(ch);return {id,title:`Stage ${id}`,description:'',type:'story-battle',battle:{template:1,bossName:'Story Boss',bossHp:20},stars:{damageMax:[0,1,2,3]},unlock:{stageId:'',minStars:0},intro:[],outro:[]};}
+function newStage(ch){const id=nextStageId(ch);return {id,title:`Encounter ${id}`,description:'',type:'battle-only',battle:{template:1,bossName:'Enemy',bossHp:20},stars:{damageMax:[0,1,2,3]},unlock:{stageId:'',minStars:0},intro:[],outro:[]};}
 function currentOrder(){return chapters.flatMap(ch=>ch.stages.map(st=>st.id));}
 function writeDraft(){
- const payload={version:1,chapters,revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};
+ const payload={...cleanStory({chapters}),revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};
  localStorage.setItem(DRAFT_KEY,JSON.stringify(payload));dirty=false;status('Draft saved in this browser. Students have not received these changes.',false,true);
 }
 function swap(arr,i,j){if(j<0||j>=arr.length)return false;[arr[i],arr[j]]=[arr[j],arr[i]];return true;}
@@ -89,7 +93,7 @@ function audioOptions(selected=''){const paths=musicOptions(chapters,[...onlineA
 function audioPreview(path){return stagedAudio.get(path)?.url||(safeStoryAudio(path)?path:'');}
 function dropUnusedAudio(){const used=new Set(audioPaths());for(const [path,item] of stagedAudio)if(!used.has(path)){URL.revokeObjectURL(item.url);stagedAudio.delete(path);}updateAuth();}
 function clearAudioSelection(){for(const item of stagedAudio.values())URL.revokeObjectURL(item.url);stagedAudio.clear();updateAuth();}
-function audioOptionsMarkup(selected=''){return `<option value="">${String(currentChapter()?.id)==='1'?'Chapter 1 theme (default)':'None (silent)'}</option>`+audioOptions(selected).map(path=>`<option value="${esc(path)}" ${path===selected?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('');}
+function audioOptionsMarkup(selected=''){return `<option value="">${String(currentChapter()?.id)==='1'?'The Rift theme (default)':'None (silent)'}</option>`+audioOptions(selected).map(path=>`<option value="${esc(path)}" ${path===selected?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('');}
 function catalog(){return (window.RPG_MECHANICS?.list()||[]).filter(m=>!m.modes?.length||m.modes.includes('story'));}
 function inherited(key,st=currentStage()){
  const base=STAGE_BASE[Math.min(4,Math.max(0,(Number(st?.battle?.template)||1)-1))]||STAGE_BASE[0];
@@ -107,12 +111,12 @@ function fillLiveValues(){
   const label=$('stageFields').querySelector(`[data-current-field="${key}"]`);
   if(!input||!label)continue;
   const data=inherited(key,st),own=st.battle[key];
-  if(own===undefined||own===null){if(document.activeElement!==input)input.value=String(data.value)}
-  label.textContent=`Current: ${own??data.value} · ${own!==undefined&&own!==null?'Story stage override':data.source}`;
+  if(own===undefined||own===null){if(document.activeElement!==input)input.value=String(showDamage(key,data.value))}
+  label.textContent=`Current: ${showDamage(key,own??data.value)} · ${own!==undefined&&own!==null?'Encounter override':data.source}`;
  }
  const panicInput=$('stageFields').querySelector('[data-damage-panic]');
- if(panicInput&&document.activeElement!==panicInput)panicInput.value=String(panicDamageValue(st));
- const info=$('current-status');if(info)info.textContent=checkAuth()?'Current values loaded from Game Settings when this stage opened.':'Showing built-in defaults; sign in to read live Game Settings overrides.';
+ if(panicInput&&document.activeElement!==panicInput)panicInput.value=String(panicDamageValue(st)*10);
+ const info=$('current-status');if(info)info.textContent=checkAuth()?'Current values loaded from Game Settings when this stage opened.':'Built-in defaults; sign in for live Game Settings overrides.';
 }
 async function loadLiveValues(){
  const st=currentStage();if(!st)return;
@@ -137,13 +141,13 @@ function panicDamageValue(st){
 function damageSettings(st){
  const fields=Object.keys(DAMAGE_DEFAULTS).map(key=>{
   const [label,min,max,step]=STAGE_FIELDS[key],actual=st.battle?.[key]??inherited(key,st).value;
-  return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${esc(actual)}"><span class="muted" data-current-field="${key}">Current: ${esc(actual)}</span></div>`;
+  return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${showDamage(key,min)}" max="${showDamage(key,max)}" step="${showDamage(key,step)}" value="${esc(showDamage(key,actual))}"><span class="muted" data-current-field="${key}">Current: ${esc(showDamage(key,actual))}</span></div>`;
  }).join('');
- const panic=String(currentChapter()?.id)==='1'?`<div class="field"><label for="battle-panicDamage">Panic word damage</label><input id="battle-panicDamage" data-damage-panic="true" type="number" min="1" max="10" step="1" value="${esc(panicDamageValue(st))}"><span class="muted">When Panic is enabled in Chapter 1.</span></div>`:'';
- return `<section class="section damage-settings"><div class="editheading"><h3>Damage Settings</h3></div><div class="grid">${fields}${panic}</div><div class="grid"><label><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Enable Comet (every 4th spawn, starting with the first)</label><label><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Enable Shooting Star (every 3rd spawn, 4-second countdown after landing)</label></div><div class="boss-sprite-actions"><button type="button" data-action="copy-damage">Copy damage to chapter</button><button type="button" data-action="reset-damage">Reset damage defaults</button></div><p class="muted">Damage only; copy/reset does not change HP, hazard toggles or other mechanics.</p></section>`;
+ const panic=String(currentChapter()?.id)==='1'?`<div class="field"><label for="battle-panicDamage">Panic word damage</label><input id="battle-panicDamage" data-damage-panic="true" type="number" min="10" max="100" step="10" value="${esc(panicDamageValue(st)*10)}"><span class="muted">When Panic is enabled in The Rift.</span></div>`:'';
+ return `<section class="section damage-settings"><div class="editheading"><h3>Damage Settings</h3></div><div class="grid">${fields}${panic}</div><div class="grid"><label><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Enable Comet (every 4th spawn, starting with the first)</label><label><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Enable Shooting Star (every 3rd spawn, 4-second countdown after landing)</label></div><div class="boss-sprite-actions"><button type="button" data-action="copy-damage">Copy damage to territory</button><button type="button" data-action="reset-damage">Reset damage defaults</button></div><p class="muted">Damage only; copy/reset does not change HP, hazard toggles or other mechanics.</p></section>`;
 }
 function mechanicMarkup(st,onlyChapter1=false){
- const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic'].includes(m.id):!['sleepy','delirium','panic'].includes(m.id));if(!plugins.length)return '<p class="muted">No Story mechanics installed. New behaviors require a static code module; they appear here automatically once installed.</p>';
+ const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic'].includes(m.id):!['sleepy','delirium','panic'].includes(m.id));if(!plugins.length)return '<p class="muted">No additional mechanics installed. New behaviors require a static code module; they appear here automatically once installed.</p>';
  return plugins.map(m=>{
   const settings=st.battle?.mechanics?.[m.id]||{};
   const controls=m.fields.filter(field=>!(m.id==='panic'&&field.key==='damage')).map(field=>{
@@ -263,7 +267,8 @@ async function downloadPhotos(){
 }
 // A missing photo can be repaired from the filenames already in the GitHub repository.
 // This only edits the local draft; Firestore is never written by a repair operation.
-function photoPaths(){return referencedImages(chapters);}
+function battleAssetChapters(items){return items.map(c=>({...c,stages:c.stages.filter(s=>s.type!=='story-only').map(s=>({...s,intro:[],outro:[]}))}));}
+function photoPaths(){return referencedImages(battleAssetChapters(chapters));}
 async function photoOnline(path){
  try{
   const url=new URL(path,document.baseURI);
@@ -392,7 +397,7 @@ async function shortenExistingImages(){
  finally{busy=false;updateAuth()}
 }
 async function verifyImageFiles(payload){
- const paths=referencedImages(payload.chapters);
+ const paths=referencedImages(battleAssetChapters(payload.chapters));
  if(!paths.length)return;
  const missing=[];
  for(let i=0;i<paths.length;i+=6){
@@ -404,23 +409,34 @@ async function verifyImageFiles(payload){
   throw Error(`${missing.length} chapter images cannot be found online. See the Photo Report below. Click Find Existing Images to repair old filenames; do not reselect or rename the photos.`);
  }
 }
+function battleStages(ch){return (ch?.stages||[]).filter(s=>s.type!=='story-only');}
+function territoryName(id){return window.RPG_CONQUEST_MAP.name(id);}
+function globalOperators(){return chapters.find(ch=>Object.keys(ch.conquest?.operators||{}).length)?.conquest.operators||{};}
+function ensureConfig(ch){return ch.conquest ||= CQ.normalizeConfig(undefined);}
 function renderNav(){
- $('chapterList').innerHTML=chapters.map((c,i)=>`<div class="navrow"><button class="navitem" data-action="select-chapter" data-i="${i}" aria-current="${i===chapterIndex}">${esc(c.id)} · ${esc(c.title)}</button><div class="navcontrols"><button data-action="chapter-up" data-i="${i}" ${i===0?'disabled':''} aria-label="Move chapter up">▲</button><button data-action="chapter-down" data-i="${i}" ${i===chapters.length-1?'disabled':''} aria-label="Move chapter down">▼</button></div></div>`).join('');
- const ch=currentChapter();
- $('stageList').innerHTML=(ch?.stages||[]).map((st,i)=>`<div class="navrow"><button class="navitem" data-action="select-stage" data-i="${i}" aria-current="${i===stageIndex}">${esc(st.id)} · ${esc(st.title)}</button><div class="navcontrols"><button data-action="stage-up" data-i="${i}" ${i===0?'disabled':''} aria-label="Move stage up">▲</button><button data-action="stage-down" data-i="${i}" ${i===ch.stages.length-1?'disabled':''} aria-label="Move stage down">▼</button></div></div>`).join('');
- $('addStage').disabled=!ch||busy;$('addChapter').disabled=busy;
+ const atlas=window.RPG_CONQUEST_MAP;
+ const row=(c,i)=>{const region=atlas.byId(c.id),count=battleStages(c).length;return `<div class="navrow"><button class="navitem cq-territory-nav" data-action="select-chapter" data-i="${i}" aria-current="${i===chapterIndex}" style="--faction:${region?.color||'#888'}"><span class="cq-swatch"></span><span>${esc(territoryName(c.id))}<small>${count} encounter${count===1?'':'s'} · ${c.conquest?.enabled===false?'Disabled':'Enabled'}</small></span></button><div class="navcontrols"><button data-action="chapter-up" data-i="${i}" ${i===0?'disabled':''} aria-label="Move territory up">▲</button><button data-action="chapter-down" data-i="${i}" ${i===chapters.length-1?'disabled':''} aria-label="Move territory down">▼</button></div></div>`;};
+ $('chapterList').innerHTML=chapters.map(row).join('')+atlas.regions.filter(r=>!chapters.some(ch=>ch.id===r.id)).map(r=>`<div class="navrow"><button class="navitem cq-territory-nav" data-action="create-territory" data-id="${r.id}" style="--faction:${r.color}" ${retiredChapters.has(r.id)?'disabled':''}><span class="cq-swatch"></span><span>${esc(r.name)}<small>${retiredChapters.has(r.id)?'Retired ID':'+ Create territory'}</small></span></button></div>`).join('');
+ const ch=currentChapter(),battles=battleStages(ch);
+ $('stageList').innerHTML=battles.map((st,i)=>{const idx=ch.stages.indexOf(st);return `<div class="navrow"><button class="navitem" data-action="select-stage" data-i="${idx}" aria-current="${idx===stageIndex}">${String(i+1).padStart(2,'0')} · ${esc(st.title)}${i===battles.length-1?'<small class="cq-final">FINAL BOSS</small>':''}</button><div class="navcontrols"><button data-action="stage-up" data-i="${idx}" ${i===0?'disabled':''} aria-label="Move encounter up">▲</button><button data-action="stage-down" data-i="${idx}" ${i===battles.length-1?'disabled':''} aria-label="Move encounter down">▼</button></div></div>`;}).join('');
+ $('addStage').disabled=!ch||busy;$('addChapter').disabled=busy||!atlas.regions.some(r=>!chapters.some(ch=>ch.id===r.id)&&!retiredChapters.has(r.id));
 }
+function selectFirstEncounter(){const ch=currentChapter();stageIndex=ch?.stages.findIndex(st=>st.type!=='story-only')??-1;}
+function createTerritory(id){if(busy||chapters.some(c=>c.id===id)||retiredChapters.has(id)||chapters.length>=40)return;const ch={id,title:territoryName(id),subtitle:'',stages:[],conquest:CQ.normalizeConfig({operators:globalOperators()})};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();}
+function renderEnhancements(ch){const cfg=ensureConfig(ch),r=cfg.rewards;return `<details class="cq-settings"><summary>Enhancement rewards <span>${r.max} max · ${r.types.length} types</span></summary><div class="cq-config-body"><div class="grid cq-rewards-grid"><div class="field"><label>Maximum rewards per operation</label><input type="number" data-reward-max min="0" max="6" step="1" value="${r.max}"></div>${r.weights.map((n,i)=>`<div class="field"><label>${i+4}★ chance (%)</label><input type="number" min="0" max="100" step="1" data-weight="${i}" value="${n}"></div>`).join('')}</div><p class="muted" id="rarity-total">Total: ${r.weights.reduce((a,b)=>a+b,0)}% (must equal 100%)</p><div class="cq-reward-pool">${CQ.pool.map(e=>`<label><input type="checkbox" data-reward-type="${e.id}" ${r.types.includes(e.id)?'checked':''}> <span>${esc(e.name)}<small>${e.label}</small></span></label>`).join('')}</div><div class="cq-reward-amounts"><div class="cq-reward-amount-row"><strong>Reward amount</strong><b>4★</b><b>5★</b><b>6★</b></div>${CQ.pool.map(e=>`<div class="cq-reward-amount-row"><span>${esc(e.label)}${e.id==='hp'||e.id==='recovery'?'':' (%)'}</span>${(r.values[e.id]||CQ.defaultRewardValues(e.id)).map((n,i)=>`<input aria-label="${esc(e.name)} ${i+4} star amount" type="number" min="1" max="${CQ.rewardMax(e.id)}" step="1" data-amount-id="${e.id}" data-amount-tier="${i}" value="${n??''}">`).join('')}</div>`).join('')}</div><button data-action="reset-rewards" type="button">Reset enhancements</button></div></details>`;}
+function renderOperatorSettings(){const overrides=globalOperators();$('operatorFields').innerHTML=`<div class="editheading"><h2>Operator Stats · All Territories</h2><button type="button" data-action="reset-all-operators">Reset all</button></div><p class="muted">Conquest only. Starting HP includes existing HP passives (Mara and Vern). Other passive mechanics stay unchanged.</p><div class="cq-operator-grid">${Object.entries(CQ.names).map(([id,name])=>{const values={...CQ.defaultOperator(id),...overrides[id]};return `<section class="cq-operator"><div class="cq-operator-head"><img src="assets/profile-icons/${id}.webp" alt=""><strong>${esc(name)}</strong><button type="button" class="small" data-action="reset-operator" data-id="${id}">Reset</button></div><div class="cq-stat-grid">${Object.entries({hp:'HP',atk:'ATK %',def:'DEF %',crit:'CRIT %',critDmg:'CRIT DMG %'}).map(([k,label])=>`<label>${label}<input type="number" data-op="${id}" data-stat="${k}" min="${CQ.operatorRanges[k][0]}" max="${CQ.operatorRanges[k][1]}" step="1" value="${values[k]}" aria-label="${esc(name)} ${label}"></label>`).join('')}</div></section>`;}).join('')}</div>`;}
+function updateOperators(id,key,value,reset=false){const operators=clone(globalOperators());if(reset){if(id)delete operators[id];else for(const k of Object.keys(operators))delete operators[k];}else{operators[id] ||= {};operators[id][key]=value;}for(const ch of chapters)ensureConfig(ch).operators=clone(operators);markDirty();}
 function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${esc(scenePreview(scene))}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image file</label><details class="advanced-image-path"><summary>${esc(scene.image?.split('/').at(-1)||'No image selected')}</summary><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></details></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><label class="filebutton small">Select Photo<input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-photo-phase="${phase}" data-photo-index="${i}" hidden></label><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
 function musicEditor(st){
  const chapterOne=String(currentChapter()?.id)==='1';
  const selected=st.battle?.bgmFile||'',src=audioPreview(selected||(chapterOne?CHAPTER_1_BATTLE_THEME:''));
- const description=chapterOne?'Chapter 1 automatically uses ch1-battle.webm during battles. Choose a track below only to override this stage. Story slides and other modes are unaffected.':'Choose a shared track for this stage. Short names: bgm-1.webm, bgm-2.mp3, etc.';
+ const description=chapterOne?'The Rift automatically uses ch1-battle.webm during battles. Choose a track below only to override this stage. Other modes are unaffected.':'Choose a shared track for this stage. Short names: bgm-1.webm, bgm-2.mp3, etc.';
  return `<div class="boss-sprite-panel music-panel"><h4>Battle Music (BGM)</h4><p class="muted">${description}</p>
  <div class="field"><label>Use Existing Music (reusable)</label><select data-music-select="bgmFile">${audioOptionsMarkup(selected)}</select></div>
  <div class="field"><details class="advanced-image-path"><summary>Advanced music path</summary><input data-battle-field="bgmFile" aria-label="Music path" value="${esc(selected)}" placeholder="story/audio/bgm-1.webm" maxlength="180"></details></div>
  <label class="music-loop"><input type="checkbox" data-battle-field="bgmLoop" ${st.battle?.bgmLoop!==false?'checked':''}> Loop during battle</label>
  <audio id="stage-bgm-preview" controls preload="none" ${src?`src="${esc(src)}"`:''} aria-label="Preview stage BGM"></audio>
- <div class="boss-sprite-actions"><label class="filebutton">Upload New Music<input type="file" data-audio-file accept="audio/*,.mp3,.m4a,.webm,.opus,.ogg,.wav" hidden></label><button type="button" data-action="remove-music" class="danger" ${!selected?'disabled':''}>${chapterOne?'Use Chapter 1 Theme':'Remove from Stage'}</button></div>
+ <div class="boss-sprite-actions"><label class="filebutton">Upload New Music<input type="file" data-audio-file accept="audio/*,.mp3,.m4a,.webm,.opus,.ogg,.wav" hidden></label><button type="button" data-action="remove-music" class="danger" ${!selected?'disabled':''}>${chapterOne?'Use The Rift Theme':'Remove from Stage'}</button></div>
  <p class="muted">MP3, M4A, WEBM/Opus, OGG or WAV · max 25 MB per file. Download Music Pack once, add to GitHub, then publish. No paid Firebase storage.</p></div>`;
 }
 function artEditor(st,key,title,kind,help){
@@ -433,55 +449,72 @@ function artEditor(st,key,title,kind,help){
  <div class="boss-sprite-actions"><label class="filebutton">Upload New ${esc(title)}<input type="file" data-art-photo="${kind}" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden></label><button type="button" data-action="remove-art" data-art-key="${key}" class="danger" ${!value?'disabled':''}>Remove from Stage</button></div>
  <p class="muted">Using an existing image does not upload, rename, or copy it. Removing it from this stage won't delete the shared file.</p></div></div></div>`;
 }
+function bannerPreview(ch){
+ const total=Math.max(1,battleStages(ch).length),art=ch.conquest?.banner?.art;
+ return window.RPG_CONQUEST_MAP.banner(ch,{total,cleared:0,segmented:true,artUrl:art?assetPreview(art):''})+window.RPG_CONQUEST_MAP.banner(ch,{captured:true});
+}
+function renderBannerSettings(ch){
+ const cfg=ensureConfig(ch);const b=cfg.banner ||= {color:'',icon:'',art:'',animate:true};const region=window.RPG_CONQUEST_MAP.byId(ch.id);
+ return `<details class="cq-settings" id="cq-banner-settings"><summary>Banner Settings</summary><div class="cq-banner-editor"><div class="cq-banner-preview" id="cq-banner-preview">${bannerPreview(ch)}</div><div class="cq-config-body"><div class="field"><label>Faction color</label><input type="color" data-banner="color" value="${b.color||region?.color||'#9ba9be'}"></div><div class="field"><label>Emblem</label><select data-banner="icon"><option value="">Faction default</option>${Object.keys(window.RPG_CONQUEST_MAP.icons).map(k=>`<option ${b.icon===k?'selected':''} value="${k}">${k}</option>`).join('')}</select></div><div class="field"><label>Banner artwork (optional)</label><select data-banner="art"><option value="">Default cloth</option>${assetOptions(b.art).map(path=>`<option value="${esc(path)}" ${b.art===path?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('')}</select><label class="filebutton">Upload artwork<input type="file" accept="image/png,image/jpeg,image/webp" data-banner-upload hidden></label></div><label><input type="checkbox" data-banner="animate" ${b.animate!==false?'checked':''}> Destruction animation</label><p class="muted">One cloth section per encounter. Gold is the captured state. Upload new artwork via the Photo Pack.</p></div></div></details>`;
+}
+async function addBannerArt(event){
+ const file=event.target.files?.[0];event.target.value='';const ch=currentChapter();if(!file||!ch||busy)return;
+ try{const blob=await optimizePhoto(file);if(currentChapter()!==ch)throw Error('Territory changed. Select artwork again.');if(stagedPhotos.size>=250)throw Error('Photo pack limit reached.');const ext=imageExt(blob);if(!ext)throw Error('Unsupported image format.');const path=storyPath(nextSharedName('banner',assetOptions().concat(onlineImageNames),ext));ensureConfig(ch).banner.art=path;updateStaged(path,blob);dropUnusedPhotos();markDirty();renderFields();$('cq-banner-settings').open=true;status('Banner artwork added. Download Photo Pack before publishing.',false,true);}catch(error){status(error.message,true);}
+}
 function renderFields(){
  // A preview must stop when changing stages; detached audio elements can keep playing.
  const previousAudio=$('stage-bgm-preview');if(previousAudio){previousAudio.pause();previousAudio.removeAttribute('src');previousAudio.load();}
  const ch=currentChapter(),st=currentStage();
- if(!ch||!st){$('chapterFields').textContent='Select a chapter and stage.';$('stageFields').textContent='';$('slidesEditor').textContent='';return;}
- $('chapterFields').innerHTML=`<div class="editheading"><h2>Chapter ${esc(ch.id)} · ${esc(window.RPG_CONQUEST_MAP.name(ch.id))}</h2><button class="danger" data-action="delete-chapter">Delete Chapter</button></div><p class="muted">Map territory: ${esc(window.RPG_CONQUEST_MAP.name(ch.id))}. The chapter ID fixes its map location; reordering only changes unlock order.</p><div class="grid"><div class="field"><label for="ch-title">Chapter title</label><input id="ch-title" data-chapter-field="title" maxlength="80" value="${esc(ch.title)}"></div><div class="field"><label for="ch-subtitle">Subtitle</label><input id="ch-subtitle" data-chapter-field="subtitle" maxlength="150" value="${esc(ch.subtitle||'')}"></div></div>`;
+ if(!ch){$('chapterFields').textContent='Select a territory.';$('stageFields').textContent='';return;}
+ const region=window.RPG_CONQUEST_MAP.byId(ch.id),cfg=ensureConfig(ch),battles=battleStages(ch);
+ $('chapterFields').innerHTML=`<div class="cq-territory-heading" style="--faction:${region?.color||'#888'}"><div><div class="cq-kicker">TERRITORY ${esc(ch.id)} · ${battles.length} ENCOUNTERS</div><h2>${esc(territoryName(ch.id))}</h2></div><label class="cq-enable"><input type="checkbox" data-territory-enabled ${cfg.enabled?'checked':''}> Enabled</label></div>${renderEnhancements(ch)}${renderBannerSettings(ch)}`;
+ if(!st||st.type==='story-only'){$('stageFields').innerHTML='<p class="muted">No battle encounter. Click + Encounter to add one.</p>';$('slidesEditor').textContent='';return;}
  const numericFields=Object.entries(STAGE_FIELDS).filter(([key])=>!(key in DAMAGE_DEFAULTS)).map(([key,[label,min,max,step]])=>{
   const own=st.battle?.[key];const actual=own??inherited(key,st).value;
-  return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${esc(actual)}"><span class="muted" data-current-field="${key}">Current: ${esc(actual)}</span></div>`;
+  return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${showDamage(key,min)}" max="${showDamage(key,max)}" step="${showDamage(key,step)}" value="${esc(showDamage(key,actual))}"><span class="muted" data-current-field="${key}">Current: ${esc(showDamage(key,actual))}</span></div>`;
  }).join('');
- $('stageFields').innerHTML=`<section class="section"><div class="editheading"><h2>Stage ${esc(st.id)}</h2><button class="danger" data-action="delete-stage">Delete Stage</button></div>
- <div class="grid"><div class="field"><label for="st-title">Stage title</label><input id="st-title" data-stage-field="title" maxlength="85" value="${esc(st.title)}"></div><div class="field"><label for="st-type">Stage type</label><select id="st-type" data-stage-field="type"><option value="story-battle" ${st.type==='story-battle'?'selected':''}>Story + Battle</option><option value="story-only" ${st.type==='story-only'?'selected':''}>Story Only</option><option value="battle-only" ${st.type==='battle-only'?'selected':''}>Battle Only</option></select></div></div>
- <div class="field"><label for="st-desc">Stage description</label><textarea id="st-desc" data-stage-field="description" maxlength="600" rows="2">${esc(st.description||'')}</textarea></div>
- <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status">Current values shown below. Stage overrides are saved with this chapter.</p>
- <div class="grid"><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP (×10 in Conquest)</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"><span class="muted">Conquest: ${esc((st.battle?.bossHp??20)*10)} HP</span></div>${numericFields}</div>
+ $('stageFields').innerHTML=`<section class="section"><div class="editheading"><h2>${battles.at(-1)===st?'Final Boss':'Encounter'} · ${esc(st.id)}</h2><button class="danger" data-action="delete-stage">Delete Encounter</button></div>
+ <div class="grid"><div class="field"><label for="st-title">Encounter name</label><input id="st-title" data-stage-field="title" maxlength="85" value="${esc(st.title)}"></div><div class="field"><label for="st-template">Battle template</label><select id="st-template" data-battle-field="template">${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(st.battle?.template||1)===n?'selected':''}>${n}</option>`).join('')}</select></div></div>
+ <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status"></p>
+ <div class="grid"><div class="field"><label for="st-bossname">Enemy name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Enemy HP</label><input id="st-hp" type="number" min="10" max="9990" step="10" data-battle-field="bossHp" value="${esc((st.battle?.bossHp??20)*10)}"><span class="muted">In-game HP · increments of 10</span></div>${numericFields}</div>
  ${damageSettings(st)}
  ${artEditor(st,'bossSprite','Boss Sprite','boss','Boss art for this stage. Select the same existing image in any other stage to reuse it.')} 
  ${artEditor(st,'battleBackground','Battle Background','bg','Background shown behind the fight in this stage. Backgrounds can also be reused.')}
  ${musicEditor(st)} </div>
- ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>Chapter 1 · Special Stage Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy settings to all Chapter 1 stages</button></div><p class="muted">Enable and tune each effect for this stage (${esc(st.id)}). All three start OFF. Delirium only works while Sleepy is enabled. During complete darkness, existing words continue falling but new spawns pause.</p>${mechanicMarkup(st,true)}</div>`:''}
- <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Story-specific settings are published with the chapter; no code comes from Firebase.</p></div>
- <p class="muted">Stage ID ${esc(st.id)} is fixed because it identifies student progress. Chapter changes take effect the next time a student starts Story Mode.</p></section>`;
+ ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>The Rift · Special Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy to all Rift encounters</button></div><p class="muted">Enable and tune each effect for this stage (${esc(st.id)}). All three start OFF. Delirium only works while Sleepy is enabled. During complete darkness, existing words continue falling but new spawns pause.</p>${mechanicMarkup(st,true)}</div>`:''}
+ <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Settings are saved with the encounter.</p></div>
+ <p class="muted">Encounter ID ${esc(st.id)} is permanent. Changes apply on the next Conquest map opening.</p></section>`;
  fillLiveValues()
- const preceding=chapters.flatMap(x=>x.stages).slice(0,chapters.flatMap(x=>x.stages).findIndex(x=>x.id===st.id));
- const unlock=st.unlock||{stageId:'',minStars:0},limits=st.stars?.damageMax||[0,1,2,3];
- const choices=preceding.map(x=>`<option value="${esc(x.id)}" ${unlock.stageId===x.id?'selected':''}>${esc(x.id)} — ${esc(x.title)}</option>`).join('');
- $('stageFields').insertAdjacentHTML('beforeend',`<section class="section"><h3>Stage Conditions</h3><div class="grid"><div class="field"><label for="unlockStage">Unlock after</label><select id="unlockStage" data-unlock-field="stageId"><option value="" ${!unlock.stageId?'selected':''}>Previous stage (default)</option>${choices}</select></div><div class="field"><label for="unlockStars">Stars needed on prerequisite</label><select id="unlockStars" data-unlock-field="minStars">${[0,1,2,3,4].map(n=>`<option value="${n}" ${Number(unlock.minStars)===n?'selected':''}>${n===0?'Clear only':n+' stars'}</option>`).join('')}</select></div></div><h3>Star Rating · Maximum Damage Taken</h3><div class="grid">${limits.map((n,i)=>`<div class="field"><label>${4-i}★ maximum damage</label><input type="number" min="0" max="99" step="1" data-star-index="${i}" value="${esc(n)}"></div>`).join('')}</div><p class="muted">Defaults: 4★ ≤0, 3★ ≤1, 2★ ≤2, 1★ ≤3. Lower ratings require larger damage limits. Star-gated stages must follow a battle stage.</p></section>`);
- $('slidesEditor').innerHTML=slideMarkup(st,'intro')+slideMarkup(st,'outro');
+ const limits=st.stars?.damageMax||[0,1,2,3];
+ $('stageFields').insertAdjacentHTML('beforeend',`<details class="cq-settings"><summary>Star rating (optional)</summary><div class="grid cq-config-body">${limits.map((n,i)=>`<div class="field"><label>${4-i}★ maximum damage</label><input type="number" min="0" max="990" step="10" data-star-index="${i}" value="${esc(n*10)}"></div>`).join('')}</div></details>`);
+ $('slidesEditor').textContent='';
  for(const [id,title] of [['boss-preview','Boss sprite'],['bg-preview','Battle background']]){const img=$(id);if(img)img.addEventListener('error',()=>{img.removeAttribute('src');img.alt=title+' not found on website.';});}
  for(const img of $('slidesEditor').querySelectorAll('img[data-scene-preview]'))img.addEventListener('error',()=>{img.removeAttribute('src');img.alt='Image not found. Add it to docs/story/images/ first.';});
 }
-function render(){renderNav();renderFields();updateAuth();void loadLiveValues();}
+function render(){if(currentStage()?.type==='story-only')selectFirstEncounter();renderNav();renderFields();renderOperatorSettings();updateAuth();void loadLiveValues();}
 function moveSelection(kind,index,d){const arr=kind==='chapter'?chapters:currentChapter()?.stages;if(!arr||!swap(arr,index,index+d))return;if(kind==='chapter')chapterIndex=index+d;else stageIndex=index+d;markDirty();render();}
 function handleNavClick(event){const btn=event.target.closest('button[data-action]');if(!btn||busy)return;const a=btn.dataset.action,i=Number(btn.dataset.i);
- if(a==='select-chapter'){chapterIndex=i;stageIndex=0;render();return;}
+ if(a==='create-territory'){createTerritory(btn.dataset.id);return;}
+ if(a==='select-chapter'){chapterIndex=i;selectFirstEncounter();render();return;}
  if(a==='select-stage'){stageIndex=i;renderFields();renderNav();void loadLiveValues();return;}
  if(a==='chapter-up')moveSelection('chapter',i,-1);
  if(a==='chapter-down')moveSelection('chapter',i,1);
- if(a==='stage-up')moveSelection('stage',i,-1);
- if(a==='stage-down')moveSelection('stage',i,1);
+ if(a==='stage-up'||a==='stage-down'){const ch=currentChapter(),b=battleStages(ch),pos=b.indexOf(ch.stages[i]),other=b[pos+(a==='stage-up'?-1:1)];if(!other)return;const j=ch.stages.indexOf(other);[ch.stages[i],ch.stages[j]]=[ch.stages[j],ch.stages[i]];stageIndex=j;markDirty();render();}
 }
-function handleEditorInput(event){const t=event.target,st=currentStage(),ch=currentChapter();if(!ch||!st)return;
+function handleEditorInput(event){const t=event.target,st=currentStage(),ch=currentChapter();if(!ch||busy)return;
+ if(t.dataset.banner){const b=ensureConfig(ch).banner;b[t.dataset.banner]=t.type==='checkbox'?t.checked:t.value;markDirty();if(t.dataset.banner==='art')dropUnusedPhotos();$('cq-banner-preview').innerHTML=bannerPreview(ch);return;}
+ if(t.dataset.territoryEnabled!==undefined){ensureConfig(ch).enabled=t.checked;markDirty();renderNav();return;}
+ if(t.dataset.amountId){const r=ensureConfig(ch).rewards;r.values[t.dataset.amountId] ||= CQ.defaultRewardValues(t.dataset.amountId);r.values[t.dataset.amountId][Number(t.dataset.amountTier)]=t.value===''?null:Number(t.value);markDirty();return;}
+ if(t.dataset.rewardMax!==undefined||t.dataset.weight!==undefined||t.dataset.rewardType!==undefined){const r=ensureConfig(ch).rewards;if(t.dataset.rewardMax!==undefined)r.max=t.value===''?null:Number(t.value);else if(t.dataset.weight!==undefined){r.weights[Number(t.dataset.weight)]=t.value===''?null:Number(t.value);$('rarity-total').textContent=`Total: ${r.weights.reduce((a,b)=>a+(b||0),0)}% (must equal 100%)`;}else{r.types=t.checked?[...new Set([...r.types,t.dataset.rewardType])]:r.types.filter(id=>id!==t.dataset.rewardType);}markDirty();return;}
+ if(t.dataset.op){updateOperators(t.dataset.op,t.dataset.stat,t.value===''?null:Number(t.value));return;}
+ if(!st||st.type==='story-only')return;
  if(t.dataset.chapterField)ch[t.dataset.chapterField]=t.value;
  else if(t.dataset.stageField)st[t.dataset.stageField]=t.value;
  else if(t.dataset.musicSelect){st.battle.bgmFile=t.value;dropUnusedAudio();markDirty();renderFields();return;}
  else if(t.dataset.assetSelect){st.battle[t.dataset.assetSelect]=t.value;dropUnusedPhotos();markDirty();renderFields();return;}
- else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='checkbox'?t.checked:t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(t.dataset.battleField==='bgmFile'){dropUnusedAudio();const a=$('stage-bgm-preview');if(a){a.pause();if(safeStoryAudio(t.value))a.src=audioPreview(t.value);else if(!t.value&&String(currentChapter()?.id)==='1')a.src=audioPreview(CHAPTER_1_BATTLE_THEME);else a.removeAttribute('src');}}else if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else fillLiveValues();}
+ else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='checkbox'?t.checked:t.type==='number'?(t.value===''?null:Number(t.value)/damageScale(t.dataset.battleField)):t.dataset.battleField==='template'?Number(t.value):t.value;if(t.dataset.battleField==='bgmFile'){dropUnusedAudio();const a=$('stage-bgm-preview');if(a){a.pause();if(safeStoryAudio(t.value))a.src=audioPreview(t.value);else if(!t.value&&String(currentChapter()?.id)==='1')a.src=audioPreview(CHAPTER_1_BATTLE_THEME);else a.removeAttribute('src');}}else if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else {fillLiveValues();if(t.dataset.battleField==='template')void loadLiveValues();}}
  else if(t.dataset.damagePanic){
-  const value=t.value===''?null:Number(t.value);
+  const value=t.value===''?null:Number(t.value)/10;
   st.battle.mechanics ||= {};st.battle.mechanics.panic ||= {};
   if(value===null)delete st.battle.mechanics.panic.damage;else st.battle.mechanics.panic.damage=value;
  }
@@ -492,7 +525,7 @@ function handleEditorInput(event){const t=event.target,st=currentStage(),ch=curr
   st.battle.mechanics ||= {};st.battle.mechanics[m.id] ||= {};st.battle.mechanics[m.id][field.key]=value;
  }
  else if(t.dataset.unlockField){st.unlock ||= {stageId:'',minStars:0};st.unlock[t.dataset.unlockField]=t.dataset.unlockField==='minStars'?Number(t.value):t.value;
- }else if(t.dataset.starIndex!==undefined){st.stars ||= {damageMax:[0,1,2,3]};st.stars.damageMax[Number(t.dataset.starIndex)]=t.value===''?null:Number(t.value);
+ }else if(t.dataset.starIndex!==undefined){st.stars ||= {damageMax:[0,1,2,3]};st.stars.damageMax[Number(t.dataset.starIndex)]=t.value===''?null:Number(t.value)/10;
  }else if(t.dataset.scenePhase){const scene=st[t.dataset.scenePhase]?.[Number(t.dataset.sceneIndex)];if(!scene)return;scene[t.dataset.sceneKey]=t.value;
   if(t.dataset.sceneKey==='image'){dropUnusedPhotos();const img=$('slidesEditor').querySelector(`img[data-scene-preview="${t.dataset.scenePhase}:${t.dataset.sceneIndex}"]`);if(img){if(safeStoryImage(t.value)){img.src=t.value;}else img.removeAttribute('src');}}
  }else return;
@@ -500,21 +533,23 @@ function handleEditorInput(event){const t=event.target,st=currentStage(),ch=curr
  if(t.dataset.chapterField==='title'||t.dataset.stageField==='title')renderNav();
 }
 function editorAction(event){const btn=event.target.closest('button[data-action]');if(!btn||busy)return;const a=btn.dataset.action,ch=currentChapter(),st=currentStage(),phase=btn.dataset.phase,i=Number(btn.dataset.i);
+ if(a==='reset-rewards'){if(!ch)return;ensureConfig(ch).rewards=CQ.normalizeConfig(undefined).rewards;markDirty();renderFields();return;}
+ if(a==='reset-all-operators'||a==='reset-operator'){if(a==='reset-all-operators'&&!confirm('Reset all Conquest operator stats?'))return;updateOperators(a==='reset-operator'?btn.dataset.id:null,null,null,true);renderOperatorSettings();return;}
  if(a==='copy-damage'||a==='reset-damage'){
   if(!st||!ch)return;
   const values={...DAMAGE_DEFAULTS};let panic=1;
   if(a==='copy-damage'){
    for(const key of Object.keys(values)){
-    const input=$('stageFields').querySelector(`[data-battle-field="${key}"]`),v=Number(input?.value);
+    const input=$('stageFields').querySelector(`[data-battle-field="${key}"]`),v=Number(input?.value)/damageScale(key);
     const [,min,max]=STAGE_FIELDS[key];
     if(!input||!input.value||!Number.isInteger(v)||v<min||v>max){status(`Enter whole damage values within the allowed range before copying.`,true);return;}
     values[key]=v;
    }
    if(ch.id==='1'){
-    const input=$('stageFields').querySelector('[data-damage-panic]');panic=Number(input?.value);
-    if(!input?.value||!Number.isInteger(panic)||panic<1||panic>10){status('Panic damage must be 1–10.',true);return;}
+    const input=$('stageFields').querySelector('[data-damage-panic]');panic=Number(input?.value)/10;
+    if(!input?.value||!Number.isInteger(panic)||panic<1||panic>10){status('Panic damage must be 10–100 in increments of 10.',true);return;}
    }
-   if(!confirm(`Copy damage values from ${st.id} to all battle stages in Chapter ${ch.id}?`))return;
+   if(!confirm(`Copy damage values from ${st.id} to all encounters in ${territoryName(ch.id)}?`))return;
   }
   const targets=a==='copy-damage'?ch.stages.filter(x=>x.type!=='story-only'):[st];
   for(const target of targets){
@@ -525,9 +560,9 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
  }
  if(a==='copy-ch1-mechanics'){
   if(ch.id!=='1'||!st)return;
-  if(!confirm(`Copy Sleepy, Delirium and Panic from ${st.id} to every other stage in Chapter 1? Existing settings for those three mechanics will be replaced.`))return;
+  if(!confirm(`Copy Sleepy, Delirium and Panic from ${st.id} to the other Rift encounters? Existing settings for those three mechanics will be replaced.`))return;
   const ids=['sleepy','delirium','panic'];const defs=catalog();
-  for(const target of ch.stages){if(target===st)continue;target.battle.mechanics ||= {};
+  for(const target of battleStages(ch)){if(target===st)continue;target.battle.mechanics ||= {};
    for(const id of ids){const def=defs.find(x=>x.id===id);if(!def)continue;target.battle.mechanics[id]={};
     for(const field of def.fields)target.battle.mechanics[id][field.key]=st.battle.mechanics?.[id]?.[field.key]??field.default;
    }
@@ -538,9 +573,9 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
   if(!confirm(`Delete Chapter ${ch.id} and all its stages from the next publication?`))return;
   retiredChapters.add(ch.id);ch.stages.forEach(s=>retiredStages.add(s.id));chapters.splice(chapterIndex,1);chapterIndex=Math.min(chapterIndex,chapters.length-1);stageIndex=0;
  }else if(a==='delete-stage'){
-  if(ch.stages.length===1){status('Every chapter needs at least one stage.',true);return;}
+  if(battleStages(ch).length===1){status('Keep at least one encounter or disable this territory.',true);return;}
   if(!confirm(`Delete stage ${st.id} from the next publication? Existing progress for this stage will remain in student records.`))return;
-  retiredStages.add(st.id);ch.stages.splice(stageIndex,1);stageIndex=Math.min(stageIndex,ch.stages.length-1);
+  retiredStages.add(st.id);ch.stages.splice(stageIndex,1);selectFirstEncounter();
  }else if(a==='remove-art'&&['bossSprite','battleBackground'].includes(btn.dataset.artKey)){st.battle[btn.dataset.artKey]='';
  }else if(a==='remove-music'){st.battle.bgmFile='';
  }else if(a==='add-slide'){st[phase].push({image:'',caption:''});
@@ -580,7 +615,7 @@ async function loadLocalChapters(){
   initialDraftRecovered=Boolean(draft);
   render();
   if(window.RPG_STORY_EDITOR_BOOT)window.RPG_STORY_EDITOR_BOOT.loaded=true;
-  status(draft?'Saved draft loaded. Checking Firebase connection in the background…':'Chapters loaded. Checking Firebase connection in the background…',false,true);
+  status(draft?'Saved draft loaded. Checking Firebase connection in the background…':'Territories loaded. Checking Firebase connection in the background…',false,true);
   return true;
  }catch(error){status('Could not display Story chapters: '+errorMessage(error),true);return false;}
 }
@@ -607,11 +642,11 @@ async function syncInitialCloud(){
   if(initialDraftRecovered||dirty){
    status('Firebase connected. Your local draft was kept. Review changes before publishing.',false,true);
   }else{
-   status(remote?'Published Story loaded (revision '+loadedRevision+').':'Chapters ready. No published Story exists yet.',false,true);
+   status(remote?'Published Conquest loaded (revision '+loadedRevision+').':'Territories ready. No published Conquest exists yet.',false,true);
   }
  }catch(error){
   cloudAvailable=false;
-  status('Chapters ready for editing. Firebase could not connect: '+errorMessage(error)+'. Save Draft and Export JSON work; publishing will require Reload Published.',true);
+  status('Territories ready for editing. Firebase could not connect: '+errorMessage(error)+'. Save Draft and Export JSON work; publishing will require Reload Published.',true);
  }finally{updateAuth();}
 }
 async function boundedCloudRead(timeoutMs=10000){
@@ -624,7 +659,7 @@ async function boundedCloudRead(timeoutMs=10000){
  }finally{clearTimeout(timer);}
 }
 async function loadRemote(useDraft=false,{requireCloud=false}={}){
- busy=true;updateAuth();status('Loading Story chapters…');
+ busy=true;updateAuth();status('Loading territories…');
  try{
   let remote=null,cloudIssue=null,missingRule=false,cloudOnline=false;
   try{remote=await boundedCloudRead();cloudOnline=true;}
@@ -633,7 +668,7 @@ async function loadRemote(useDraft=false,{requireCloud=false}={}){
   // when the cloud read failed. Keep current data and any saved draft intact.
   if(requireCloud&&!cloudOnline){
    cloudAvailable=false;
-   status('Could not reload published Story: '+errorMessage(cloudIssue)+'. Your current editor content and saved draft were kept.',true);
+   status('Could not reload published Conquest: '+errorMessage(cloudIssue)+'. Your current editor content and saved draft were kept.',true);
    return false;
   }
   let source=remote;
@@ -667,7 +702,7 @@ async function loadRemote(useDraft=false,{requireCloud=false}={}){
    const reason=missingRule?'The Firestore Story rule is missing or access is denied.':errorMessage(cloudIssue||Error('Firebase unavailable'));
    status(`Offline editor: ${draftRecovered?'local draft':'built-in chapters'} loaded. Save Draft and Export JSON work. Publishing is disabled until you reconnect and use Reload Published. ${reason}`,true);
   }else if(draftRecovered)status('Local draft restored. Students still see the published version.',false,true);
-  else status(remote?`Published Story loaded (revision ${loadedRevision}).`:'Loaded initial Chapter 1 from the game files. No cloud Story published yet.',false,true);
+  else status(remote?`Published Conquest loaded (revision ${loadedRevision}).`:'Loaded initial Chapter 1 from the game files. No cloud Story published yet.',false,true);
   if(window.RPG_STORY_EDITOR_BOOT)window.RPG_STORY_EDITOR_BOOT.loaded=true;
   return true;
  }catch(e){status('Story failed to load: '+errorMessage(e)+'. Try Import JSON if you have a backup.',true);return false;}
@@ -686,11 +721,11 @@ async function publish(){
  let payload;try{payload=cleanStory({chapters});}catch(e){status(e.message,true);return;}
  const previous=publishedOrder.join('|'),newOrder=currentOrder().join('|');
  if(previous!==newOrder&&loadedRevision>0&&!confirm('You changed or deleted published stage order. Unlock progression may change for existing students. Publish anyway?'))return;
- if(!confirm(`Publish ${chapters.length} chapters / ${newOrder.split('|').length} stages to students?`))return;
+ if(!confirm(`Publish ${chapters.length} territories / ${chapters.reduce((n,c)=>n+battleStages(c).length,0)} encounters to students?`))return;
  busy=true;updateAuth();status('Checking chapter photos and music…');
  try{
   await verifyImageFiles(payload);
-  const missingMusic=[];const paths=referencedMusic(payload.chapters);
+  const missingMusic=[];const paths=referencedMusic(battleAssetChapters(payload.chapters));
   for(let i=0;i<paths.length;i+=6){const group=await Promise.all(paths.slice(i,i+6).map(async path=>({path,ok:await checkMusicOnline(path)})));missingMusic.push(...group.filter(item=>!item.ok).map(item=>item.path));}
   if(missingMusic.length){showMusicReport(missingMusic.map(path=>({path,ok:false,text:stagedAudio.has(path)?'Only in browser — download and upload Music Pack':'Not found on GitHub Pages'})));throw Error(`${missingMusic.length} music file(s) are not yet online. Download Music Pack and push to GitHub first.`);}
   status('Publishing to Firebase…');
@@ -707,23 +742,25 @@ async function publish(){
    tx.set(reference,{...payload,revision:next,retiredStageIds:stageIds,retiredChapterIds:chapterIds,updatedAt:serverTimestamp()});
   });
   loadedRevision=next;publishedOrder=currentOrder();dirty=false;localStorage.removeItem(DRAFT_KEY);
-  status(`Published revision ${next}. Students receive it when they next open Story Mode.`,false,true);
+  status(`Published revision ${next}. Students receive it when they next open Conquest.`,false,true);
  }catch(e){status('Publish failed: '+errorMessage(e),true)}finally{busy=false;updateAuth();}
 }
-function exportFile(){try{const payload=cleanStory({chapters});const output={...payload,revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};const blob=new Blob([JSON.stringify(output,null,2)+'\n'],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='story-chapters-backup.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1500);status('JSON exported.',false,true);}catch(e){status(e.message,true);}}
+function exportFile(){try{const payload=cleanStory({chapters});const output={...payload,revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};const blob=new Blob([JSON.stringify(output,null,2)+'\n'],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='conquest-backup.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1500);status('JSON exported.',false,true);}catch(e){status(e.message,true);}}
 async function importFile(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;
  try{if(file.size>750000)throw Error('JSON file exceeds 750 KB.');const incoming=JSON.parse(await file.text());const normalized=cleanStory(incoming);
   if(!confirm(`Replace the editor draft with ${normalized.chapters.length} imported chapters? Nothing is published yet.`))return;
   clearPhotoSelection();clearAudioSelection();chapters=normalized.chapters;restoreRetired(incoming);chapterIndex=0;stageIndex=0;markDirty();render();
  }catch(e){status('Import failed: '+e.message,true);}}
 async function boot(){
+ const tab=operators=>{document.querySelector('.layout').hidden=operators;$('operatorFields').hidden=!operators;$('cq-encounters-tab').setAttribute('aria-pressed',String(!operators));$('cq-operators-tab').setAttribute('aria-pressed',String(operators));};
+ $('cq-encounters-tab').onclick=()=>tab(false);$('cq-operators-tab').onclick=()=>tab(true);
  $('chapterList').addEventListener('click',handleNavClick);$('stageList').addEventListener('click',handleNavClick);
- $('chapterFields').addEventListener('input',handleEditorInput);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
- $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('input[type=file][data-audio-file]'))void addMusic(event);else if(event.target.matches('select[data-asset-select],select[data-music-select],input[data-battle-field=bgmLoop],input[data-battle-field=cometEnabled],input[data-battle-field=shootingStarEnabled]'))handleEditorInput(event);});
+ $('chapterFields').addEventListener('input',handleEditorInput);$('chapterFields').addEventListener('change',e=>{if(e.target.matches('[data-banner-upload]'))void addBannerArt(e);});$('operatorFields').addEventListener('input',handleEditorInput);$('operatorFields').addEventListener('click',editorAction);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
+ $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('input[type=file][data-audio-file]'))void addMusic(event);else if(event.target.matches('select[data-asset-select],select[data-music-select],input[data-battle-field=bgmLoop],input[data-battle-field=cometEnabled],input[data-battle-field=shootingStarEnabled],select[data-battle-field=template]'))handleEditorInput(event);});
  $('slidesEditor').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-photo-phase]'))void addPhoto(event);});
  $('chapterFields').addEventListener('click',editorAction);$('stageFields').addEventListener('click',editorAction);$('slidesEditor').addEventListener('click',editorAction);
- $('addChapter').onclick=()=>{const id=nextChapterId(),ch={id,title:`Chapter ${id}`,subtitle:'',stages:[]};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();};
- $('addStage').onclick=()=>{const ch=currentChapter();if(!ch)return;if(ch.stages.length>=60){status('Maximum 60 stages per chapter.',true);return;}ch.stages.push(newStage(ch));stageIndex=ch.stages.length-1;markDirty();render();};
+ $('addChapter').onclick=()=>{const next=window.RPG_CONQUEST_MAP.regions.find(r=>!chapters.some(c=>c.id===r.id)&&!retiredChapters.has(r.id));if(next)createTerritory(next.id);};
+ $('addStage').onclick=()=>{const ch=currentChapter();if(!ch||busy)return;if(ch.stages.length>=60){status('Maximum 60 encounters per territory.',true);return;}ch.stages.push(newStage(ch));stageIndex=ch.stages.length-1;markDirty();render();};
  $('saveDraft').onclick=()=>{try{writeDraft()}catch(e){status('Could not save local draft: '+e.message,true)}};
  $('downloadPhotos').onclick=downloadPhotos;
  $('downloadAudio').onclick=downloadMusic;$('checkMusic').onclick=()=>void checkMusic();$('findMusic').onclick=()=>void findExistingMusic();

@@ -9,7 +9,7 @@ export function shortSlideName(stageId,phase,index,ext='webp'){
  return `${stageId}-${phase}-${index+1}.${ext}`;
 }
 export function nextSharedName(kind,paths,ext='webp'){
- if(!['boss','bg'].includes(kind)||!['webp','jpg','png'].includes(ext))throw Error('Invalid shared asset name.');
+ if(!['boss','bg','banner'].includes(kind)||!['webp','jpg','png'].includes(ext))throw Error('Invalid shared asset name.');
  const names=new Set([...paths].map(x=>String(x||'').split('/').at(-1).toLowerCase()));
  for(let n=1;n<=9999;n++){
   const candidate=`${kind}-${n}.${ext}`;
@@ -20,6 +20,7 @@ export function nextSharedName(kind,paths,ext='webp'){
 }
 export function referencedImages(chapters){
  const out=[];
+ for(const ch of chapters||[])if(ch.conquest?.banner?.art)out.push(ch.conquest.banner.art);
  for(const ch of chapters||[])for(const st of ch.stages||[]){
   for(const phase of ['intro','outro'])for(const scene of st[phase]||[])if(scene.image)out.push(scene.image);
   for(const key of ['bossSprite','battleBackground'])if(st.battle?.[key])out.push(st.battle[key]);
@@ -64,6 +65,7 @@ export function shortRenamePlan(chapters,reservedPaths=[]){
 }
 export function applyShortRename(chapters,plan){
  const map=new Map(plan.map(x=>[x.from,x.to]));
+ for(const ch of chapters)if(ch.conquest?.banner?.art)ch.conquest.banner.art=map.get(ch.conquest.banner.art)||ch.conquest.banner.art;
  for(const ch of chapters)for(const st of ch.stages){
   for(const phase of ['intro','outro'])for(const scene of st[phase])scene.image=map.get(scene.image)||scene.image;
   for(const key of ['bossSprite','battleBackground'])if(st.battle?.[key])st.battle[key]=map.get(st.battle[key])||st.battle[key];

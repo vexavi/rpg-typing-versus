@@ -1,3 +1,4 @@
+import './conquest-core.js?v=131.0';
 /* Pure validation/normalization; imported by the teacher editor and testable in Node.
  * Stable identifiers are essential to player progress and Game Settings overrides.
  */
@@ -83,11 +84,14 @@ export function cleanStory(raw){
    if(!Number.isInteger(unlock.minStars)||unlock.minStars<0||unlock.minStars>4)throw Error(`Stage ${id}: unlock stars must be 0–4.`);
    stages.push({id,title,type:st.type,description,battle,stars:{damageMax:[...damageMax]},unlock,intro:scenes(st.intro,'intro'),outro:scenes(st.outro,'outro')});
   }
-  chapters.push({id:chId,title,subtitle,stages});
+  const conquest=ch.conquest===undefined?{}:{conquest:(typeof window!=='undefined'?window:globalThis).RPG_CONQUEST.normalizeConfig(ch.conquest,true)};
+  chapters.push({id:chId,title,subtitle,stages,...conquest});
  }
  if(totalStages>300)throw Error('Maximum 300 stages in a published story.');
+ // Conquest uses territory order, not the legacy story prerequisites. Keep those
+ // fields for backwards compatibility without blocking encounter reordering.
  const previous=[];
- for(const stage of chapters.flatMap(ch=>ch.stages)){
+ if(!chapters.some(ch=>ch.conquest!==undefined))for(const stage of chapters.flatMap(ch=>ch.stages)){
   const autoPrerequisite=previous.at(-1)?.id||'';
   const required=stage.unlock.stageId||autoPrerequisite;
   if(stage.unlock.stageId&&!previous.some(s=>s.id===stage.unlock.stageId))throw Error(`Stage ${stage.id}: prerequisite must be an earlier stage.`);

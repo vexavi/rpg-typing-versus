@@ -1,43 +1,39 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Story Editor — RPG Typing Versus</title>
-<link rel="stylesheet" href="teacher-nav.css?v=87"><script defer src="teacher-nav.js?v=87"></script>
-<link rel="stylesheet" href="story-editor.css?v=126.0">
+<title>Conquest Editor — RPG Typing Versus</title>
+<link rel="stylesheet" href="teacher-nav.css?v=87"><script defer src="teacher-nav.js?v=131"></script>
+<link rel="stylesheet" href="story-editor.css?v=131.0">
 <script defer src="game-mechanics.js?v=88"></script><script defer src="custom-mechanics.js?v=112.0"></script>
 </head><body><main>
-<header class="header"><div><p class="eyebrow">RPG TYPING VERSUS / TEACHER</p><h1>Story Editor</h1><p class="muted">Conquest uses each chapter as one operation; all battle stages run in order. Dialogue-only stages are skipped. HP and damage values remain in legacy units (1 = 10 displayed HP/DMG); base attack multiplies 5 + English letter count. Enhancements are automatic.</p></div><div class="actions"><button id="google" type="button">Sign in with Google</button><button id="signout" type="button" hidden>Sign out</button></div></header>
-<div class="toolbar panel"><button id="saveDraft" type="button">Save Draft</button><button id="export" type="button">Export JSON</button><button id="downloadPhotos" type="button" disabled>Download Photo Pack (0)</button><button id="downloadAudio" type="button" disabled>Download Music Pack (0)</button><label class="filebutton" for="import">Import JSON<input id="import" type="file" accept="application/json,.json" hidden></label><button id="reload" type="button">Reload Published</button><button id="publish" class="primary" type="button">Publish to Students</button></div>
+<header class="header"><div><p class="eyebrow">RPG TYPING VERSUS / TEACHER</p><h1>Conquest Editor</h1></div><div class="actions"><button id="google" type="button">Sign in with Google</button><button id="signout" type="button" hidden>Sign out</button></div></header>
+<div class="toolbar panel"><button id="saveDraft" type="button">Save Draft</button><button id="reload" type="button">Reload Published</button><button id="export" type="button">Export JSON</button><label class="filebutton" for="import">Import JSON<input id="import" type="file" accept="application/json,.json" hidden></label><button id="publish" class="primary" type="button">Publish to Students</button></div>
 <p id="status" role="status" aria-live="polite">Loading chapters…</p>
+<div class="cq-tabs"><button type="button" id="cq-encounters-tab" aria-pressed="true">Territories & Encounters</button><button type="button" id="cq-operators-tab" aria-pressed="false">Operator Stats</button><a href="vocabulary-admin.html">Class Vocabulary ↗</a></div>
 <div class="layout">
- <aside class="panel sidebar"><div class="sectionhead"><h2>Chapters</h2><button id="addChapter" type="button">+ Chapter</button></div><div id="chapterList" class="navlist"></div><div class="sectionhead sectiongap"><h2>Stages</h2><button id="addStage" type="button">+ Stage</button></div><div id="stageList" class="navlist"></div></aside>
- <section class="panel editpanel"><div id="chapterFields"></div><div id="stageFields"></div><div id="slidesEditor"></div></section>
+ <aside class="panel sidebar"><div class="sectionhead"><h2>Territories</h2><button id="addChapter" type="button" hidden>+ Territory</button></div><div id="chapterList" class="navlist"></div></aside>
+ <section class="panel editpanel"><div id="chapterFields"></div><div class="sectionhead cq-encounter-heading"><h2>Encounters</h2><button id="addStage" type="button">+ Encounter</button></div><div id="stageList" class="navlist cq-encounter-nav"></div><div id="stageFields"></div><div id="slidesEditor" hidden></div></section>
 </div>
-<section class="panel photo-manager"><div class="editheading"><h2>Chapter Images</h2><span class="muted">Repair the filenames you already uploaded — no need to select 18 photos again.</span></div>
-<div class="photo-manager-row"><div class="field"><label for="repoName">GitHub repository</label><input id="repoName" placeholder="username/repository" autocomplete="off" spellcheck="false"></div>
-<button id="repairGithub" type="button">Find Existing Images</button><button id="shortenNames" type="button">Make Short-Name ZIP</button><label class="filebutton" for="repairFolder">Choose Local Images Folder<input id="repairFolder" type="file" webkitdirectory directory multiple hidden></label><button id="checkPhotos" type="button">Check Images</button></div>
-<p class="muted">Start with <strong>Find Existing Images</strong> to match the files already on GitHub. Optional: <strong>Make Short-Name ZIP</strong> converts old names into simple names such as <code>1-2-intro-1.webp</code>, <code>boss-1.webp</code> and <code>bg-1.webp</code>. Install that ZIP only once, then publish the new draft. If your repository is private or the scan fails, choose the existing <code>docs/story/images</code> folder from your computer. <strong>No photos are uploaded or published by these buttons.</strong> The image names are checked when you publish.</p>
-<div id="photoReportPanel" hidden><h3>Photo Report</h3><ul id="photoReport" class="photo-report"></ul></div></section>
-<section class="panel photo-manager"><div class="editheading"><h2>Battle Music</h2><span class="muted">Reuse the same BGM in any stage.</span></div>
-<div class="photo-manager-row"><button id="findMusic" type="button">Find Existing Music</button><button id="checkMusic" type="button">Check Music</button></div>
-<p class="muted">Upload a track under Stage → Battle Settings → Battle Music. Click <strong>Download Music Pack</strong>, extract into the GitHub repository root, commit/push, then use <strong>Check Music</strong> before <strong>Publish to Students</strong>. Tracks go to <code>docs/story/audio/</code>. To reuse a track already on GitHub, click Find Existing Music, then choose it from a stage. Supports MP3, M4A, WEBM/Opus, OGG and WAV. Use the GitHub repository entered under Chapter Images above.</p>
-<div id="musicReportPanel" hidden><h3>Music Report</h3><ul id="musicReport" class="photo-report"></ul></div></section>
-
-<section class="panel footerpanel"><h2>Chapter Images, Shared Boss Sprites & Battle Backgrounds + Music</h2><p>Under Battle Settings, choose <strong>Use Existing Image</strong> to reuse a boss sprite or battle background from another stage. A shared image is uploaded only once. To create a new one, click <strong>Upload New Boss Sprite</strong> or <strong>Upload New Battle Background</strong>; these use short shared filenames. On a slide, click <strong>Select Photo</strong> to choose an image from your computer. The preview is local. For <strong>new images only</strong>, click <strong>Download Photo Pack</strong>, extract it into your GitHub repository root (so files land in <code>docs/story/images/</code>), then commit and push. If your photos are already in GitHub, click <strong>Find Existing Images</strong> at the top instead of uploading them again. After <strong>Check Images</strong> reports that the files are online, click <strong>Publish to Students</strong>. This avoids paid Firebase Cloud Storage. JPG, PNG, and WEBP are supported; photos are automatically optimized to WEBP when your browser supports it.</p><p>Music files are not stored in the browser draft: download the Music Pack before reloading. Browser autoplay restrictions can require students to tap a control or unmute audio. Player progress is tied to stage IDs. IDs are fixed once created; changing stage order or deleting published stages can change which stages unlock. Save Draft is local to this browser and does not save image bytes: download the Photo Pack of any newly selected images before refreshing or closing this tab. Existing GitHub-hosted images do not need a new Photo Pack. Publishing requires your authorized teacher Google account and an added Firestore rule.</p></section>
+<section class="panel" id="operatorFields" hidden></section>
+<section class="panel photo-manager"><details><summary><strong>Battle Assets</strong> · Sprites, backgrounds & music</summary><div class="editheading cq-asset-head"><h2>GitHub assets</h2><button id="downloadPhotos" type="button" disabled>Download Photo Pack (0)</button><button id="downloadAudio" type="button" disabled>Download Music Pack (0)</button></div>
+<div class="photo-manager-row"><div class="field"><label for="repoName">GitHub repository</label><input id="repoName" placeholder="username/repository" autocomplete="off" spellcheck="false"></div><button id="repairGithub" type="button">Find Existing Images</button><button id="checkPhotos" type="button">Check Images</button><button id="findMusic" type="button">Find Existing Music</button><button id="checkMusic" type="button">Check Music</button></div>
+<div class="photo-manager-row"><button id="shortenNames" type="button">Make Short-Name ZIP</button><label class="filebutton" for="repairFolder">Choose Local Images Folder<input id="repairFolder" type="file" webkitdirectory directory multiple hidden></label></div>
+<p class="muted">Choose existing assets or upload new ones in the encounter. For new files, download the packs, extract into the GitHub repository root, commit and push, then publish. Existing story slides are preserved but not required for Conquest.</p>
+<div id="photoReportPanel" hidden><h3>Image Report</h3><ul id="photoReport" class="photo-report"></ul></div><div id="musicReportPanel" hidden><h3>Music Report</h3><ul id="musicReport" class="photo-report"></ul></div></details></section>
 </main><script>
 window.RPG_STORY_EDITOR_BOOT={loaded:false};
 // A classic-script loader can report a module import failure rather than leaving
 // the page permanently stuck on "Loading chapters".
-import('./story-editor.js?v=129.0').catch(error=>{
+import('./story-editor.js?v=131.0').catch(error=>{
  const notice=document.getElementById('status');
  notice.className='error';
- notice.textContent='Story Editor script failed to start: '+String(error?.message||error).slice(0,240)+'. Check the uploaded docs/ files and refresh.';
- console.error('Story Editor startup:',error);
+ notice.textContent='Conquest Editor script failed to start: '+String(error?.message||error).slice(0,240)+'. Check the uploaded docs/ files and refresh.';
+ console.error('Conquest Editor startup:',error);
 });
 setTimeout(()=>{
  const state=window.RPG_STORY_EDITOR_BOOT,notice=document.getElementById('status');
  if(state&&!state.loaded&&notice&&/Loading chapters/i.test(notice.textContent)){
   notice.className='error';
-  notice.textContent='Story Editor could not load local chapters. Verify docs/story/chapters.json and reload.';
+  notice.textContent='Conquest Editor could not load local chapters. Verify docs/story/chapters.json and reload.';
  }
 },7000);
 </script></body></html>
