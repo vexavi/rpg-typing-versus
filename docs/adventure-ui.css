@@ -1150,3 +1150,12 @@ body.story-squad-picker-open{overflow:hidden}
 .storySquadSelectScreen .storySquadRosterCard{min-height:max-content}
 
 @media(prefers-reduced-motion:reduce){.storySquadSelectScreen .storySquadSlotArt{transition:none}}
+
+
+/* v124: Wide operator illustrations should fill the tall Story battle portrait.
+   Use height-led crop only for images wider than .78 aspect ratio (detected in JS).
+   Never change story squad assembly artwork or normal/extra/tournament screens. */
+body.story-squad-layout .storySquadHero img.storySquadArtWide{
+  object-fit:cover;
+  object-position:center center;
+}

@@ -3550,7 +3550,18 @@ async function debugJumpTo(mode, idx){
     if(storyBgmRow&&storyEnemySlot&&storyBgmRow.parentElement!==storyEnemySlot)storyEnemySlot.append(storyBgmRow);
     if(storySquadArt){
       const src=storyArtUrl(activeOperatorId);
-      if(storySquadArt.dataset.src!==src){storySquadArt.dataset.src=src;storySquadArt.src=src;}
+      if(storySquadArt.dataset.src!==src){
+        // Wide illustrated operators (including the 6-stars) were fitted by width
+        // into a tall slot, leaving a huge blank band above their artwork.
+        // Frame wide art by height and crop the side scenery; keep portrait art intact.
+        storySquadArt.classList.remove('storySquadArtWide');
+        storySquadArt.onload=()=>{
+          const w=storySquadArt.naturalWidth,h=storySquadArt.naturalHeight;
+          storySquadArt.classList.toggle('storySquadArtWide',h>0&&w/h>=0.78);
+        };
+        storySquadArt.dataset.src=src;
+        storySquadArt.src=src;
+      }
       storySquadArt.onerror=()=>{if(!storySquadArt.src.endsWith('mc.webp'))storySquadArt.src='assets/characters/mc.webp';};
       storySquadArt.alt=storyOperatorName(activeOperatorId);
     }
