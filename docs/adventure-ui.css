@@ -1079,12 +1079,13 @@ body.story-squad-picker-open{overflow:hidden}
 .storySquadSelectScreen .storySquadSlot:hover:not(:disabled){border-color:#838782;background:#34383b}
 .storySquadSelectScreen .storySquadStage.selected .storySquadSlot{border:3px solid #f0f500;box-shadow:inset 0 0 0 1px #f0f50033}
 .storySquadSelectScreen .storySquadStage.confirmed .storySquadSlot{border:1px solid #989d9e;box-shadow:none;opacity:1}
+.storySquadSelectScreen .storySquadStage.confirmed .storySquadSlotArt{opacity:.68;filter:saturate(.82) brightness(.94)}
 .storySquadSelectScreen .storySquadStage.confirmed .storySquadSlot::after{content:'✓';position:absolute;z-index:4;right:8px;top:7px;display:grid;place-items:center;width:25px;height:25px;background:#f0f500;color:#222528;font-size:16px;font-weight:950}
 .storySquadSelectScreen .storySquadStage.locked .storySquadSlot{background:#e9ebeb;border-color:#c2c5c5;opacity:1}
 .storySquadSelectScreen .storySquadStage.empty .storySquadSlot{background:#e8eae7;border:1px dashed #acb0ad}
 .storySquadSelectScreen .storySquadStage.selected.empty .storySquadSlot{border:3px solid #e4e900;background:#373b3e}
 .storySquadSelectScreen .storySquadStage.locked.empty .storySquadSlot{background:#e8eae7;opacity:.9;border:1px dashed #c1c3c0}
-.storySquadSelectScreen .storySquadSlotArt{inset:0;width:100%;height:100%;object-fit:cover;object-position:center 21%;transform:none;filter:none;transition:none}
+.storySquadSelectScreen .storySquadSlotArt{inset:0;width:100%;height:100%;object-fit:cover;object-position:center 21%;transform:none;filter:none;transition:opacity .2s ease, filter .2s ease}
 .storySquadSelectScreen .storySquadStage.selected .storySquadSlotArt{transform:none}
 .storySquadSelectScreen .storySquadSlotNumber{font:900 clamp(17px,2vw,25px) ui-monospace,Consolas,monospace;color:#f0f500;text-shadow:0 2px 5px #101214}
 .storySquadSelectScreen .storySquadStage.empty .storySquadSlotNumber{color:#596061;text-shadow:none}
@@ -1098,7 +1099,7 @@ body.story-squad-picker-open{overflow:hidden}
 .storySquadSelectScreen .storySquadStage.empty .storySquadSlotState{color:#808587}
 .storySquadSelectScreen .storySquadStage.selected.empty .storySquadSlotState{color:#e2e4de}
 .storySquadSlotAction{flex:0 0 43px;min-height:43px;display:flex;align-items:stretch;justify-content:stretch}
-.storySquadSelectScreen .storySquadReadyBtn{width:100%;min-width:0;min-height:40px;border:1px solid #242628;background:#f0f500;color:#222426;border-radius:0;box-shadow:none;font:950 13px ui-monospace,Consolas,monospace;letter-spacing:0}
+.storySquadSelectScreen .storySquadReadyBtn{width:100%;min-width:0;min-height:40px;border:1px solid #242628;background:#f0f500;color:#222426;border-radius:0;box-shadow:none;font:950 19px ui-monospace,Consolas,monospace;letter-spacing:.015em;line-height:1}
 .storySquadSelectScreen .storySquadReadyBtn:disabled{background:#d6d8d4;color:#777d7d;border-color:#b3b6b3;opacity:1}
 .storySquadSelectScreen .storySquadReadyBtn:hover:not(:disabled){background:#e5eb00;filter:none}
 .storySquadSelectScreen .storySquadPickerRoster{gap:7px}
@@ -1136,7 +1137,7 @@ body.story-squad-picker-open{overflow:hidden}
  .storySquadSelectScreen .storySquadPickerStage,.storySquadSelectScreen .storySquadPickerRoster{padding:5px}
  .storySquadSelectScreen .storySquadStages{gap:5px;padding:4px 0}
  .storySquadSlotAction{flex-basis:32px;min-height:32px}
- .storySquadSelectScreen .storySquadReadyBtn{min-height:30px;font-size:11px}
+ .storySquadSelectScreen .storySquadReadyBtn{min-height:32px;font-size:16px}
  .storySquadSelectScreen .storySquadPickerList{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
  .storySquadSelectScreen .storySquadRosterCard{padding:3px 3px 14px;gap:3px}
  .storySquadSelectScreen .storySquadRosterCard img{width:min(100%,90px)}
@@ -1147,3 +1148,5 @@ body.story-squad-picker-open{overflow:hidden}
 /* Keep operator portraits fully visible; never compress grid rows to fit the viewport. */
 .storySquadSelectScreen .storySquadPickerList{grid-auto-rows:max-content;align-content:start}
 .storySquadSelectScreen .storySquadRosterCard{min-height:max-content}
+
+@media(prefers-reduced-motion:reduce){.storySquadSelectScreen .storySquadSlotArt{transition:none}}
