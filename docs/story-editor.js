@@ -3,6 +3,7 @@
  */
 // Firebase is loaded separately AFTER local chapters are displayed.
 // Static Firebase imports blocked the entire editor if the CDN was unavailable.
+import './conquest-map.js?v=129.0';
 import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=126.0';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
@@ -437,7 +438,7 @@ function renderFields(){
  const previousAudio=$('stage-bgm-preview');if(previousAudio){previousAudio.pause();previousAudio.removeAttribute('src');previousAudio.load();}
  const ch=currentChapter(),st=currentStage();
  if(!ch||!st){$('chapterFields').textContent='Select a chapter and stage.';$('stageFields').textContent='';$('slidesEditor').textContent='';return;}
- $('chapterFields').innerHTML=`<div class="editheading"><h2>Chapter ${esc(ch.id)}</h2><button class="danger" data-action="delete-chapter">Delete Chapter</button></div><div class="grid"><div class="field"><label for="ch-title">Chapter title</label><input id="ch-title" data-chapter-field="title" maxlength="80" value="${esc(ch.title)}"></div><div class="field"><label for="ch-subtitle">Subtitle</label><input id="ch-subtitle" data-chapter-field="subtitle" maxlength="150" value="${esc(ch.subtitle||'')}"></div></div>`;
+ $('chapterFields').innerHTML=`<div class="editheading"><h2>Chapter ${esc(ch.id)} · ${esc(window.RPG_CONQUEST_MAP.name(ch.id))}</h2><button class="danger" data-action="delete-chapter">Delete Chapter</button></div><p class="muted">Map territory: ${esc(window.RPG_CONQUEST_MAP.name(ch.id))}. The chapter ID fixes its map location; reordering only changes unlock order.</p><div class="grid"><div class="field"><label for="ch-title">Chapter title</label><input id="ch-title" data-chapter-field="title" maxlength="80" value="${esc(ch.title)}"></div><div class="field"><label for="ch-subtitle">Subtitle</label><input id="ch-subtitle" data-chapter-field="subtitle" maxlength="150" value="${esc(ch.subtitle||'')}"></div></div>`;
  const numericFields=Object.entries(STAGE_FIELDS).filter(([key])=>!(key in DAMAGE_DEFAULTS)).map(([key,[label,min,max,step]])=>{
   const own=st.battle?.[key];const actual=own??inherited(key,st).value;
   return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${esc(actual)}"><span class="muted" data-current-field="${key}">Current: ${esc(actual)}</span></div>`;

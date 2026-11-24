@@ -27,7 +27,7 @@
 window.RPG_STORY_EDITOR_BOOT={loaded:false};
 // A classic-script loader can report a module import failure rather than leaving
 // the page permanently stuck on "Loading chapters".
-import('./story-editor.js?v=128.0').catch(error=>{
+import('./story-editor.js?v=129.0').catch(error=>{
  const notice=document.getElementById('status');
  notice.className='error';
  notice.textContent='Story Editor script failed to start: '+String(error?.message||error).slice(0,240)+'. Check the uploaded docs/ files and refresh.';

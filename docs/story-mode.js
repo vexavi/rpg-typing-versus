@@ -78,22 +78,37 @@ function leaveStoryToModes(){
 }
 function errorScreen(msg){show(`<div class="story-modal"><h1>CONQUEST</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=leaveStoryToModes}
 const starMarkup=(n=0)=>`<span class="story-stars" aria-label="${n} of 4 stars">${Array.from({length:4},(_,i)=>`<span class="${i<n?'earned':'empty'}" aria-hidden="true">★</span>`).join('')}</span>`;
-function openConquestChapter(chIndex,preferred=null){
+function openConquestChapter(chIndex,preferred=null,requestedId=null,focus=false){
  const regions=chapters.filter(ch=>ch.stages.some(s=>s.type!=='story-only'));
  if(!regions.length){errorScreen('No encounters available.');return;}
+ const atlas=window.RPG_CONQUEST_MAP;
  const cleared=ch=>ch.stages.every(s=>completed.has(s.id));
- const available=(ch,i)=>i===0||cleared(regions[i-1]);
+ const available=(ch,i)=>cleared(ch)||i===0||cleared(regions[i-1]);
  const preferredIndex=preferred?regions.findIndex(ch=>ch.stages.some(s=>s.id===preferred)):-1;
  activeChapter=preferredIndex>=0?preferredIndex:Math.max(0,Math.min(regions.length-1,chIndex));
- if(!available(regions[activeChapter],activeChapter))activeChapter=Math.max(0,regions.findLastIndex(available));
- const ch=regions[activeChapter],battles=ch.stages.filter(s=>s.type!=='story-only');
- const tabs=regions.map((region,i)=>`<button type="button" data-conquest-region="${i}" class="story-chapter-tab ${i===activeChapter?'active':''}" ${available(region,i)?'':'disabled'}>${esc(region.title)} ${cleared(region)?'✓':available(region,i)?'':'🔒'}</button>`).join('');
+ if(requestedId===null&&!available(regions[activeChapter],activeChapter))activeChapter=Math.max(0,regions.findLastIndex(available));
+ const selected=String(requestedId??regions[activeChapter].id);
+ const selectedIndex=regions.findIndex(ch=>ch.id===selected);
+ const ch=regions[selectedIndex];
+ const battles=ch?ch.stages.filter(s=>s.type!=='story-only'):[];
+ const allowed=!!ch&&available(ch,selectedIndex);
+ if(allowed)activeChapter=selectedIndex;
+ const state=id=>{const i=regions.findIndex(c=>c.id===id);return i<0?'unpublished':cleared(regions[i])?'captured':available(regions[i],i)?'available':'locked';};
+ const status={unpublished:'COMING SOON',captured:'CAPTURED',available:'AVAILABLE',locked:'LOCKED'};
+ const mapped=atlas.regions.map(r=>{const st=state(r.id);const name=r.name==='Aurum Dominion'?['AURUM','DOMINION']:r.name==='Pale Horizon'?['PALE','HORIZON']:[r.name.toUpperCase()];return `<g class="cq-territory ${st} ${selected===r.id?'selected':''}" data-territory="${r.id}" role="button" tabindex="0" aria-label="${r.name}, ${status[st]}" aria-pressed="${selected===r.id}" style="--territory:${r.color}"><path class="cq-boundary" d="${r.path}"/><g class="cq-label" transform="translate(${r.x} ${r.y})" aria-hidden="true"><g class="cq-emblem" transform="translate(0 -62)">${atlas.icons[r.icon]}</g>${name.map((line,i)=>`<text class="cq-name" y="${i*35-12}">${line}</text>`).join('')}<text class="cq-status" y="${name.length*35+7}">${st==='captured'?'✓ ':st==='locked'?'◆ ':''}${status[st]}</text></g></g>`;}).join('');
+ const extras=regions.filter(ch=>!atlas.byId(ch.id));
+ const choices=[...atlas.regions.map(r=>({id:r.id,name:r.name})),...extras.map(c=>({id:c.id,name:c.title}))];
+ const label=atlas.byId(selected)?.name||ch?.title||'Operation';
+ const selectedColor=atlas.byId(selected)?.color||'#d9dfe4';
  const entries=battles.map((stage,i)=>`<div class="conquest-encounter"><b>${String(i+1).padStart(2,'0')}</b><span>${esc(stage.battle.bossName||stage.title)}</span><strong>${stage.battle.bossHp*10} HP</strong>${i===battles.length-1?'<small>BOSS</small>':''}</div>`).join('');
- show(`<div class="story-world conquest-world"><div class="story-world-top"><button id="story-close" class="story-map-back" type="button">‹ <span>MODE SELECT</span></button><div class="story-map-title">CONQUEST</div></div><div class="conquest-regions">${tabs}</div><div class="conquest-operation"><section class="conquest-encounters"><h2>${esc(ch.title)}</h2>${entries}</section><aside class="conquest-details"><h2>${cleared(ch)?'CAPTURED':'OPERATION'}</h2><div class="conquest-count">${battles.length} ENCOUNTERS</div><div>3 OPERATORS</div><div>HP CARRIES OVER</div><div>ENHANCEMENTS ×${Math.min(6,battles.length-1)}</div><button id="conquest-start" class="story-start" type="button">${cleared(ch)?'REPLAY':'START'}</button></aside></div></div>`);
+ const mapSrc=window.RPG_MEDIA?.url?.('story/images/conquest-world.webp')||'story/images/conquest-world.webp';
+ show(`<div class="story-world conquest-world cq-atlas"><div class="story-world-top"><button id="story-close" class="story-map-back" type="button" aria-label="Back to Mode Select">‹ <span>MODE SELECT</span></button><div class="story-map-title">CONQUEST</div><div class="cq-progress">TERRITORIES <strong>${regions.filter(cleared).length} / ${regions.length}</strong></div></div><div class="cq-main"><section class="cq-map-panel" aria-label="World territories"><div class="cq-map-frame"><svg class="cq-map" viewBox="0 0 1536 960" xmlns="http://www.w3.org/2000/svg" aria-label="Conquest world map"><image href="${esc(mapSrc)}" width="1536" height="960" preserveAspectRatio="none" aria-hidden="true"/>${mapped}</svg></div><div class="cq-map-footer"><div class="cq-legend"><span><i class="cq-dot available"></i> Available</span><span><i class="cq-dot captured"></i> Captured</span><span><i class="cq-dot locked"></i> Locked / Coming soon</span></div><label class="cq-jump"><span class="cq-jump-label">Territory</span><select id="cq-territory-select" aria-label="Select territory">${choices.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.name)} · ${status[state(c.id)]}</option>`).join('')}</select></label></div></section><aside class="cq-side" style="--territory:${selectedColor}" aria-label="Selected territory"><div class="cq-side-head"><span class="cq-side-status">${status[state(selected)]}</span><h2>${esc(label)}</h2>${ch&&ch.title!==label?`<p>${esc(ch.title)}</p>`:''}</div>${ch?`<div class="cq-summary"><span><b>${battles.length}</b> ENCOUNTERS</span><span><b>3</b> OPERATORS</span><span><b>${Math.min(6,battles.length-1)}</b> ENHANCEMENTS</span></div><div class="cq-encounters"><h3>ENCOUNTERS</h3>${entries}</div>`:'<div class="cq-empty">No published encounters.</div>'}<div class="cq-actions"><button id="conquest-start" class="story-start" type="button" ${allowed?'':'disabled'}>${allowed?(cleared(ch)?'REPLAY':'START'):(ch?'LOCKED':'COMING SOON')} <span>${allowed?'››':''}</span></button></div></aside></div></div>`);
  view='map';
  box.querySelector('#story-close').onclick=leaveStoryToModes;
- box.querySelectorAll('[data-conquest-region]').forEach(btn=>btn.onclick=()=>openConquestChapter(Number(btn.dataset.conquestRegion)));
- box.querySelector('#conquest-start').onclick=()=>{if(!available(ch,activeChapter))return;hide();startFn?.(ch);};
+ box.querySelectorAll('[data-territory]').forEach(el=>{const select=()=>openConquestChapter(activeChapter,null,el.dataset.territory,true);el.onclick=select;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select();}};});
+ box.querySelector('#cq-territory-select').onchange=e=>{openConquestChapter(activeChapter,null,e.target.value);box.querySelector('#cq-territory-select')?.focus();};
+ box.querySelector('#conquest-start').onclick=()=>{if(!allowed)return;hide();startFn?.(ch);};
+ if(focus)box.querySelector(`[data-territory="${selected}"]`)?.focus({preventScroll:true});
 }
 function openChapter(chIndex,preferred=null,focusTarget=''){
  if(window.RPG_CONQUEST)return openConquestChapter(chIndex,preferred);
@@ -202,7 +217,7 @@ function showConquestReward(run,step){
 }
 function showConquestResult(run,result){
  return new Promise(resolve=>{
-   show(`<div class="story-result conquest-reward" role="dialog" aria-label="Operation complete"><div class="story-result-label">OPERATION COMPLETE</div><h2>${esc(run.chapter.title)}</h2><p>${run.encounters.length} / ${run.encounters.length} CLEARED</p><p>${3-run.knockedOut.length} / 3 OPERATORS</p><p>${result.saved?'TERRITORY CAPTURED':'UNRANKED / NOT SAVED'}</p>${result.coins?`<p>+${result.coins} GUILD COINS</p>`:''}<button type="button" id="conquest-finish">OK</button></div>`);
+   show(`<div class="story-result conquest-reward" role="dialog" aria-label="Operation complete"><div class="story-result-label">OPERATION COMPLETE</div><h2>${esc(window.RPG_CONQUEST_MAP?.byId(run.chapter.id)?.name||run.chapter.title)}</h2><p>${run.encounters.length} / ${run.encounters.length} CLEARED</p><p>${3-run.knockedOut.length} / 3 OPERATORS</p><p>${result.saved?'TERRITORY CAPTURED':'UNRANKED / NOT SAVED'}</p>${result.coins?`<p>+${result.coins} GUILD COINS</p>`:''}<button type="button" id="conquest-finish">OK</button></div>`);
    const finish=()=>{if(conquestOverlayFinish!==finish)return;conquestOverlayFinish=null;hide();resolve();};conquestOverlayFinish=finish;
    box.querySelector('#conquest-finish').onclick=finish;box.querySelector('#conquest-finish').focus();
  });
