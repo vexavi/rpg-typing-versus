@@ -3785,12 +3785,13 @@ async function debugJumpTo(mode, idx){
     if(!storySquad.enabled||gameState!=='playing')return false;
     storySquad.knockedOut.push(storySquad.index);
     const next=storySquad.index+1;
-    if(next>=storySquad.ids.length){renderStorySquad();return false;}
+    if(next>=storySquad.ids.length){resetOperatorForStage();clearOutgoingSquadEffects();renderStorySquad();updateUI();return false;}
     storySquad.index=next;
     gameState='squad-deploy';setInputsEnabled(false);answerInput.value='';
     pauseStageClock();setSleepyBgmGain(1);
-    resetOperatorForStage(); // Safely remove old operator marks; retain normal falling words and boss HP.
-    renderStorySquad();
+    resetOperatorForStage(); // Retire the outgoing rules engine and its temporary hexes.
+    clearOutgoingSquadEffects();
+    renderStorySquad();updateUI();
     if(storySquadDeploy){storySquadDeploy.textContent=`${storyOperatorName(storySquad.ids[next])} DEPLOYING`;storySquadDeploy.classList.add('show');}
     storySquadSwitchTimer=setTimeout(()=>{
       storySquadSwitchTimer=null;
@@ -3982,6 +3983,37 @@ async function debugJumpTo(mode, idx){
     wordLane?.classList?.remove('operator-frozen-domain','operator-foxfire-active','operator-sovereign-guard','operator-fletcher-last-stand','operator-fletcher-overdrive','operator-nitrate-ready');
     uiCache.nitrateShield=null;uiCache.nitrateVisible=null;
     operatorClearLupaVisuals();
+  }
+  // The squad knockout is not a stage reset: the field survives. Retire
+  // every operator-owned word flag and visual that could outlive its rules.
+  function clearOutgoingSquadEffects(){
+    operatorPassive=null;
+    // Foxfire's hidden queue would otherwise remain untypeable forever: the
+    // old Tavi controller (the only thing that releases it) is gone.
+    let queueY=wordsOnField.reduce((y,w)=>w.state==='falling'&&!w.foxfireHidden&&Number.isFinite(w.y)?Math.min(y,w.y-30):y,-30);
+    for(const word of wordsOnField){
+      if(word.foxfireHidden){
+        word.state='falling';word.y=queueY;queueY-=32;
+        word.groupId=0;word.groupIndex=0;word.spawnBaseCount=undefined;
+        word.el?.classList?.remove('landed');
+        if(word.el)setWordY(word.el,word.y);
+      }
+      delete word.foxfireHidden;delete word.foxfireOrigin;
+      // All operator decorations are local to this life, unlike stage tags.
+      const classes=word.el?.classList;
+      if(classes){for(const name of Array.from(classes))if(name.startsWith('operator-'))classes.remove(name);}
+      word.el?.removeAttribute?.('data-hunt-time');
+      word.el?.removeAttribute?.('data-lupa-time');
+      word.el?.style?.removeProperty?.('--mara-shield-push-distance');
+      word.el?.style?.removeProperty?.('--tavi-rewind-distance');
+    }
+    // Remove transient attack animations even if their timeout has not fired.
+    wordLane?.querySelectorAll?.('.operator-nitrate-release,.operator-sovereign-slash,.operator-phantom-slash').forEach(el=>el.remove());
+    nitrateShieldEl?.classList?.remove('nitrate-block-impact');
+    uiCache.playerHpStr=null;uiCache.maraHpActive=null;
+    uiCache.nitrateVisible=null;uiCache.nitrateShield=null;
+    // Old passive messages must not be announced as the next operator's.
+    msgBox?.replaceChildren();
   }
   function operatorStageWithoutBoss(){
     // Survival/time trials have a visible boss HP bar but no boss to defeat.
@@ -4987,6 +5019,7 @@ function ex1IsFrozenInput(_norm){ return false; }
         ex1ClearShootingStarGlow(w);
         damagePlayer(storyIncomingDamage("shootingStarDamage",2), "shooting star");
         removeWord(w.id);
+        if(storySquad.enabled&&gameState!=='playing')return;
       }else{
         const rem = Math.max(1, Math.ceil(remMs / 1000));
         if(w.tagEl && w.tagEl.textContent !== `★ ${rem}`) w.tagEl.textContent = `★ ${rem}`;
@@ -7868,14 +7901,16 @@ if(gameState === "paused"){
       }
 
       if(challengeCometImpactIds.length){
-        challengeCometImpactIds.forEach(id => {
+        for(const id of challengeCometImpactIds){
           const w = wordsOnField.find(x => x && x.id === id);
           if(w) challengeHandleCometLanding(w);
-        });
+          if(storySquad.enabled&&gameState!=='playing'){scheduleTick(true);return;}
+        }
       }
 
       stage5UpdateFrost();
       ex1UpdatePermafrost();
+      if(storySquad.enabled&&gameState!=='playing'){scheduleTick(true);return;}
       ex3UpdateGhostTimers();
       ex4UpdateInfectionTimers();
 

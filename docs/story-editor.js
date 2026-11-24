@@ -3,7 +3,7 @@
  */
 // Firebase is loaded separately AFTER local chapters are displayed.
 // Static Firebase imports blocked the entire editor if the CDN was unavailable.
-import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=125.0';
+import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=126.0';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
 import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs';
