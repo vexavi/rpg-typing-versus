@@ -18,7 +18,7 @@ const starsForDamage=(damage,stageId=null)=>{
  return 0;
 };
 let chapters=null,completed=new Set(),bestStars={},startFn=null,view='closed',activeChapter=0,selectedId=null;
-let autoTimer=0;
+let autoTimer=0,conquestOverlayFinish=null;
 const box=document.createElement('div');box.id='storyRoot';box.hidden=true;document.body.appendChild(box);
 const serverOnline=Boolean(identity.online&&/^[A-HJ-NP-Z2-9]{16}$/.test(String(identity.card_code||'')));
 function storageGet(){try{const v=JSON.parse(localStorage.getItem(STORAGE)||'[]');return Array.isArray(v)?v.filter(validId):[]}catch{return []}}
@@ -76,9 +76,27 @@ function leaveStoryToModes(){
  if(typeof window.RPG_STORY_EXIT_TO_MODES==='function')window.RPG_STORY_EXIT_TO_MODES();
  else document.getElementById('overlay')?.classList.add('show');
 }
-function errorScreen(msg){show(`<div class="story-modal"><h1>STORY MODE</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=leaveStoryToModes}
+function errorScreen(msg){show(`<div class="story-modal"><h1>CONQUEST</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=leaveStoryToModes}
 const starMarkup=(n=0)=>`<span class="story-stars" aria-label="${n} of 4 stars">${Array.from({length:4},(_,i)=>`<span class="${i<n?'earned':'empty'}" aria-hidden="true">★</span>`).join('')}</span>`;
+function openConquestChapter(chIndex,preferred=null){
+ const regions=chapters.filter(ch=>ch.stages.some(s=>s.type!=='story-only'));
+ if(!regions.length){errorScreen('No encounters available.');return;}
+ const cleared=ch=>ch.stages.every(s=>completed.has(s.id));
+ const available=(ch,i)=>i===0||cleared(regions[i-1]);
+ const preferredIndex=preferred?regions.findIndex(ch=>ch.stages.some(s=>s.id===preferred)):-1;
+ activeChapter=preferredIndex>=0?preferredIndex:Math.max(0,Math.min(regions.length-1,chIndex));
+ if(!available(regions[activeChapter],activeChapter))activeChapter=Math.max(0,regions.findLastIndex(available));
+ const ch=regions[activeChapter],battles=ch.stages.filter(s=>s.type!=='story-only');
+ const tabs=regions.map((region,i)=>`<button type="button" data-conquest-region="${i}" class="story-chapter-tab ${i===activeChapter?'active':''}" ${available(region,i)?'':'disabled'}>${esc(region.title)} ${cleared(region)?'✓':available(region,i)?'':'🔒'}</button>`).join('');
+ const entries=battles.map((stage,i)=>`<div class="conquest-encounter"><b>${String(i+1).padStart(2,'0')}</b><span>${esc(stage.battle.bossName||stage.title)}</span><strong>${stage.battle.bossHp*10} HP</strong>${i===battles.length-1?'<small>BOSS</small>':''}</div>`).join('');
+ show(`<div class="story-world conquest-world"><div class="story-world-top"><button id="story-close" class="story-map-back" type="button">‹ <span>MODE SELECT</span></button><div class="story-map-title">CONQUEST</div></div><div class="conquest-regions">${tabs}</div><div class="conquest-operation"><section class="conquest-encounters"><h2>${esc(ch.title)}</h2>${entries}</section><aside class="conquest-details"><h2>${cleared(ch)?'CAPTURED':'OPERATION'}</h2><div class="conquest-count">${battles.length} ENCOUNTERS</div><div>3 OPERATORS</div><div>HP CARRIES OVER</div><div>ENHANCEMENTS ×${Math.min(6,battles.length-1)}</div><button id="conquest-start" class="story-start" type="button">${cleared(ch)?'REPLAY':'START'}</button></aside></div></div>`);
+ view='map';
+ box.querySelector('#story-close').onclick=leaveStoryToModes;
+ box.querySelectorAll('[data-conquest-region]').forEach(btn=>btn.onclick=()=>openConquestChapter(Number(btn.dataset.conquestRegion)));
+ box.querySelector('#conquest-start').onclick=()=>{if(!available(ch,activeChapter))return;hide();startFn?.(ch);};
+}
 function openChapter(chIndex,preferred=null,focusTarget=''){
+ if(window.RPG_CONQUEST)return openConquestChapter(chIndex,preferred);
  const eligible=chapters.map((ch,i)=>({ch,i})).filter(x=>isUnlocked(x.ch.stages[0].id));
  activeChapter=eligible.some(x=>x.i===chIndex)?chIndex:(eligible.at(-1)?.i??0);
  const ch=chapters[activeChapter];const visible=ch.stages.filter(s=>isUnlocked(s.id));
@@ -159,6 +177,36 @@ async function markCompleted(id,result={}){
  storageSave();
  return {stars,best:bestStars[id]??null,firstClear};
 }
+async function markConquestCompleted(run){
+ const previous=new Set(completed),previousStars={...bestStars},firstClears=[];
+ for(const stage of run.chapter.stages){
+   if(!validId(stage.id))continue;
+   if(!completed.has(stage.id))firstClears.push(stage.id);
+   completed.add(stage.id);
+   const rec=run.records.find(r=>r.stageId===stage.id);
+   if(rec)bestStars[stage.id]=Math.max(bestStars[stage.id]??0,starsForDamage(rec.damage,stage.id));
+ }
+ const saved=await serverProgress('save');
+ if(!saved?.ok||!run.chapter.stages.every(stage=>saved.completed?.includes(stage.id))){completed=previous;bestStars=previousStars;return {ok:false,firstClears:[]};}
+ storageSave();return {ok:true,firstClears};
+}
+function cancelConquestOverlay(){if(conquestOverlayFinish)conquestOverlayFinish();}
+function showConquestReward(run,step){
+ return new Promise(resolve=>{
+   const reward=step.reward;
+   const body=reward?`<div class="conquest-rarity">${'★'.repeat(reward.rarity)}</div><h2>${esc(reward.name)}</h2><div class="conquest-reward-stat">${esc(reward.label)} ${esc(reward.display)}</div>`:'<h2>ENCOUNTER COMPLETE</h2>';
+   show(`<div class="story-result conquest-reward" role="dialog" aria-label="Enhancement acquired"><div class="story-result-label">${reward?'ENHANCEMENT ACQUIRED':'ENCOUNTER COMPLETE'}</div>${body}<p>HP ${window.RPG_CONQUEST.displayed(step.hp)}${step.healed?` · +${step.healed} HEALED`:''}</p><p>${run.position} / ${run.encounters.length} CLEARED</p><button type="button" id="conquest-reward-next">OK</button></div>`);
+   const finish=()=>{if(conquestOverlayFinish!==finish)return;conquestOverlayFinish=null;hide();resolve();};
+   conquestOverlayFinish=finish;box.querySelector('#conquest-reward-next').onclick=finish;box.querySelector('#conquest-reward-next').focus();
+ });
+}
+function showConquestResult(run,result){
+ return new Promise(resolve=>{
+   show(`<div class="story-result conquest-reward" role="dialog" aria-label="Operation complete"><div class="story-result-label">OPERATION COMPLETE</div><h2>${esc(run.chapter.title)}</h2><p>${run.encounters.length} / ${run.encounters.length} CLEARED</p><p>${3-run.knockedOut.length} / 3 OPERATORS</p><p>${result.saved?'TERRITORY CAPTURED':'UNRANKED / NOT SAVED'}</p>${result.coins?`<p>+${result.coins} GUILD COINS</p>`:''}<button type="button" id="conquest-finish">OK</button></div>`);
+   const finish=()=>{if(conquestOverlayFinish!==finish)return;conquestOverlayFinish=null;hide();resolve();};conquestOverlayFinish=finish;
+   box.querySelector('#conquest-finish').onclick=finish;box.querySelector('#conquest-finish').focus();
+ });
+}
 function showResult(stageId,rating,damage){
  return new Promise(resolve=>{
   const st=allStages().find(s=>s.id===stageId);const isBattle=rating&&rating.stars!==null;
@@ -169,5 +217,5 @@ function showResult(stageId,rating,damage){
   box.addEventListener('keydown',onKey);box.querySelector('#story-result-continue').onclick=finish;box.querySelector('#story-result-continue').focus();
  });
 }
-window.RPG_STORY={openMap,showSlides,markCompleted,showResult,loadManifest,getCompleted:()=>[...completed],getBestStars:()=>({...bestStars}),isUnlocked,starsForDamage};
+window.RPG_STORY={openMap,showSlides,markCompleted,showResult,markConquestCompleted,showConquestReward,showConquestResult,cancelConquestOverlay,loadManifest,getCompleted:()=>[...completed],getBestStars:()=>({...bestStars}),isUnlocked,starsForDamage};
 })();

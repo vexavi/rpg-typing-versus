@@ -51,8 +51,9 @@
   const rewindableWord=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const lowestWord=words=>(Array.isArray(words)?words:[]).filter(fallingWord).reduce((best,w)=>!best||w.y>best.y?w:best,null);
 
-  function create(characterId,mode,random=Math.random){
+  function create(characterId,mode,random=Math.random,preciseHp=false){
     const rule=ALLOWED_MODES.has(mode)?RULES[characterId]||null:null;
+    const lowHp=(hp,threshold)=>preciseHp?Number(hp)>0&&Number(hp)<=threshold:Number(hp)===threshold;
     let correct=0,activations=0,spawnPauseUntil=0,slowUntil=0,lastSlowAt=-Infinity;
     let frozen=null,freezeUntil=0,mistakeArmed=false,used=false;
     let streak=0,domainFreezeUntil=0,charged=false,marked=null,awaitingMark=false,executionPendingUntil=0;
@@ -123,8 +124,9 @@
     }
     function nitrateAbsorbDamage(amount){
       if(rule?.id!=='nitrate'||!(amount>0))return 0;
-      const absorbed=Math.min(wrathShield,Math.max(0,Math.ceil(amount)));
+      const absorbed=Math.min(wrathShield,Math.max(0,preciseHp?amount:Math.ceil(amount)));
       wrathShield-=absorbed;
+      if(preciseHp)wrathShield=Math.round(wrathShield*10)/10;
       return absorbed;
     }
     function getNitrateShield(){return rule?.id==='nitrate'?wrathShield:0;}
@@ -151,7 +153,7 @@
     }
     function syncAdrenaline(words,hp){
       if(rule?.id!=='crossbow')return false;
-      const active=Number(hp)===rule.adrenalineHp;
+      const active=lowHp(hp,rule.adrenalineHp);
       // Leaving 1 HP cancels both the temporary shield and earned momentum.
       // The once-per-stage activation flag remains spent until stage reset.
       if(!active&&adrenalineActive){
@@ -182,7 +184,7 @@
         return null;
       }
       if(rule?.id!=='crossbow')return;
-      if(crossbowTypeable(word))word.el?.classList?.toggle('operator-crossbow-adrenaline',Number(hp)===rule.adrenalineHp&&adrenalineActive&&adrenalineMomentumUnlocked);
+      if(crossbowTypeable(word))word.el?.classList?.toggle('operator-crossbow-adrenaline',lowHp(hp,rule.adrenalineHp)&&adrenalineActive&&adrenalineMomentumUnlocked);
     }
     function longestCrossbowWord(words){
       const available=(Array.isArray(words)?words:[]).filter(crossbowTypeable);
@@ -433,7 +435,7 @@
       syncAdrenaline(words,hp);
       // Normal Continue resumes at 3 HP. Support a 1-HP revive safely if a
       // future mode adds one, without bypassing the once-per-stage restriction.
-      return Number(hp)===rule.adrenalineHp?activateFletcherLastStand(time):null;
+      return lowHp(hp,rule.adrenalineHp)?activateFletcherLastStand(time):null;
     }
     // Stage transitions retain player HP in Normal/Extra but reset operator
     // counters. Trigger a fresh emergency shield if Fletcher enters at 1 HP.
@@ -449,7 +451,7 @@
       }
       if(rule?.id!=='crossbow')return null;
       syncAdrenaline(words,hp);
-      return Number(hp)===rule.adrenalineHp?activateFletcherLastStand(time):null;
+      return lowHp(hp,rule.adrenalineHp)?activateFletcherLastStand(time):null;
     }
     function onPlayerDamage(previousHp,nextHp,time,words=[]){
       if(rule?.id==='crossbow'){
@@ -460,7 +462,7 @@
         syncAdrenaline(words,nextHp);
         // Exactly 1 HP, reached through HP damage. A lethal hit ending at
         // 0 HP does not grant an automatic revive or protection.
-        if(nextHp===rule.adrenalineHp&&previousHp>nextHp&&!adrenalineTriggered){
+        if(lowHp(nextHp,rule.adrenalineHp)&&previousHp>nextHp&&!adrenalineTriggered){
           return activateFletcherLastStand(time);
         }
         return null;
@@ -482,7 +484,7 @@
         shieldPending=level;
         return executeShield(level,time,words);
       }
-      if(rule?.id!=='alden'||used||previousHp<=1||nextHp!==1)return null;
+      if(rule?.id!=='alden'||used||previousHp<=1||!lowHp(nextHp,1))return null;
       used=true;activations++;slowUntil=validTime(time)+rule.durationSec;
       return {type:'slowdown',seconds:rule.durationSec,percent:rule.slowPct,characterId:rule.id};
     }
@@ -499,6 +501,7 @@
         const release=wrathShield>=rule.maxShield&&!context.nonBoss;
         if(release){wrathShield=0;activations++;}
         else wrathShield=Math.min(rule.maxShield,wrathShield+1);
+        if(preciseHp)wrathShield=Math.round(wrathShield*10)/10;
         completeWrathCycle(t);
         return release
           ?{type:'nitrate-release',damage:rule.releaseDamage,shield:0,characterId:rule.id}
@@ -524,9 +527,9 @@
         crossbowCombo++;
         // HP can be healed by another stage mechanic between animation frames.
         // Use the current HP from this hit, not just the last per-frame sync.
-        if(Number(context.hp)!==rule.adrenalineHp&&adrenalineActive)syncAdrenaline(words,context.hp);
+        if(!lowHp(context.hp,rule.adrenalineHp)&&adrenalineActive)syncAdrenaline(words,context.hp);
         const phase=getAdrenalinePhase(t);
-        const vulnerableOverdrive=Number(context.hp)===rule.adrenalineHp&&phase==='overdrive';
+        const vulnerableOverdrive=lowHp(context.hp,rule.adrenalineHp)&&phase==='overdrive';
         // Earn progress only while vulnerable in Overdrive. The third word
         // unlocks the buff; the NEXT correctly typed word receives +1 damage.
         // A Show-Off bullseye can still grant its independent +1 at any time.

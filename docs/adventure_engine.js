@@ -2894,6 +2894,14 @@ function setBgm(src, loop=true, autoplay=true){
 
 async function launchStoryStage(stage){
   if(!stage)return;
+  if(Array.isArray(stage.stages)){
+    if(!normalCleared){showModeSelectScreen();return;}
+    const chosen=await chooseStorySquad();
+    if(!chosen){showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage);return;}
+    const operation=window.RPG_CONQUEST.begin(stage,chosen);
+    storySquad.ids=chosen;
+    return launchStoryStage(operation.encounters[0]);
+  }
   storySelectedStage = stage;
   try{window.RPG_BALANCE?.setActive('story',String(stage.id),String(stage.id).split('-')[0]);}catch(_){}
   const wantsBattle = stage.type !== "story-only";
@@ -2920,13 +2928,14 @@ async function launchStoryStage(stage){
     window.RPG_BALANCE?.setStoryOverrides?.(stage.id,overrides,battle.mechanics||{});
   }catch(error){console.warn('Story battle settings:',error)}
   // Show pictures first. The scene overlay is independent of the battle engine.
-  const scenesOk = await window.RPG_STORY.showSlides(stage.intro,stage.id,'intro');
+  const scenesOk = window.RPG_CONQUEST?.run ? true : await window.RPG_STORY.showSlides(stage.intro,stage.id,'intro');
   if(!scenesOk){ showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage); return }
   if(!wantsBattle){
     await completeStoryStage(stage,null);
     return;
   }
-  if(/^[12]-/.test(String(stage.id||''))){
+  if(window.RPG_CONQUEST?.run){storySquad.ids=window.RPG_CONQUEST.run.ids.slice();}
+  else if(/^[12]-/.test(String(stage.id||''))){
     const chosen=await chooseStorySquad();
     if(!chosen){showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage);return;}
     storySquad.ids=chosen;
@@ -2934,6 +2943,36 @@ async function launchStoryStage(stage){
   setMode("story");
   showOverlay(false);
   startGame();
+}
+async function completeConquestEncounter(){
+  const core=window.RPG_CONQUEST,run=core?.run;
+  if(!run||gameState!=='playing')return;
+  gameState='stageclear';setInputsEnabled(false);stopBgm();pauseStageClock();
+  const step=core.finishEncounter({index:storySquad.index,knockedOut:storySquad.knockedOut,hp:playerHp,passiveHp:operatorPassive?.getMaxHpBonus?.()||0,damage:Math.ceil(damageTakenThisStage-1e-8),correct:guildCorrectThisRun,incorrect:mistakes,attemptId:guildStoryAttemptId,unranked:runLocalOnly||!!window.RPG_V66_DISCONNECTED||!navigator.onLine});
+  if(!step)return;
+  if(!step.final){
+    await window.RPG_STORY.showConquestReward(run,step);
+    if(core.run!==run||gameState!=='stageclear')return;
+    return launchStoryStage(step.next);
+  }
+  let saved=false,coins=0;
+  if(!run.unranked){
+    try{
+      const result=await window.RPG_STORY.markConquestCompleted(run);
+      saved=!!result?.ok;
+      if(saved&&!DEV_CHEATS_ENABLED&&!window.RPG_V66_DISCONNECTED){
+        for(const rec of run.records){
+          if(core.run!==run)return;
+          try{const reward=await window.RPG_GUILD.claim({mode:'story',stageId:rec.stageId,attemptId:rec.attemptId,firstClear:result.firstClears.includes(rec.stageId),correct:rec.correct,incorrect:rec.incorrect});coins+=Number(reward.awarded)||0;}catch(e){console.warn('Conquest Guild Coins:',e);}
+        }
+      }
+    }catch(e){console.warn('Conquest progress:',e);}
+  }
+  if(core.run!==run)return;
+  await window.RPG_STORY.showConquestResult(run,{saved,coins});
+  if(core.run!==run)return;
+  const preferred=run.chapter.stages[0].id;
+  resetGame(false);window.RPG_STORY.openMap(launchStoryStage,preferred);
 }
 async function completeStoryStage(stage,damage=null){
   if(!stage)return;
@@ -3150,7 +3189,7 @@ function showModeSelectScreen(){
   heroChange.addEventListener('click',openOperatorSelector);
   refreshHero();
 
-  addMode('Story Mode', {onClick:()=>{
+  addMode('Conquest', {disabled:!normalCleared,lockedReason:'Clear Normal Mode to unlock',onClick:()=>{
     if(!window.RPG_STORY){pushMsg('Story unavailable.',true);return;}
     window.RPG_STORY.openMap(launchStoryStage);
   }});
@@ -3509,7 +3548,7 @@ async function debugJumpTo(mode, idx){
   const storySquad={ids:[],index:0,knockedOut:[],enabled:false};
   let storySquadSwitchTimer=null;
   let storySquadGraceUntil=0;
-  const storyThreeLifeStage=()=>currentMode==='story'&&/^[12]-/.test(String(storySelectedStage?.id||''));
+  const storyThreeLifeStage=()=>currentMode==='story'&&/^[12]-/.test(String(storySelectedStage?.id||''))||currentMode==='story'&&!!window.RPG_CONQUEST?.run;
   const storySquadVisual=document.getElementById('storySquadVisual');
   const storySquadArt=document.getElementById('storySquadArt');
   const storySquadRoster=document.getElementById('storySquadRoster');
@@ -3582,6 +3621,8 @@ async function debugJumpTo(mode, idx){
     }
   }
   function stopStorySquad(){
+    window.RPG_CONQUEST?.abort();
+    window.RPG_STORY?.cancelConquestOverlay?.();
     clearStorySquadSwitch();storySquad.enabled=false;storySquad.ids=[];storySquad.index=0;storySquad.knockedOut=[];
     document.body.classList.remove('story-squad-layout');renderStorySquad();
   }
@@ -3692,6 +3733,8 @@ async function debugJumpTo(mode, idx){
           card.classList.toggle('inSquad',pos!==-1);
           card.classList.toggle('highlighted',selected[activeSlot]===op.id);
           card.setAttribute('aria-label',`${op.name}, ${op.rarity} stars${op.trial?', trial':''}${pos>=0?', deployed as '+(pos+1):''}`);
+          if(window.RPG_CONQUEST){const st=window.RPG_CONQUEST.stats(op.id,window.RPG_OPERATOR_PASSIVES?.RULES?.[op.id]?.maxHpBonus||0,{});card.title=`HP ${window.RPG_CONQUEST.displayed(st.hp)} · ATK ${Math.round(st.atk*100)}% · DEF ${Math.round(st.def*100)}%`;}
+
           // Existing square headshot assets have consistent focal framing.
           // Do not squeeze the tall full-body deployment crops into square roster cards.
           const pic=make('img','');pic.alt='';pic.loading='lazy';pic.src=storyIconUrl(op.id);
@@ -3801,8 +3844,9 @@ async function debugJumpTo(mode, idx){
       storySquadSwitchTimer=null;
       if(!storySquad.enabled||gameState!=='squad-deploy'||currentMode!=='story')return;
       activeOperatorId=storySquad.ids[next];
-      operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
+      operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode,undefined,!!window.RPG_CONQUEST?.run)||null;
       playerMaxHp=BASE_PLAYER_MAX_HP+(operatorPassive?.getMaxHpBonus?.()||0);
+      if(window.RPG_CONQUEST?.run)playerMaxHp=window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0).hp;
       playerHp=playerMaxHp;
       // Show the fresh operator and HP before the optional first-KO lesson.
       renderStorySquad();renderProfileHeader();
@@ -3951,7 +3995,12 @@ async function debugJumpTo(mode, idx){
     storySquad.enabled=storyThreeLifeStage()&&storySquad.ids.length===3;
     storySquad.index=0;storySquad.knockedOut=[];
     activeOperatorId=storySquad.enabled?storySquad.ids[0]:(operatorModeEligible()?getSelectedOperator():'mc');
-    operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
+    const operation=window.RPG_CONQUEST?.run;
+    if(operation&&currentMode==='story'){
+      storySquad.index=operation.index;storySquad.knockedOut=operation.knockedOut.slice();
+      activeOperatorId=storySquad.ids[storySquad.index];
+    }
+    operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode,undefined,!!operation)||null;
     renderStorySquad();
   }
   // Keeps one unobtrusive visible 3-second countdown inside the word lane.
@@ -4171,11 +4220,13 @@ async function debugJumpTo(mode, idx){
       pushMsg('ELISE · QUICK RECOVERY (3s)',true);
     }else if(effect.type==='heal'){
       playerHp=Math.min(playerMaxHp,playerHp+effect.hp);
+      if(window.RPG_CONQUEST?.run)playerHp=window.RPG_CONQUEST.q(playerHp);
       pushMsg('VEX · ENDURANCE (+1 HP)',true);
       updateUI();
     }else if(effect.type==='anodyne-serum'){
       // Overheal is intentionally allowed. Preserve the base max HP for each stage.
       playerHp+=effect.hp;
+      if(window.RPG_CONQUEST?.run)playerHp=window.RPG_CONQUEST.q(playerHp);
       pushMsg('ANODYNE · RECOVERY SERUM (+2 HP)',true);
       updateUI();
     }else if(effect.type==='anodyne-cryo'){
@@ -4558,7 +4609,9 @@ function updateUI(){
       ex4EyeBanner.style.opacity = showEye ? "1" : "0";
     }
 
-    const bossHpStr = `${bossHp}/${bossMaxHp}`;
+    const conquest=currentMode==='story'&&window.RPG_CONQUEST?.run;
+    const showHp=n=>conquest?window.RPG_CONQUEST.displayed(n):n;
+    const bossHpStr = `${showHp(bossHp)}/${showHp(bossMaxHp)}`;
     if(bossHpStr !== uiCache.bossHpStr){
       uiCache.bossHpStr = bossHpStr;
       bossHpText.textContent = bossHpStr;
@@ -4570,19 +4623,24 @@ function updateUI(){
       bossFill.style.width = bossW;
     }
 
-    const playerHpStr = `${playerHp}/${playerMaxHp}`;
+    const playerHpStr = `${showHp(playerHp)}/${showHp(playerMaxHp)}`;
     if(playerHpStr !== uiCache.playerHpStr){
       uiCache.playerHpStr = playerHpStr;
       playerHpText.textContent = playerHpStr;
       playerHpText.classList.toggle('operator-anodyne-overheal',playerHp>playerMaxHp);
     }
 
+    const statsEl=document.getElementById('conquestStats');
+    const operationEl=document.getElementById('conquestOperationHud');
+    const hitEl=document.getElementById('conquestLastHit');if(hitEl)hitEl.hidden=!conquest;
+    if(statsEl){statsEl.hidden=!conquest;if(conquest){const st=window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0);const label=`ATK ${Math.round(st.atk*100)}% · DEF ${Math.round(st.def*100)}% · CRIT ${Math.round(st.crit*100)}%`;if(statsEl.textContent!==label)statsEl.textContent=label;statsEl.title=`CRIT DMG ${Math.round(st.critDmg*100)}% · Recovery ${window.RPG_CONQUEST.displayed(st.recovery)} HP`;}}
+    if(operationEl){operationEl.hidden=!conquest;if(conquest){const c=window.RPG_CONQUEST.run;const label=`${c.position+1}/${c.encounters.length} · ENHANCEMENTS ${c.rewards.length}`;if(operationEl.textContent!==label)operationEl.textContent=label;operationEl.title=c.rewards.map(r=>`${r.label} ${r.display}`).join(' · ');}}
     const maraHpActive=operatorPassive?.rule?.id==='shield' && playerMaxHp>BASE_PLAYER_MAX_HP;
     const hpVisual=computePlayerHpSegments(playerHp,playerMaxHp,maraHpActive);
     if(maraHpActive!==uiCache.maraHpActive){
       uiCache.maraHpActive=maraHpActive;
       playerMeter.classList.toggle('operator-mara-hp',maraHpActive);
-      playerMeter.title=maraHpActive?'Mara: 10 base HP + 3 bonus HP':'';
+      playerMeter.title=maraHpActive?(conquest?'Mara: 100 base HP + 30 passive HP; Vitality adds extra HP':'Mara: 10 base HP + 3 bonus HP'):'';
     }
     if(hpVisual.baseWidth!==uiCache.playerFillW){
       uiCache.playerFillW=hpVisual.baseWidth;
@@ -4609,11 +4667,14 @@ function updateUI(){
       uiCache.nitrateShield=nitrateShield;
       for(let i=0;i<nitrateShieldSegments.length;i++){
         nitrateShieldSegments[i].classList.toggle('filled',i<nitrateShield);
+        const part=Math.max(0,Math.min(1,nitrateShield-i));
+        nitrateShieldSegments[i].style.background=conquest&&part>0&&part<1?`linear-gradient(90deg,#e6b747 ${part*100}%,rgba(88,66,37,.3) ${part*100}%)`:'';
       }
       if(nitrateShieldEl){
+        const caption=nitrateShieldEl.querySelector('.nitrate-shield-caption');if(caption)caption.textContent=conquest?`${showHp(nitrateShield)}/50`:"5 MAX";
         nitrateShieldEl.classList.toggle('awakened',nitrateShield>=3);
         nitrateShieldEl.classList.toggle('charged',nitrateShield>=5);
-        nitrateShieldEl.setAttribute('aria-label',`Wrath Shield ${nitrateShield} of 5`);
+        nitrateShieldEl.setAttribute('aria-label',`Wrath Shield ${showHp(nitrateShield)} of ${showHp(5)}`);nitrateShieldEl.title=`Shield ${showHp(nitrateShield)}/${showHp(5)}`;
       }
       wordLane?.classList?.toggle('operator-nitrate-ready',nitrateVisible&&nitrateShield>=5);
     }
@@ -4643,7 +4704,7 @@ function updateUI(){
       ? "Extra"
       : ((currentMode === "practice")
           ? "Practice"
-          : ((currentMode === "challenge") ? "Challenge" : currentMode === "shared" ? "All Grades" : currentMode === "story" ? "Story" : "Normal"));
+          : ((currentMode === "challenge") ? "Challenge" : currentMode === "shared" ? "All Grades" : currentMode === "story" ? (conquest?"Conquest":"Story") : "Normal"));
     if(scoreModeLabel && modeLabel !== uiCache.scoreMode){
       uiCache.scoreMode = modeLabel;
       scoreModeLabel.textContent = modeLabel;
@@ -6462,7 +6523,15 @@ if(state === "landed"){
     }
     // Combine manual and instant secondary damage into ONE boss hit. Otherwise
     // the first hit could finish the stage before the automatic hit is awarded.
-    const dmg = baseHitDamage+bonusDamage;
+    let dmg = baseHitDamage+bonusDamage;
+    if(currentMode==='story'&&window.RPG_CONQUEST?.run){
+      const original=best.chainHexOrigin?.answer||best.answer;
+      const hit=window.RPG_CONQUEST.manualDamage(original,baseHitDamage,bonusDamage,window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0));
+      dmg=hit.amount;
+      if(hit.crit){pushMsg('CRITICAL HIT',true);}
+      const indicator=document.getElementById('conquestLastHit');
+      if(indicator){indicator.textContent=`${hit.crit?'CRIT · ':''}${window.RPG_CONQUEST.displayed(dmg)} DMG`;indicator.classList.toggle('critical',hit.crit);}
+    }
     damageBoss(dmg);
     if(passiveEffect?.forceSpawn && gameState==='playing' && (bossHp>0||operatorStageWithoutBoss())){
       applyOperatorFieldEffect({type:'hound-force-spawn'});
@@ -6492,6 +6561,7 @@ if(state === "landed"){
     showBossDamagedBriefly();
 
     bossHp = Math.max(0, bossHp - amount);
+    if(currentMode==='story'&&window.RPG_CONQUEST?.run)bossHp=window.RPG_CONQUEST.q(bossHp);
 
     // Swap boss art when HP drops strictly below half (if stage.bossFile2 exists).
     // Disabled for Normal mode so boss sprites do not change at half HP.
@@ -6750,17 +6820,19 @@ function storyIncomingDamage(key,fallback){
       return;
     }
 
-    const scaled = Math.max(1, Math.round(amount));
+    const conquest=currentMode==='story'&&window.RPG_CONQUEST?.run;
+    const scaled = conquest?window.RPG_CONQUEST.incomingDamage(amount,window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0)):Math.max(1, Math.round(amount));
     // Wrath's Shield HP absorbs first; only the remainder reaches ordinary HP.
     // No player-damage stage hooks fire on a fully shielded hit.
     const shieldAbsorbed=operatorPassive?.nitrateAbsorbDamage?.(scaled)||0;
-    const hpDamage=scaled-shieldAbsorbed;
+    const hpDamage=conquest?window.RPG_CONQUEST.q(scaled-shieldAbsorbed):scaled-shieldAbsorbed;
     if(shieldAbsorbed)nitrateBlockVisual(shieldAbsorbed);
     if(hpDamage<=0){updateUI();return;}
     damageTakenThisStage += hpDamage;
     damageTakenThisRun += hpDamage;
     const previousHp=playerHp;
     playerHp = Math.max(0, playerHp - hpDamage);
+    if(conquest)playerHp=window.RPG_CONQUEST.q(playerHp);
     const passiveEffect=operatorPassive?.onPlayerDamage(previousHp,playerHp,stageElapsedSec(),wordsOnField);
     if(passiveEffect?.type==='slowdown')pushMsg('ALDEN · SECOND WIND (5s)',true);
     else if(passiveEffect?.type==='shield-advance')applyOperatorFieldEffect(passiveEffect);
@@ -7311,12 +7383,19 @@ function storyIncomingDamage(key,fallback){
     if(!stillStarting())return;
     continuesLeft = (currentMode === "practice") ? Infinity : (currentMode === "shared" ? 0 : MAX_CONTINUES);
     resetRunScoring();
+    const hitLabel=document.getElementById('conquestLastHit');if(hitLabel)hitLabel.textContent='';
     if(currentMode === "shared") resetSharedBuckets();
     prepareOperatorForRun();
     if(storySquad.enabled)document.body.classList.add('story-squad-layout');
     startRankedRun();
     playerMaxHp = BASE_PLAYER_MAX_HP + (operatorPassive?.getMaxHpBonus()||0);
     playerHp = playerMaxHp;
+    if(currentMode==='story'&&window.RPG_CONQUEST?.run){
+      const operation=window.RPG_CONQUEST.run;
+      playerMaxHp=window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0).hp;
+      playerHp=operation.hp===null?playerMaxHp:operation.hp;
+      if(runLocalOnly)operation.unranked=true;
+    }
     if(storySquad.enabled)renderStorySquad();
 
     showOverlay(false);
@@ -7508,6 +7587,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
     setInputsEnabled(false);
     hideBossBubble();
     pushMsg("✅ Boss defeated!");
+    if(currentMode==='story'&&window.RPG_CONQUEST?.run){void completeConquestEncounter().catch(error=>{console.error('Conquest transition:',error);window.RPG_STORY?.cancelConquestOverlay?.();resetGame(false);alert('Conquest could not continue. Please try again.');});return;}
 
     (async () => {
       const clearedStage = STAGES[stageIndex];
