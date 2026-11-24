@@ -3,7 +3,7 @@
  */
 // Firebase is loaded separately AFTER local chapters are displayed.
 // Static Firebase imports blocked the entire editor if the CDN was unavailable.
-import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs';
+import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=125.0';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
 import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs';
@@ -11,7 +11,8 @@ const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const DRAFT_KEY='rpg_story_teacher_draft_v87';
 const CHAPTER_1_BATTLE_THEME='story/audio/ch1-battle.webm';
 const STAGE_BASE=[{fallSpeedPxPerSec:41,spawnEveryMs:2950,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,hitDamage:1}];
-const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Boss damage per word',1,100,1]};
+const STAGE_FIELDS={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,1],hitDamage:['Damage dealt per correct word',1,100,1],missDamage:['Incorrect answer damage',1,10,1],overflowDamage:['Overflow damage per second',1,10,1],cometDamage:['Comet impact damage',1,10,1],shootingStarDamage:['Shooting Star damage',1,10,1]};
+const DAMAGE_DEFAULTS={hitDamage:1,missDamage:1,overflowDamage:1,cometDamage:2,shootingStarDamage:2};
 const stagedPhotos=new Map(),stagedAudio=new Map();let liveBalance={},liveRequestId=0;
 const REPO_KEY='rpg_story_github_repo_v90';
 let onlineImageNames=[],selectedLocalFiles=new Map(),onlineAudioNames=[];
@@ -91,6 +92,7 @@ function audioOptionsMarkup(selected=''){return `<option value="">${String(curre
 function catalog(){return (window.RPG_MECHANICS?.list()||[]).filter(m=>!m.modes?.length||m.modes.includes('story'));}
 function inherited(key,st=currentStage()){
  const base=STAGE_BASE[Math.min(4,Math.max(0,(Number(st?.battle?.template)||1)-1))]||STAGE_BASE[0];
+ if(key in DAMAGE_DEFAULTS&&key!=='hitDamage')return {value:DAMAGE_DEFAULTS[key],source:'built-in'};
  let value=base[key],source='built-in';
  for(const scope of [`mode:story`,`chapter:${currentChapter()?.id}`,`stage:story:${st?.id}`]){
   if(liveBalance[scope]?.values?.[key]!==undefined){value=liveBalance[scope].values[key];source=scope}
@@ -107,6 +109,8 @@ function fillLiveValues(){
   if(own===undefined||own===null){if(document.activeElement!==input)input.value=String(data.value)}
   label.textContent=`Current: ${own??data.value} · ${own!==undefined&&own!==null?'Story stage override':data.source}`;
  }
+ const panicInput=$('stageFields').querySelector('[data-damage-panic]');
+ if(panicInput&&document.activeElement!==panicInput)panicInput.value=String(panicDamageValue(st));
  const info=$('current-status');if(info)info.textContent=checkAuth()?'Current values loaded from Game Settings when this stage opened.':'Showing built-in defaults; sign in to read live Game Settings overrides.';
 }
 async function loadLiveValues(){
@@ -122,11 +126,26 @@ async function loadLiveValues(){
   fillLiveValues();
  }catch(error){if(token===liveRequestId)status('Could not read existing Game Settings: '+errorMessage(error),true)}
 }
+function panicDamageValue(st){
+ let value=1;
+ for(const scope of ['mode:story',`chapter:${currentChapter()?.id}`,`stage:story:${st.id}`]){
+  const v=liveBalance[scope]?.mechanics?.panic?.damage;if(typeof v==='number'&&v>=1&&v<=10)value=v;
+ }
+ return st.battle?.mechanics?.panic?.damage??value;
+}
+function damageSettings(st){
+ const fields=Object.keys(DAMAGE_DEFAULTS).map(key=>{
+  const [label,min,max,step]=STAGE_FIELDS[key],actual=st.battle?.[key]??inherited(key,st).value;
+  return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${esc(actual)}"><span class="muted" data-current-field="${key}">Current: ${esc(actual)}</span></div>`;
+ }).join('');
+ const panic=String(currentChapter()?.id)==='1'?`<div class="field"><label for="battle-panicDamage">Panic word damage</label><input id="battle-panicDamage" data-damage-panic="true" type="number" min="1" max="10" step="1" value="${esc(panicDamageValue(st))}"><span class="muted">When Panic is enabled in Chapter 1.</span></div>`:'';
+ return `<section class="section damage-settings"><div class="editheading"><h3>Damage Settings</h3></div><div class="grid">${fields}${panic}</div><div class="grid"><label><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Enable Comet (every 4th spawn, starting with the first)</label><label><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Enable Shooting Star (every 3rd spawn, 4-second countdown after landing)</label></div><div class="boss-sprite-actions"><button type="button" data-action="copy-damage">Copy damage to chapter</button><button type="button" data-action="reset-damage">Reset damage defaults</button></div><p class="muted">Damage only; copy/reset does not change HP, hazard toggles or other mechanics.</p></section>`;
+}
 function mechanicMarkup(st,onlyChapter1=false){
  const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic'].includes(m.id):!['sleepy','delirium','panic'].includes(m.id));if(!plugins.length)return '<p class="muted">No Story mechanics installed. New behaviors require a static code module; they appear here automatically once installed.</p>';
  return plugins.map(m=>{
   const settings=st.battle?.mechanics?.[m.id]||{};
-  const controls=m.fields.map(field=>{
+  const controls=m.fields.filter(field=>!(m.id==='panic'&&field.key==='damage')).map(field=>{
    const current=settings[field.key]??field.default??(field.type==='boolean'?false:field.min);
    const attr=`data-mechanic-id="${esc(m.id)}" data-mechanic-key="${esc(field.key)}"`;
    const input=field.type==='boolean'?`<select ${attr}><option value="true" ${current===true?'selected':''}>Enabled</option><option value="false" ${current!==true?'selected':''}>Disabled</option></select>`:`<input type="number" ${attr} min="${field.min}" max="${field.max}" step="${field.step||1}" value="${esc(current)}">`;
@@ -419,7 +438,7 @@ function renderFields(){
  const ch=currentChapter(),st=currentStage();
  if(!ch||!st){$('chapterFields').textContent='Select a chapter and stage.';$('stageFields').textContent='';$('slidesEditor').textContent='';return;}
  $('chapterFields').innerHTML=`<div class="editheading"><h2>Chapter ${esc(ch.id)}</h2><button class="danger" data-action="delete-chapter">Delete Chapter</button></div><div class="grid"><div class="field"><label for="ch-title">Chapter title</label><input id="ch-title" data-chapter-field="title" maxlength="80" value="${esc(ch.title)}"></div><div class="field"><label for="ch-subtitle">Subtitle</label><input id="ch-subtitle" data-chapter-field="subtitle" maxlength="150" value="${esc(ch.subtitle||'')}"></div></div>`;
- const numericFields=Object.entries(STAGE_FIELDS).map(([key,[label,min,max,step]])=>{
+ const numericFields=Object.entries(STAGE_FIELDS).filter(([key])=>!(key in DAMAGE_DEFAULTS)).map(([key,[label,min,max,step]])=>{
   const own=st.battle?.[key];const actual=own??inherited(key,st).value;
   return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${esc(actual)}"><span class="muted" data-current-field="${key}">Current: ${esc(actual)}</span></div>`;
  }).join('');
@@ -428,6 +447,7 @@ function renderFields(){
  <div class="field"><label for="st-desc">Stage description</label><textarea id="st-desc" data-stage-field="description" maxlength="600" rows="2">${esc(st.description||'')}</textarea></div>
  <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status">Current values shown below. Stage overrides are saved with this chapter.</p>
  <div class="grid"><div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Boss HP</label><input id="st-hp" type="number" min="1" max="999" step="1" data-battle-field="bossHp" value="${esc(st.battle?.bossHp??20)}"><span class="muted">Current: ${esc(st.battle?.bossHp??20)} HP</span></div>${numericFields}</div>
+ ${damageSettings(st)}
  ${artEditor(st,'bossSprite','Boss Sprite','boss','Boss art for this stage. Select the same existing image in any other stage to reuse it.')} 
  ${artEditor(st,'battleBackground','Battle Background','bg','Background shown behind the fight in this stage. Backgrounds can also be reused.')}
  ${musicEditor(st)} </div>
@@ -459,6 +479,11 @@ function handleEditorInput(event){const t=event.target,st=currentStage(),ch=curr
  else if(t.dataset.musicSelect){st.battle.bgmFile=t.value;dropUnusedAudio();markDirty();renderFields();return;}
  else if(t.dataset.assetSelect){st.battle[t.dataset.assetSelect]=t.value;dropUnusedPhotos();markDirty();renderFields();return;}
  else if(t.dataset.battleField){st.battle[t.dataset.battleField]=t.type==='checkbox'?t.checked:t.type==='number'?(t.value===''?null:Number(t.value)):t.value;if(t.dataset.battleField==='bgmFile'){dropUnusedAudio();const a=$('stage-bgm-preview');if(a){a.pause();if(safeStoryAudio(t.value))a.src=audioPreview(t.value);else if(!t.value&&String(currentChapter()?.id)==='1')a.src=audioPreview(CHAPTER_1_BATTLE_THEME);else a.removeAttribute('src');}}else if(['bossSprite','battleBackground'].includes(t.dataset.battleField)){dropUnusedPhotos();const img=$(t.dataset.battleField==='bossSprite'?'boss-preview':'bg-preview');if(img){if(safeStoryImage(t.value)){img.src=assetPreview(t.value)}else img.removeAttribute('src');}}else fillLiveValues();}
+ else if(t.dataset.damagePanic){
+  const value=t.value===''?null:Number(t.value);
+  st.battle.mechanics ||= {};st.battle.mechanics.panic ||= {};
+  if(value===null)delete st.battle.mechanics.panic.damage;else st.battle.mechanics.panic.damage=value;
+ }
  else if(t.dataset.mechanicId){
   const m=catalog().find(x=>x.id===t.dataset.mechanicId),field=m?.fields.find(x=>x.key===t.dataset.mechanicKey);if(!field)return;
   const value=field.type==='boolean'?t.value==='true':Number(t.value);
@@ -474,6 +499,29 @@ function handleEditorInput(event){const t=event.target,st=currentStage(),ch=curr
  if(t.dataset.chapterField==='title'||t.dataset.stageField==='title')renderNav();
 }
 function editorAction(event){const btn=event.target.closest('button[data-action]');if(!btn||busy)return;const a=btn.dataset.action,ch=currentChapter(),st=currentStage(),phase=btn.dataset.phase,i=Number(btn.dataset.i);
+ if(a==='copy-damage'||a==='reset-damage'){
+  if(!st||!ch)return;
+  const values={...DAMAGE_DEFAULTS};let panic=1;
+  if(a==='copy-damage'){
+   for(const key of Object.keys(values)){
+    const input=$('stageFields').querySelector(`[data-battle-field="${key}"]`),v=Number(input?.value);
+    const [,min,max]=STAGE_FIELDS[key];
+    if(!input||!input.value||!Number.isInteger(v)||v<min||v>max){status(`Enter whole damage values within the allowed range before copying.`,true);return;}
+    values[key]=v;
+   }
+   if(ch.id==='1'){
+    const input=$('stageFields').querySelector('[data-damage-panic]');panic=Number(input?.value);
+    if(!input?.value||!Number.isInteger(panic)||panic<1||panic>10){status('Panic damage must be 1–10.',true);return;}
+   }
+   if(!confirm(`Copy damage values from ${st.id} to all battle stages in Chapter ${ch.id}?`))return;
+  }
+  const targets=a==='copy-damage'?ch.stages.filter(x=>x.type!=='story-only'):[st];
+  for(const target of targets){
+   Object.assign(target.battle,values);
+   if(ch.id==='1'){target.battle.mechanics ||= {};target.battle.mechanics.panic ||= {};target.battle.mechanics.panic.damage=panic;}
+  }
+  markDirty();renderFields();status(a==='copy-damage'?`Damage copied to ${targets.length} battle stages. Save Draft or Publish.`:'Damage reset to defaults. Save Draft or Publish.',false,true);return;
+ }
  if(a==='copy-ch1-mechanics'){
   if(ch.id!=='1'||!st)return;
   if(!confirm(`Copy Sleepy, Delirium and Panic from ${st.id} to every other stage in Chapter 1? Existing settings for those three mechanics will be replaced.`))return;
@@ -670,7 +718,7 @@ async function importFile(event){const file=event.target.files?.[0];event.target
 async function boot(){
  $('chapterList').addEventListener('click',handleNavClick);$('stageList').addEventListener('click',handleNavClick);
  $('chapterFields').addEventListener('input',handleEditorInput);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
- $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('input[type=file][data-audio-file]'))void addMusic(event);else if(event.target.matches('select[data-asset-select],select[data-music-select],input[data-battle-field=bgmLoop]'))handleEditorInput(event);});
+ $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('input[type=file][data-audio-file]'))void addMusic(event);else if(event.target.matches('select[data-asset-select],select[data-music-select],input[data-battle-field=bgmLoop],input[data-battle-field=cometEnabled],input[data-battle-field=shootingStarEnabled]'))handleEditorInput(event);});
  $('slidesEditor').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-photo-phase]'))void addPhoto(event);});
  $('chapterFields').addEventListener('click',editorAction);$('stageFields').addEventListener('click',editorAction);$('slidesEditor').addEventListener('click',editorAction);
  $('addChapter').onclick=()=>{const id=nextChapterId(),ch={id,title:`Chapter ${id}`,subtitle:'',stages:[]};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();};

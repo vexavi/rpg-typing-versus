@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Story Editor — RPG Typing Versus</title>
 <link rel="stylesheet" href="teacher-nav.css?v=87"><script defer src="teacher-nav.js?v=87"></script>
-<link rel="stylesheet" href="story-editor.css?v=110.0">
+<link rel="stylesheet" href="story-editor.css?v=125.0">
 <script defer src="game-mechanics.js?v=88"></script><script defer src="custom-mechanics.js?v=112.0"></script>
 </head><body><main>
 <header class="header"><div><p class="eyebrow">RPG TYPING VERSUS / TEACHER</p><h1>Story Editor</h1></div><div class="actions"><button id="google" type="button">Sign in with Google</button><button id="signout" type="button" hidden>Sign out</button></div></header>
@@ -27,7 +27,7 @@
 window.RPG_STORY_EDITOR_BOOT={loaded:false};
 // A classic-script loader can report a module import failure rather than leaving
 // the page permanently stuck on "Loading chapters".
-import('./story-editor.js?v=113.0').catch(error=>{
+import('./story-editor.js?v=125.0').catch(error=>{
  const notice=document.getElementById('status');
  notice.className='error';
  notice.textContent='Story Editor script failed to start: '+String(error?.message||error).slice(0,240)+'. Check the uploaded docs/ files and refresh.';

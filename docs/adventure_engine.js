@@ -4830,6 +4830,7 @@ function challengeSpecialWord(id, defaultResult){
   return pct>=0?Math.random()*100<pct:defaultResult;
 }
 function challengeIsCometSpawn(){
+  if(currentMode==='story')return storyHazardEnabled('cometEnabled')&&challengeCometBaseForCount(spawnCountThisStage);
   if(!isChallengeCometStage()) return false;
   if(challengeAllWordsAlwaysBoth()) return challengeSpecialWord('comet',true);
   const n = spawnCountThisStage;
@@ -4848,6 +4849,7 @@ function challengeIsStarStruckSpawn(){
   return challengeSpecialWord('star_struck', defaultResult);
 }
 function challengeWouldBeCometForCount(nextCount){
+  if(currentMode==='story')return storyHazardEnabled('cometEnabled')&&challengeCometBaseForCount(nextCount);
   if(!isChallengeCometStage()) return false;
   if(challengeAllWordsAlwaysBoth()) return true;
   const n = Number(nextCount) || 0;
@@ -4889,7 +4891,7 @@ function challengeHandleCometLanding(w){
     if(w.ex5StarStruck) ex5CreateSunSpotAt(w.y);
   }catch(_){}
   try{ removeWord(w.id); }catch(_){}
-  try{ damagePlayer(2, "comet"); }catch(_){}
+  try{ damagePlayer(storyIncomingDamage("cometDamage",2), "comet"); }catch(_){}
 }
 
 // ---- Normal Stage 4 mechanics removed for clean base ----
@@ -4920,9 +4922,11 @@ function ex1IsFrozenInput(_norm){ return false; }
   function isExtraStage1(){
     return currentMode === "extra" && stageIndex === 0;
   }
+  function shootingStarActive(){return isExtraStage1()||storyHazardEnabled('shootingStarEnabled');}
+  function shootingStarClockMs(){return currentMode==='story'?stageElapsedSec()*1000:nowMs();}
   function ex1HighlightFrequency(){
     // Every 3 spawned words becomes a shooting star.
-    return isExtraStage1() ? 3 : 0;
+    return shootingStarActive() ? 3 : 0;
   }
   function ex1ShootingStarWindowSec(){
     // Below half boss HP: countdown becomes 3 seconds instead of 4.
@@ -4955,11 +4959,11 @@ function ex1IsFrozenInput(_norm){ return false; }
   }
   function ex1ArmPermafrost(wordObj){
     // Legacy function name kept for compatibility; now arms the shooting-star countdown.
-    if(!isExtraStage1() || !wordObj || !wordObj.ex1Highlighted) return;
+    if(!shootingStarActive() || !wordObj || !wordObj.ex1Highlighted) return;
     if(wordObj.ex1DeadlineMs) return;
     const sec = ex1ShootingStarWindowSec();
     wordObj.ex1CountdownMs = sec * 1000;
-    wordObj.ex1DeadlineMs = nowMs() + wordObj.ex1CountdownMs;
+    wordObj.ex1DeadlineMs = shootingStarClockMs() + wordObj.ex1CountdownMs;
     wordObj.ex1DamageArmed = true;
     try{ wordObj.el && wordObj.el.classList.add("ex1StarArmed"); }catch(_){}
     ex1SetShootingStarGlow(wordObj, 0);
@@ -4967,8 +4971,8 @@ function ex1IsFrozenInput(_norm){ return false; }
   }
   function ex1UpdatePermafrost(){
     // Legacy function name kept for compatibility; now updates shooting-star countdowns.
-    if(!isExtraStage1()) return;
-    const t = nowMs();
+    if(!shootingStarActive()) return;
+    const t = shootingStarClockMs();
     for(const w of [...wordsOnField]){
       if(!w || w.state !== "landed") continue;
       if(!w.ex1Highlighted || !w.ex1DamageArmed || !w.ex1DeadlineMs) continue;
@@ -4981,7 +4985,7 @@ function ex1IsFrozenInput(_norm){ return false; }
       if(remMs <= 0){
         w.ex1DamageArmed = false;
         ex1ClearShootingStarGlow(w);
-        damagePlayer(2, "shooting star");
+        damagePlayer(storyIncomingDamage("shootingStarDamage",2), "shooting star");
         removeWord(w.id);
       }else{
         const rem = Math.max(1, Math.ceil(remMs / 1000));
@@ -5970,7 +5974,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     if(countSpawn && state === "falling") spawnCountThisStage++;
     // Extra Stage 1: every 3rd spawned word becomes a shooting star.
     const ex1Freq = ex1HighlightFrequency();
-    const ex1Highlighted = (!operatorHexSummoned && state === "falling" && ex1Freq > 0 && (spawnCountThisStage % ex1Freq === 0));
+    const ex1Highlighted = (!operatorHexSummoned && state === "falling" && ex1Freq > 0 && (spawnCountThisStage % ex1Freq === 0) && (currentMode!=='story'||(countSpawn&&!willBeChallengeComet)));
 
     // Old EX1 variable-speed/ghost phase mechanics are removed.
     const ex1FallMult = 1;
@@ -6138,7 +6142,7 @@ if(state === "landed"){
     if(!operatorHexSummoned&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
     // Panic consumes a normal spawn; never generate extra words or interfere with operator marks.
-    if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&currentMode==='story')window.RPG_CH1_SPECIAL?.markSpawn(obj,stageElapsedSec(),wordsOnField);
+    if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&currentMode==='story'&&!obj.challengeComet&&!obj.ex1Highlighted)window.RPG_CH1_SPECIAL?.markSpawn(obj,stageElapsedSec(),wordsOnField);
     return obj;
   }
 
@@ -6686,7 +6690,14 @@ function nitrateReleaseVisual(){
     nitrateShieldEl.classList.add('nitrate-block-impact');
     pushMsg(`NITRATE · SHIELD BLOCKED ${blocked} DAMAGE`,true);
   }
-function damagePlayer(amount, reason){
+// Story-only incoming damage, independent of operator damage and other modes.
+function storyIncomingDamage(key,fallback){
+    if(currentMode!=='story')return fallback;
+    const value=storySelectedStage?.battle?.[key];
+    return Number.isInteger(value)&&value>=1&&value<=10?value:fallback;
+  }
+  function storyHazardEnabled(key){return currentMode==='story'&&storySelectedStage?.battle?.[key]===true;}
+  function damagePlayer(amount, reason){
     if(amount <= 0) return;
     if(storySquad.enabled&&(gameState==='squad-deploy'||(gameState==='playing'&&stageElapsedSec()<storySquadGraceUntil)))return;
     if(operatorPassive?.isInvulnerable(stageElapsedSec())&&gameState==='playing'){
@@ -7621,7 +7632,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
       mechanicEvent('onMistake',null,{input:raw});
       mistakes++;
       pushMsg(`MISS: ${raw || "(blank)"}`);
-      if(!operatorOnMistake())damagePlayer(1, "input miss");
+      if(!operatorOnMistake())damagePlayer(storyIncomingDamage("missDamage",1), "input miss");
       updateUI();
     }
 
@@ -7836,7 +7847,7 @@ if(gameState === "paused"){
           w.state = "landed";
           w.el.classList.add("landed");
           mechanicEvent('onLand',w);
-          if(isExtraStage1() && w.ex1Highlighted){
+          if(shootingStarActive() && w.ex1Highlighted){
             ex1ArmPermafrost(w);
           }
           if(isExtraStage2() && ex2Phase >= 3){
@@ -7879,7 +7890,7 @@ if(gameState === "paused"){
         if(overflowAcc >= 1){
           const ticks = Math.floor(overflowAcc);
           overflowAcc -= ticks;
-          damagePlayer(ticks, "overflow");
+          damagePlayer(ticks*storyIncomingDamage("overflowDamage",1), "overflow");
         }
       }else{
         if(wasOverflowing){

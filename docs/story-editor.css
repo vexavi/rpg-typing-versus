@@ -22,3 +22,6 @@
 
 /* Keep chapter navigation and editing above auxiliary media tools. */
 .layout{margin:0 0 14px}
+
+/* v125: compact damage controls inside Battle Settings. */
+.damage-settings .grid + .grid{margin-top:10px}.damage-settings .grid label:has(input[type=checkbox]){display:flex;align-items:center;gap:7px}.damage-settings input[type=checkbox]{width:auto;flex:none}.damage-settings .boss-sprite-actions{margin-top:10px}

@@ -35,12 +35,18 @@ export function cleanStory(raw){
     if(typeof st.battle.bgmLoop!=='boolean')throw Error(`Stage ${id}: BGM loop must be true or false.`);
     battle.bgmLoop=st.battle.bgmLoop;
    }
-   const numericRanges={fallSpeedPxPerSec:[5,250],spawnEveryMs:[180,15000],hitDamage:[1,100]};
+   const numericRanges={fallSpeedPxPerSec:[5,250],spawnEveryMs:[180,15000],hitDamage:[1,100],missDamage:[1,10],overflowDamage:[1,10],cometDamage:[1,10],shootingStarDamage:[1,10]};
    for(const [key,[min,max]] of Object.entries(numericRanges)){
     const rawValue=st.battle?.[key];
     if(rawValue===undefined||rawValue===null)continue;
     if(typeof rawValue!=='number'||!Number.isFinite(rawValue)||rawValue<min||rawValue>max)throw Error(`Stage ${id}: invalid ${key} (${min}–${max}).`);
+    if(['missDamage','overflowDamage','cometDamage','shootingStarDamage'].includes(key)&&!Number.isInteger(rawValue))throw Error(`Stage ${id}: invalid ${key} (whole HP only).`);
     battle[key]=rawValue;
+   }
+   for(const key of ['cometEnabled','shootingStarEnabled']){
+    if(st.battle?.[key]===undefined)continue;
+    if(typeof st.battle[key]!=='boolean')throw Error(`Stage ${id}: ${key} must be true or false.`);
+    battle[key]=st.battle[key];
    }
    const rawMechanics=st.battle?.mechanics||{};
    if(typeof rawMechanics!=='object'||Array.isArray(rawMechanics)||rawMechanics===null||Object.keys(rawMechanics).length>24)throw Error(`Stage ${id}: invalid word mechanics.`);
