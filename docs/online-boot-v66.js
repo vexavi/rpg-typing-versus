@@ -88,7 +88,7 @@ let teacherAssignedGrade=null;
 let readyPromise=null;
 // Keep the app shell available when the browser has previously visited this site.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./offline-sw.js?v=126',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
+  navigator.serviceWorker.register('./offline-sw.js?v=127',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
 }
 function installOfflineBridge(){
  window.RPG_V66_DISCONNECTED=true;
@@ -134,7 +134,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=86.31');
+   await import('./online-spark.js?v=127.0');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
@@ -157,8 +157,8 @@ async function load(identity,progress,{offline=false}={}){
  for(const [k,val] of [['bossTyping_hiScore_normal_v1',progress?.best_normal],['bossTyping_hiScore_extra_v1',progress?.best_extra]])localStorage.setItem(key(k),String(Number(val)||0));
  for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear],['bossTyping_extraCleared_v1',progress?.extra_clear]])localStorage.setItem(key(k),val?'1':'0');
  window.RPG_PERF?.begin('Game scripts');
- for(const file of ['story-mode.js','adventure_rewards.js','guild-coins.js','adventure_engine.js'])await new Promise((resolve,reject)=>{
-   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'126.0':file==='story-mode.js'?'126.0':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
+ for(const file of ['story-mode.js','adventure_rewards.js','guild-coins.js','squad-tutorial.js','adventure_engine.js'])await new Promise((resolve,reject)=>{
+   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'127.0':file==='story-mode.js'?'127.0':file==='squad-tutorial.js'?'127.0':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
  });
  window.RPG_PERF?.end('Game scripts');
  gate.remove();

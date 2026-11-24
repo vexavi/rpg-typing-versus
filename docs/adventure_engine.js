@@ -3529,6 +3529,7 @@ async function debugJumpTo(mode, idx){
   // Original recruitment art and boss sprites remain untouched.
   const storyDeploymentArtUrl=id=>window.RPG_MEDIA?.url?.(`assets/deployment/${id}.webp`)||`assets/deployment/${id}.webp`;
   function clearStorySquadSwitch(){
+    window.RPG_SQUAD_TUTORIAL?.cancelKnockout();
     if(storySquadSwitchTimer!==null){clearTimeout(storySquadSwitchTimer);storySquadSwitchTimer=null;}
     storySquadDeploy?.classList.remove('show');
     storySquadGraceUntil=0;
@@ -3678,6 +3679,7 @@ async function debugJumpTo(mode, idx){
       const reset=make('button','storySquadAction secondary','RESET');reset.type='button';
       footer.append(message,reset,cancel);
       wrap.append(stage,side,footer);selectMount.appendChild(wrap);
+      const guide=window.RPG_SQUAD_TUTORIAL?.createPicker({screen:selectScreen,mount:selectMount,roster:side,ready,footer});
 
       function renderRoster(){
         filterButtons.forEach(({btn,value})=>{btn.classList.toggle('active',value===rarityFilter);btn.setAttribute('aria-pressed',String(value===rarityFilter));});
@@ -3745,11 +3747,13 @@ async function debugJumpTo(mode, idx){
         countText.textContent=`${lockedCount} / 3 LOCKED IN`;
         ready.disabled=!selected[lockedCount];
         renderRoster();
+        guide?.update(lockedCount,!!selected[lockedCount]);
       }
       searchBox.addEventListener('input',()=>{search=searchBox.value;renderRoster();});
       const finish=result=>{
         if(done)return;
         done=true;
+        if(result)guide?.finish();else guide?.close();
         window.removeEventListener('keydown',keys);
         selectMount.replaceChildren();
         selectScreen.hidden=true;
@@ -3788,7 +3792,7 @@ async function debugJumpTo(mode, idx){
     if(next>=storySquad.ids.length){resetOperatorForStage();clearOutgoingSquadEffects();renderStorySquad();updateUI();return false;}
     storySquad.index=next;
     gameState='squad-deploy';setInputsEnabled(false);answerInput.value='';
-    pauseStageClock();setSleepyBgmGain(1);
+    pauseStageClock();window.RPG_CH1_SPECIAL?.suspend?.();setSleepyBgmGain(1);
     resetOperatorForStage(); // Retire the outgoing rules engine and its temporary hexes.
     clearOutgoingSquadEffects();
     renderStorySquad();updateUI();
@@ -3800,15 +3804,22 @@ async function debugJumpTo(mode, idx){
       operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode)||null;
       playerMaxHp=BASE_PLAYER_MAX_HP+(operatorPassive?.getMaxHpBonus?.()||0);
       playerHp=playerMaxHp;
-      // Grant a short grace window, without resetting or deleting the falling words.
-      resumeStageClock();storySquadGraceUntil=stageElapsedSec()+2;
-      window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
-      const stageEffect=operatorPassive?.onStageStart?.(playerHp,stageElapsedSec(),wordsOnField);
-      if(stageEffect?.type==='fletcher-last-stand')renderFletcherStatus(stageElapsedSec());
-      gameState='playing';setInputsEnabled(true);renderStorySquad();renderProfileHeader();
+      // Show the fresh operator and HP before the optional first-KO lesson.
+      renderStorySquad();renderProfileHeader();
       storySquadDeploy?.classList.remove('show');
       uiCache.playerHpStr=null;uiCache.nitrateVisible=null;uiCache.nitrateShield=null;
-      updateUI();answerInput.focus();
+      updateUI();
+      const resumeReplacement=()=>{
+        if(!storySquad.enabled||gameState!=='squad-deploy'||currentMode!=='story')return;
+        // Grant a short grace window, without resetting or deleting the falling words.
+        resumeStageClock();storySquadGraceUntil=stageElapsedSec()+2;
+        window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
+        const stageEffect=operatorPassive?.onStageStart?.(playerHp,stageElapsedSec(),wordsOnField);
+        if(stageEffect?.type==='fletcher-last-stand')renderFletcherStatus(stageElapsedSec());
+        gameState='playing';setInputsEnabled(true);renderStorySquad();renderProfileHeader();
+        updateUI();answerInput.focus();
+      };
+      if(!window.RPG_SQUAD_TUTORIAL?.showKnockout(resumeReplacement))resumeReplacement();
     },1600);
     return true;
   }

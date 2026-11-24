@@ -319,6 +319,16 @@ async function tutorialProgress(b={}){
  const next=step===5?{version:1,step:5,updatedAt:serverTimestamp()}:{version:0,step,updatedAt:serverTimestamp()};
  await updateDoc(p.playerRef,{tutorial:next});return {ok:true,step,complete:step===5};
 }
+// v127: optional, independent Story help flags. Preserve the existing onboarding map.
+async function squadTutorialProgress(b={}){
+ const kind=b.guide;
+ if(!['squadAssembly','squadKnockout'].includes(kind))err('Invalid squad guide.');
+ const p=await currentPlayer(b);
+ if(p.player.tutorial?.[kind]===true)return {ok:true,alreadySaved:true};
+ if(p.player.tutorial){await updateDoc(p.playerRef,{[`tutorial.${kind}`]:true});}
+ else{await updateDoc(p.playerRef,{[`tutorial.${kind}`]:true,'tutorial.version':1,'tutorial.step':5});}
+ return {ok:true};
+}
 async function recruitmentState(b={}){
  const p=await currentPlayer(b),r=p.player.recruitment||{},date=getJstDate();
  let eligible=false;
@@ -428,6 +438,7 @@ async function call(path,body={}){
  if(path==='/api/profile')return profile(body);
  if(path==='/api/tutorial/state')return tutorialState(body);
  if(path==='/api/tutorial/progress')return tutorialProgress(body);
+ if(path==='/api/tutorial/squad')return squadTutorialProgress(body);
  if(path==='/api/recruitment/state')return recruitmentState(body);
  if(path==='/api/recruitment/tutorial-draw')return recruitmentTutorialDraw(body);
  if(path==='/api/recruitment/pull')return recruitmentPull(body);
