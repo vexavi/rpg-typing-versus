@@ -7,7 +7,9 @@
  const STORAGE='rpgTeacherBalance_v869';
  const saved=(()=>{try{const x=JSON.parse(localStorage.getItem(STORAGE)||'null');return x?.v===1&&Number.isFinite(x.updatedAt)&&x.updatedAt<=Date.now()+60000&&Date.now()-x.updatedAt<30*86400000&&Array.isArray(x.items)?x.items:[]}catch{return []}})();
  // Firestore data is never restored as proof that a run can be ranked.
- const cachedScopes=new Set();
+ const cachedScopes=new Set();let persistTimer=null;
+ function schedulePersist(){if(persistTimer!==null)return;persistTimer=setTimeout(()=>{persistTimer=null;persist();},100);}
+ window.addEventListener?.('pagehide',()=>{if(persistTimer!==null){clearTimeout(persistTimer);persistTimer=null;persist();}});
  function persist(){
   try{localStorage.setItem(STORAGE,JSON.stringify({v:1,updatedAt:Date.now(),items:[...cache.entries()].slice(0,150)}))}catch(_){}
  }
@@ -45,7 +47,7 @@
  function apply(scope,data,source='local'){
   if(!/^((mode:(normal|extra|story|practice|challenge))|(chapter:[a-zA-Z0-9_-]+)|(stage:(normal|extra|story|practice|challenge):[a-zA-Z0-9_-]+))$/.test(scope))return;
   cache.set(scope,clean(data||{}));effective=null;
-  if(source==='server'){cachedScopes.add(scope);persist();}
+  if(source==='server'){cachedScopes.add(scope);schedulePersist();}
   if(scopeList(active).includes(scope))window.dispatchEvent(new Event('rpg-balance-update'));
  }
  function merged(){

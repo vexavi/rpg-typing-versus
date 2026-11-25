@@ -86,10 +86,7 @@ let code=qrCode||(!switchPlayer&&resume?clean(cached?.card_code):'');
 let busy=false;
 let teacherAssignedGrade=null;
 let readyPromise=null;
-// Keep the app shell available when the browser has previously visited this site.
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./offline-sw.js?v=136',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
-}
+let scriptsStarted=false;
 function installOfflineBridge(){
  window.RPG_V66_DISCONNECTED=true;
  window.RPG_OFFLINE_SESSION=true;
@@ -134,13 +131,13 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=133.0');
+   await import('./online-spark.js?v=137.0');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
  })();}
  // Prevent a broken RTDB handshake from blocking an already-verified card indefinitely.
- return Promise.race([readyPromise,new Promise((_,reject)=>setTimeout(()=>reject(Error('Firebase connection timeout')),9000))]);
+ let timer;try{return await Promise.race([readyPromise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Firebase connection timeout')),9000);})]);}finally{clearTimeout(timer);}
 }
 async function load(identity,progress,{offline=false}={}){
  window.ADVENTURE_PLAYER=identity;
@@ -157,23 +154,24 @@ async function load(identity,progress,{offline=false}={}){
  for(const [k,val] of [['bossTyping_hiScore_normal_v1',progress?.best_normal],['bossTyping_hiScore_extra_v1',progress?.best_extra]])localStorage.setItem(key(k),String(Number(val)||0));
  for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear],['bossTyping_extraCleared_v1',progress?.extra_clear]])localStorage.setItem(key(k),val?'1':'0');
  window.RPG_PERF?.begin('Game scripts');
- for(const file of ['conquest-map.js','conquest-core.js','story-mode.js','adventure_rewards.js','guild-coins.js','squad-tutorial.js','adventure_engine.js'])await new Promise((resolve,reject)=>{
-   const s=document.createElement('script');s.src=file+'?v='+(file==='adventure_engine.js'?'136.0':file==='conquest-map.js'?'135.0':file==='story-mode.js'?'136.0':file==='conquest-core.js'?'136.0':file==='squad-tutorial.js'?'131.0':'81');s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded'));document.body.appendChild(s);
+ if(scriptsStarted)throw Error('Game startup interrupted. Reload to retry.');scriptsStarted=true;
+ // Preload all required files together, then execute in dependency order. Preloads
+ // have the exact same URLs as the injected scripts and use the HTTP cache.
+ const scripts=['conquest-map.js','conquest-core.js','story-mode.js','adventure_rewards.js','guild-coins.js','squad-tutorial.js','adventure_engine.js'].map(file=>({file,url:file+'?v='+(file==='adventure_engine.js'?'137.0':file==='conquest-map.js'?'135.0':file==='story-mode.js'?'137.0':file==='conquest-core.js'?'136.0':file==='squad-tutorial.js'?'131.0':'81')}));
+ for(const {url} of scripts){if(!Array.from(document.querySelectorAll('link[rel=preload]')).some(link=>link.href===new URL(url,document.baseURI).href)){const link=document.createElement('link');link.rel='preload';link.as='script';link.href=url;document.head.append(link);}}
+ for(const {file,url} of scripts)await new Promise((resolve,reject)=>{
+   const s=document.createElement('script');s.src=url;s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded. Reload to retry.'));document.body.appendChild(s);
  });
  window.RPG_PERF?.end('Game scripts');
  gate.remove();
 }
 async function finish(card){
  status('Loading your saved progress…');
- const vocabPromise=Promise.race([window.RPG_V66.call('/api/vocab/load',{card_code:code,mode:'normal'}),
-   new Promise((_,reject)=>setTimeout(()=>reject(Error('Vocabulary prefetch timed out')),7500))]).catch(e=>{console.info('Vocabulary will refresh on first play:',e?.message||e);return null});
- const [progress,profile,vocab]=await Promise.all([
-   window.RPG_V66.call('/api/adventure/progress',{card_code:code,action:'load'}),
-   window.RPG_V66.call('/api/profile',{card_code:code}).catch(()=>null),
-   vocabPromise
- ]);
+ const {progress,profile,vocab}=await window.RPG_V66.call('/api/adventure/bootstrap',{card_code:code});
+ // A failed profile read must not bypass onboarding or overwrite the local identity.
+ if(!progress?.ok||!profile?.ok||profile.public_id!==card.public_id)throw Error('Player profile unavailable. Retry sign-in.');
  const selectedCharacter=String(profile?.selected_character||profile?.cosmetics?.featured||'mc');
- const identity={public_id:card.public_id,name:card.name,grade:card.grade||null,card_code:code,online:true,cloud:true,selected_character:selectedCharacter,cosmetics:profile?.cosmetics||null,recruitment:profile?.recruitment||null,tutorial:profile?.tutorial||{version:1,step:5}};
+ const identity={public_id:card.public_id,name:card.name,grade:card.grade||null,card_code:code,online:true,cloud:true,selected_character:selectedCharacter,cosmetics:profile?.cosmetics||null,recruitment:profile?.recruitment||null,tutorial:profile.tutorial};
  sessionStorage.setItem('rpgAdventureContext',JSON.stringify(identity));
  // A verified online visit saves ONLY read-only progress identity + the class word list.
  // Never persist the bearer code in localStorage or any queued cloud write.
@@ -266,7 +264,7 @@ async function registerCard(e){
 }
 $('ag-register').addEventListener('submit',registerCard);
 $('ag-manual').addEventListener('submit',e=>{e.preventDefault();if(busy)return;code=clean($('ag-code').value);void resolveCard();});
-$('ag-retry').addEventListener('click',()=>{readyPromise=null;if(switchPlayer)void beginSwitchPlayer();else if(code)void resolveCard();else void resumeRememberedCard();});
+$('ag-retry').addEventListener('click',()=>{if(scriptsStarted||(window.RPG_V68_CONNECTION?.blocked&&!window.RPG_OFFLINE_SESSION)){location.reload();return;}readyPromise=null;if(switchPlayer)void beginSwitchPlayer();else if(code)void resolveCard();else void resumeRememberedCard();});
 // Switch Player is available on the already-logged-in start screen.
 document.getElementById('introSwitchPlayer')?.addEventListener('click',()=>{
  window.location.assign('adventure.html?switch=1');

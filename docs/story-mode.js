@@ -84,7 +84,7 @@ function isUnlocked(id){
 function show(html){box.hidden=false;view='active';box.innerHTML=`<div class="story-screen">${html}</div>`;}
 function hide(){clearTimeout(autoTimer);autoTimer=0;box.hidden=true;box.innerHTML='';view='closed'}
 function leaveStoryToModes(){
- hide();
+ mapOpenRequest++;hide();
  // A map can be opened after the underlying game overlay was hidden by
  // Squad Assembly or a previous story battle. Restore navigation explicitly.
  if(typeof window.RPG_STORY_EXIT_TO_MODES==='function')window.RPG_STORY_EXIT_TO_MODES();
@@ -164,9 +164,15 @@ function openChapter(chIndex,preferred=null,focusTarget=''){
  if(focusTarget==='stage')target?.focus({preventScroll:true});
  else if(focusTarget==='chapter')box.querySelector('.story-chapter-tab.active')?.focus({preventScroll:true});
 }
-async function openMap(fn,preferred){if(typeof fn==='function')startFn=fn;try{await loadManifest(true);await loadProgress();openChapter(activeChapter,preferred)}catch(e){errorScreen(e.message||'Story unavailable')}}
+let mapOpenRequest=0,mapLoading=null;
+async function openMap(fn,preferred){
+ const request=++mapOpenRequest;if(typeof fn==='function')startFn=fn;
+ show('<div class="story-modal"><h1>CONQUEST</h1><p>LOADING…</p><button id="st-loading-back" type="button">BACK</button></div>');view='map-loading';box.querySelector('#st-loading-back').onclick=leaveStoryToModes;
+ if(!mapLoading){const pending=Promise.allSettled([loadManifest(true),loadProgress()]).then(results=>{const failure=results.find(result=>result.status==='rejected');if(failure)throw failure.reason;});mapLoading=pending;pending.then(()=>{if(mapLoading===pending)mapLoading=null;},()=>{if(mapLoading===pending)mapLoading=null;});}
+ try{await mapLoading;if(request===mapOpenRequest)openChapter(activeChapter,preferred)}catch(e){if(request===mapOpenRequest)errorScreen(e.message||'Story unavailable')}
+}
 document.addEventListener('keydown',e=>{
- if(e.key==='Escape' && !box.hidden && view==='map'){
+ if(e.key==='Escape' && !box.hidden && (view==='map'||view==='map-loading')){
   e.preventDefault();leaveStoryToModes();
  }
 });

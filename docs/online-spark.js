@@ -66,7 +66,7 @@ async function openCard(b){
  return {ok:true,public_id:c.publicId,name:c.username,grade:c.grade||null,card_code:code,online:true,cloud:true};
 }
 async function currentConfig(mode){const data=await read('systemConfig','current');if(!data)err('Firebase setup incomplete. Teacher: run SETUP SPARK first.');return modeRevision(data,mode);}
-async function vocab(b){const p=await currentPlayer(b);const shared=b.mode==='shared';const g=shared?'all':p.player.grade;if(!g)err('Teacher must assign your class before playing.');
+async function vocab(b,verifiedPlayer=null){const p=verifiedPlayer||await currentPlayer(b);const shared=b.mode==='shared';const g=shared?'all':p.player.grade;if(!g)err('Teacher must assign your class before playing.');
  const pool=shared?'all':poolOf(g),data=await read('vocabPools',pool);if(!data||!Array.isArray(data.words))err('Vocabulary pool not installed. Teacher: run Spark setup.');
  return {ok:true,pool,grade:shared?'all':g[0],rank_grade:g,revision:Number(data.revision)||1,group:pool==='b'?'b':'standard',words:data.words.filter(x=>x.active!==false),ruleset:shared?`v65-shared-r${data.revision}-fixed-120s`:null};
 }
@@ -142,11 +142,9 @@ async function setClass(b){
  const cards=await getDocsFromServer(query(collection(db,'cloudCards'),where('publicId','==',publicId),limit(2)));
  if(cards.docs.length!==1||cards.docs[0].data().deleted)err('Card not found.');
  const cardDoc=cards.docs[0].ref,pRef=ref('players',publicId);
- const [player,oldScores]=await Promise.all([
-  getDocFromServer(pRef),
-  getDocsFromServer(query(collection(db,'rankEntries'),where('public_id','==',publicId),limit(100)))
- ]);
+ const player=await getDocFromServer(pRef);
  if(cards.docs[0].data().grade===grade&&(!player.exists()||player.data().grade===grade))return {ok:true,grade,unchanged:true};
+ const oldScores=await getDocsFromServer(query(collection(db,'rankEntries'),where('public_id','==',publicId),limit(100)));
  // Atomically update both grade locations and remove outdated grade-specific rankings.
  const batch=writeBatch(db);
  batch.update(cardDoc,{grade});
@@ -163,7 +161,7 @@ async function rankIcon(b){const p=await currentPlayer(b);if(b.action==='set'){c
 let currentRun=null;
 async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','extra','challenge','shared'].includes(mode))err('Invalid ranking mode.');
  const grade=mode==='shared'?'all':p.player.grade;if(!grade)err('Assign class before playing.');
- const v=await read('vocabPools',mode==='shared'?'all':poolOf(grade)),configVersion=await currentConfig(mode);if(!v)err('Vocabulary is missing.');
+ const [v,configVersion]=await Promise.all([read('vocabPools',mode==='shared'?'all':poolOf(grade)),currentConfig(mode)]);if(!v)err('Vocabulary is missing.');
  const revision=Number(v.revision)||1,token=crypto.randomUUID();
  const record={uid:uid(),publicId:p.id,mode,grade,pool:mode==='shared'?'all':poolOf(grade),vocabRevision:revision,configRevision:configVersion,token,status:'active',startedAt:serverTimestamp()};
  await setDoc(ref('sparkRuns',uid()),record);currentRun={...record,startedMs:Date.now()};
@@ -175,8 +173,8 @@ async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',g
  const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([read('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
  const revision=Number(v.revision)||1,rule=`spark-${mode}-${grade}-v${revision}-c${c}`;
  const d=await getDocsFromServer(rankQuery(mode,grade,revision,c,Math.min(20,Number(b.limit)||20)));
- const entries=d.docs.map((s,i)=>({...s.data(),rank:i+1}));const mine=entries.find(x=>x.public_id===p.id)||{public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',rank:null,score:0};
- return {ok:true,mode,grade,assigned_grade:p.player.grade,entries,current:mine,total:entries.length,ruleset:rule,expected_ruleset:rule,source:'firebase-spark-unverified',completed_only:true,vocab_revision:revision};
+ const rows=d.docs.map(s=>s.data());const entries=rows.map((row,i)=>({...row,rank:i&&row.score===rows[i-1].score?rows.findIndex(x=>x.score===row.score)+1:i+1}));const mine=entries.find(x=>x.public_id===p.id)||{public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',rank:null,score:0};
+ return {ok:true,mode,grade,assigned_grade:p.player.grade,entries,current:mine,total:entries.length,ruleset:rule,expected_ruleset:rule,source:'firebase-spark-unverified',completed_only:true,vocab_revision:revision,config_revision:c};
 }
 async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Number.isInteger(b.score)||b.score<=0||b.score>2000000)err('Invalid score.');
  const snap=await getDocFromServer(ref('sparkRuns',uid()));const run=snap.data();if(!run||run.status!=='active'||run.token!==b.run_token)err('Run missing or already completed.');
@@ -302,10 +300,19 @@ async function auraChange(b){
   return {ok:true,shards:shards-cost,auras:{...auras,[id]:after},level:after.level,equipped:after.equipped,spent:cost};
  });return result;
 }
-async function profile(b){const p=await currentPlayer(b),d=p.player;const owned=Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id));const safe=sanitizedCosmetics(d);
+async function profile(b,verifiedPlayer=null){const p=verifiedPlayer||await currentPlayer(b),d=p.player;const owned=Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id));const safe=sanitizedCosmetics(d);
  return {ok:true,public_id:p.id,name:d.username,selected_character:safe.featured,cosmetics:safe,adventure:d.adventure||{},tournament:d.tournament||{},collection:{owned:['mc',...owned],available:['mc',...owned]},recruitment:{coins:Math.max(0,Math.trunc(Number(d.recruitment?.coins)||0)),permits:0,pity_six:Math.max(0,Number(d.recruitment?.pity_six)||0),pity_five:Math.max(0,Number(d.recruitment?.pity_five)||0),featured_guarantee:!!d.recruitment?.featured_guarantee,status:'classroom-browser-reported',daily_claimed:d.recruitment?.lastDailyDate===getJstDate(),shards:Math.max(0,Math.trunc(Number(d.recruitment?.shards)||0)),auras:d.recruitment?.auras||{},owned:Object.fromEntries(Object.entries(d.recruitment?.owned||{}).filter(([id])=>!RETIRED_OPERATORS.has(id)))},tutorial:d.tutorial||{version:1,step:5}};}
 
 
+// Share one freshly verified account snapshot only within this login request.
+async function bootstrapPlayer(b){
+ const player=await currentPlayer(b),details=await profile(b,player);
+ let timer;
+ try{
+  const words=await Promise.race([vocab({mode:'normal'},player),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),7500);})]).catch(()=>null);
+  return {ok:true,profile:details,progress:{ok:true,...details.adventure},vocab:words};
+ }finally{clearTimeout(timer);}
+}
 // Each new profile has tutorial.version=0. Profiles created in older builds do not,
 // and are treated as previously onboarded, avoiding forced replay for existing students.
 async function tutorialState(b={}){
@@ -425,9 +432,14 @@ async function profileCustom(b){
  return {ok:true,cosmetics:c,selected_character:c.featured};
 }
 
-async function adventureProgress(b){const p=await currentPlayer(b),a=p.player.adventure||{};if(b.action==='load')return {ok:true,...a};if(b.action!=='save')err('Invalid action.');
+async function adventureProgress(b){const p=await currentPlayer(b);if(b.action==='load')return {ok:true,...(p.player.adventure||{})};if(b.action!=='save')err('Invalid action.');
+ return runTransaction(db,async tx=>{
+ const snapshot=await tx.get(p.playerRef);if(!snapshot.exists()||snapshot.data().disabled)err('Player no longer active.');
+ const a=snapshot.data().adventure||{};
  const up={xp:Math.max(a.xp||0,Number(b.xp)||0),best_normal:Math.max(a.best_normal||0,Number(b.best_normal)||0),best_extra:Math.max(a.best_extra||0,Number(b.best_extra)||0),normal_clear:!!(a.normal_clear||b.normal_clear),extra_clear:!!(a.extra_clear||b.extra_clear),achievements:[...new Set([...(a.achievements||[]),...(Array.isArray(b.achievements)?b.achievements:[])])].slice(0,200)};
- if(up.xp>100000000||up.best_normal>2000000||up.best_extra>2000000)err('Progress out of range.');await updateDoc(p.playerRef,{adventure:up});return {ok:true,...up};}
+ if(up.xp>100000000||up.best_normal>2000000||up.best_extra>2000000)err('Progress out of range.');
+ if(Object.keys(up).some(k=>JSON.stringify(up[k])!==JSON.stringify(a[k])))tx.update(p.playerRef,{adventure:up});
+ return {ok:true,...up};});}
 // Per-player, per-territory subcollection; independent from the wallet and profile.
 const territoryRef=(playerId,id)=>doc(db,'players',playerId,'conquestProgress',id);
 async function storyProgress(b){
@@ -453,6 +465,7 @@ async function call(path,body={}){
  if(path==='/api/adventure/card')return openCard(body);
  if(path==='/api/adventure/resume')return resumeCard();
  if(path==='/api/adventure/progress')return adventureProgress(body);
+ if(path==='/api/adventure/bootstrap')return bootstrapPlayer(body);
  if(path==='/api/profile')return profile(body);
  if(path==='/api/tutorial/state')return tutorialState(body);
  if(path==='/api/tutorial/progress')return tutorialProgress(body);
@@ -493,7 +506,9 @@ function lost(reason){
  const shouldNotify=!blocked;
  blocked=true;
  if(shouldNotify)window.dispatchEvent(new Event('rpg-v66-offline'));
- message(reason||'Firestore session interrupted. Reload after reconnecting.');
+ // A verified student already inside Adventure may finish locally, unranked.
+ // Never show a blocking login gate over an active battle; cloud calls remain blocked.
+ if(!window.RPG_ADVENTURE_READY)message(reason||'Firestore session interrupted. Reload after reconnecting.');
 }
 async function check(){
  try{
@@ -521,7 +536,7 @@ window.fetch=async(input,init)=>{
 };
 window.addEventListener('offline',()=>lost('Internet connection lost.'));
 // Realtime Database listener resumes transport; an interrupted run requires manual reload.
-window.addEventListener('online',()=>{if(blocked)message('Internet restored. Reload to start a new online session.');});
+window.addEventListener('online',()=>{if(blocked&&!window.RPG_ADVENTURE_READY)message('Internet restored. Reload to start a new online session.');});
 const ready=check();
 // Practice/Story teacher settings: at most one verified fetch per scope set / 15 minutes.
 const soloBalanceSyncs=new Map();
@@ -542,10 +557,14 @@ window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await te
  const settings=await Promise.all(scopes.map(scope=>read('gameBalance',scope)));
  for(let i=0;i<scopes.length;i++)window.RPG_BALANCE?.apply(scopes[i],settings[i]||{},'server');
  const after=await currentConfig(mode);if(before!==after)err('Difficulty settings changed during run setup.');window.RPG_V66_PREPARED_REVISION=after;return after;},
- watchRankings(mode,grade,update){let disposed=false;Promise.all([read('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig(mode)]).then(([v,c])=>{
+ watchRankings(mode,grade,update,verified=null){let disposed=false,stop=null,lastSignature=null;
+ const known=Number.isInteger(verified?.vocab_revision)&&Number.isInteger(verified?.config_revision);
+ const versions=known?Promise.resolve([{revision:verified.vocab_revision},verified.config_revision]):Promise.all([read('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig(mode)]);
+ versions.then(([v,c])=>{
  if(disposed||!v)return;return onSnapshot(rankQuery(mode,grade,Number(v.revision)||1,c,20),{includeMetadataChanges:true},snap=>{
- if(disposed||snap.metadata.fromCache)return;const entries=snap.docs.map(s=>s.data());update({ruleset:`spark-${mode}-${grade}-v${v.revision}-c${c}`,entries});
- },e=>console.warn('Rankings live-update unavailable:',e?.message||e));}).then(unsub=>{if(disposed)unsub?.();else stop=unsub;}).catch(e=>console.warn('Rankings',e));let stop=null;
- return ()=>{disposed=true;stop?.()};}
+ if(disposed||snap.metadata.fromCache)return;const entries=snap.docs.map(s=>s.data()),signature=JSON.stringify(entries);
+ if(signature===lastSignature)return;lastSignature=signature;update({ruleset:`spark-${mode}-${grade}-v${v.revision}-c${c}`,entries});
+ },e=>console.warn('Rankings live-update unavailable:',e?.message||e));}).then(unsub=>{if(disposed)unsub?.();else stop=unsub;}).catch(e=>console.warn('Rankings',e));
+ return ()=>{disposed=true;stop?.();stop=null;};}
 };
 // No periodic connection polling; ranked operations verify current server state.

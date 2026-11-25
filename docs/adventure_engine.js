@@ -1436,7 +1436,7 @@ const achOverlay = document.getElementById("achOverlay");
         normal_clear:loadNormalCleared(),extra_clear:loadExtraCleared()
       };
       try{const res=await fetch("/api/adventure/progress",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-        if(res.ok&&!unverifiedRun())void window.RPG_LOCAL_PRACTICE?.confirmedProgress?.(payload);
+        if(res.ok&&!unverifiedRun()){const confirmed=await res.json();if(confirmed?.ok)void window.RPG_LOCAL_PRACTICE?.confirmedProgress?.(confirmed);}
       }catch(_){}
     },12000);
   }
@@ -1728,6 +1728,7 @@ const achOverlay = document.getElementById("achOverlay");
   }
   function downgradeOnConnectionLoss(){
     if(rankedRun)rankedRun.invalid=true;
+    if(gameState==='rankings'||gameState==='modeselect')showModeSelectScreen();
     // If Wi-Fi drops during play, the run can finish as local practice only.
     if(typeof gameState!=='undefined' && ['playing','paused','countdown'].includes(gameState) && !runLocalOnly){
       setLocalOnlyRun(true);
@@ -1760,6 +1761,7 @@ const achOverlay = document.getElementById("achOverlay");
 
   // ---- Grade-specific and shared challenge rankings ----
   let rankingRequest=0;let stopLiveRankings=null;
+  function closeRankings(){rankingRequest++;if(stopLiveRankings){stopLiveRankings();stopLiveRankings=null;}}
   let rankingMode='normal';
   // Only the three standard grades and shared challenge are shown as student filters.
   // The B-class vocabulary and separate rank records remain intact on the server.
@@ -1813,9 +1815,9 @@ const achOverlay = document.getElementById("achOverlay");
     });
     overlayChoices.querySelectorAll('[data-mode]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();void openRankings(btn.dataset.mode,rankingGrade==='all'?lastStandardRankingGrade:rankingGrade);}));
     overlayChoices.querySelectorAll('[data-grade]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();void openRankings(btn.dataset.grade==='all'?'shared':rankingMode==='shared'?'normal':rankingMode,btn.dataset.grade);}));
-    overlayChoices.querySelector('[data-play-shared]')?.addEventListener('click',e=>{e.stopPropagation();rankingRequest++;setMode('shared');showOverlay(false);void startGame();});
+    overlayChoices.querySelector('[data-play-shared]')?.addEventListener('click',e=>{e.stopPropagation();closeRankings();setMode('shared');showOverlay(false);void startGame();});
     overlayChoices.querySelector('[data-refresh]')?.addEventListener('click',e=>{e.stopPropagation();void openRankings(rankingMode,rankingGrade);});
-    overlayChoices.querySelector('[data-back]')?.addEventListener('click',e=>{e.stopPropagation();rankingRequest++;if(stopLiveRankings){stopLiveRankings();stopLiveRankings=null;}showModeSelectScreen();});
+    overlayChoices.querySelector('[data-back]')?.addEventListener('click',e=>{e.stopPropagation();showModeSelectScreen();});
   }
   async function openRankings(mode='normal',grade=assignedRankGrade||cleanClassYear(profile?.classYear)){
     grade=visibleRankingGrade(grade);
@@ -1836,7 +1838,7 @@ const achOverlay = document.getElementById("achOverlay");
           const entries=(doc.entries||[]).map((item,i,all)=>({...item,rank:all.findIndex(e=>e.score===item.score)+1}));
           const mine=entries.find(e=>e.public_id===data.current?.public_id)||data.current;
           rankingsView(mode,grade,{...data,entries,current:mine,total:entries.length,ruleset:doc.ruleset||null},'');
-        });}
+        },data);}
       }
     }catch(err){
       if(req===rankingRequest){
@@ -3007,7 +3009,7 @@ async function completeStoryStage(stage,damage=null){
 window.RPG_STORY_EXIT_TO_MODES = () => resetGame(false);
 function showModeSelectScreen(){
   window.RPG_V66_COMPETITIVE_ACTIVE=false;window.dispatchEvent(new Event("rpg-v66-unlock-settings"));
-  rankingRequest++;
+  closeRankings();
 
   // No Profile screen. The Adventure Card supplies the name; local game
   // progress still uses a background save record for XP and currency.
@@ -3218,6 +3220,7 @@ function showModeSelectScreen(){
       window.location.assign('auras.html');
     }});
   auraWorkshopMode.classList.add('aura-mode-card');
+  if(window.RPG_V66_DISCONNECTED||!ADVENTURE_CONTEXT.online)addMode('Reconnect', {onClick:()=>location.reload()});
   addMode('Rankings', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     void openRankings('normal');
   }});
@@ -4082,9 +4085,11 @@ async function debugJumpTo(mode, idx){
       || !!stage?.bossInvulnerable || !!stage?.endStageOnBgmEnd || isExtraStage2();
   }
 
+  let cachedOperatorWords=null,cachedOperatorEntries=[];
   function operatorStageWordEntries(){
     const stage=STAGES[stageIndex];
     const list=(stage&&stage.words)?stage.words:[];
+    if(list===cachedOperatorWords)return cachedOperatorEntries;
     const valid=[];
     for(const w of list){
       if(!w)continue;
@@ -4093,7 +4098,7 @@ async function debugJumpTo(mode, idx){
       if(!prompt||!answer)continue;
       valid.push({prompt,answer});
     }
-    return valid;
+    cachedOperatorWords=list;cachedOperatorEntries=valid;return valid;
   }
   function operatorShortestStageEntry(){
     const valid=operatorStageWordEntries();
@@ -4457,9 +4462,14 @@ async function debugJumpTo(mode, idx){
 
   let lastTs = 0;
 
-  // Prevent huge dt spikes after tab/app is backgrounded.
+  // Do not let background time count toward a survival clear while simulation is suspended.
+  let backgroundStage=null;
   document.addEventListener("visibilitychange", () => {
-    if(!document.hidden) lastTs = 0;
+    if(document.hidden){backgroundStage=gameState==='playing'&&stagePlayStartMs&&stagePauseStartMs===null?{start:stagePlayStartMs,at:performance.now()}:null;}
+    else{
+      if(backgroundStage&&gameState==='playing'&&stagePlayStartMs===backgroundStage.start&&stagePauseStartMs===null)stagePausedTotalMs+=Math.max(0,performance.now()-backgroundStage.at);
+      backgroundStage=null;lastTs=0;
+    }
   });
 
   let overflow = false;
@@ -7486,6 +7496,8 @@ setMode("normal");
 
   function resetGame(reopenStoryMap = false){
     cancelPendingRun();
+    closeRankings();
+    window.RPG_MEDIA?.next(null);
     stopStorySquad();
     const returnToStoryMap = currentMode === "story" && reopenStoryMap;
     if(!returnToStoryMap){storySelectedStage=null;storyBattleStage=null;}
@@ -7681,7 +7693,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
     if(gameState!=='victory')return;
     const msg=overlayChoices.querySelector('#guildResult');
     if(msg)msg.textContent=data?.awarded?`+${data.awarded} GUILD COINS · ${data.coins} TOTAL`:data?.duplicate?`ALREADY CLAIMED · ${data.coins} TOTAL`:(data?.error||'COINS NOT SAVED');
-  }).catch(e=>{const msg=overlayChoices.querySelector('#guildResult');if(msg)msg.textContent='COINS NOT SAVED';console.warn(e)}).finally(()=>{menuButton.disabled=false;});
+  }).catch(e=>{const msg=overlayChoices.querySelector('#guildResult');if(msg)msg.textContent='COINS NOT SAVED';console.warn(e)}).finally(()=>{if(menuButton)menuButton.disabled=false;});
   pushMsg("🏆 VICTORY!");
 }
 
@@ -7771,6 +7783,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
   }
 
   function tick(ts){
+    if(document.hidden){lastTs=0;scheduleTick(true);return;}
     let dt = 0;
     if(lastTs){
       const rawDt = (ts - lastTs) / 1000;
@@ -7885,7 +7898,8 @@ if(gameState === "paused"){
 
       // Operator effects advance after new spawns. Hidden Foxfire words cannot
       // be typed/moved until their turn, and Hound can force a chain target.
-      const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed,{hp:playerHp,laneHeight:laneHeight()});
+      const frameLaneHeight=laneHeight();
+      const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed,{hp:playerHp,laneHeight:frameLaneHeight});
       // Lupa's focus/6-second countdown must advance with the live stage clock.
       // Do this AFTER updateField so a timeout removes the marks immediately.
       operatorRefreshLupaVisuals(elapsed);
@@ -7901,7 +7915,7 @@ if(gameState === "paused"){
         }
       }
 
-      const h = laneHeight();
+      const h = frameLaneHeight;
       let fallSpeed = (stageIndex === 4)
         ? stage5CurrentFallSpeed(elapsed)
         : (currentMode === 'shared' ? stage.fallSpeedPxPerSec : (window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec) ?? stage.fallSpeedPxPerSec));
@@ -8009,7 +8023,7 @@ if(gameState === "paused"){
       if(needsRestack) restackLanded();
 
       const wasOverflowing = overflow;
-      overflow = landedCount >= laneCapacity();
+      overflow = wordsOnField.reduce((count,w)=>count+(w.state==='landed'?1:0),0) >= Math.floor(h / 30);
       if(overflow){
         overflowSpawnGraceUntilMs = 0;
         overflowAcc += battleDt;
@@ -8039,7 +8053,7 @@ if(gameState === "paused"){
       updateUIThrottled();
     }
 
-    requestAnimationFrame(tick);
+    scheduleTick(gameState!=='playing');
   }
 
   startCmd && startCmd.addEventListener("click", () => {
@@ -8128,6 +8142,7 @@ runCmd.addEventListener("click", () => {
   }
 
   bootGame();
+  window.RPG_ADVENTURE_READY=true;
 
   requestAnimationFrame(tick);
 })();
