@@ -1,4 +1,4 @@
-import './conquest-core.js?v=131.0';
+import './conquest-core.js?v=136.0';
 /* Pure validation/normalization; imported by the teacher editor and testable in Node.
  * Stable identifiers are essential to player progress and Game Settings overrides.
  */
@@ -84,7 +84,7 @@ export function cleanStory(raw){
    if(!Number.isInteger(unlock.minStars)||unlock.minStars<0||unlock.minStars>4)throw Error(`Stage ${id}: unlock stars must be 0–4.`);
    stages.push({id,title,type:st.type,description,battle,stars:{damageMax:[...damageMax]},unlock,intro:scenes(st.intro,'intro'),outro:scenes(st.outro,'outro')});
   }
-  const conquest=ch.conquest===undefined?{}:{conquest:(typeof window!=='undefined'?window:globalThis).RPG_CONQUEST.normalizeConfig(ch.conquest,true)};
+  const conquest=ch.conquest===undefined?{}:{conquest:(typeof window!=='undefined'?window:globalThis).RPG_CONQUEST.normalizeConfig(ch.conquest,true,chId)};
   chapters.push({id:chId,title,subtitle,stages,...conquest});
  }
  if(totalStages>300)throw Error('Maximum 300 stages in a published story.');

@@ -26,13 +26,24 @@ const rewardMax=id=>Math.round(caps[id]*rewardScale(id));
 const passiveHP={vern:1,shield:3};
 const defaultOperator=id=>{const [hp,atk,def]=roles[id]||roles.mc;return {hp:displayed(10+hp+(passiveHP[id]||0)),atk:Math.round(atk*100),def:Math.round(def*100),crit:5,critDmg:200};};
 const operatorRanges={hp:[10,500],atk:[10,300],def:[0,60],crit:[0,60],critDmg:[100,400]};
-function normalizeConfig(input,strict=false){
+const visibilityValues=Object.freeze(['enabled','soon','hidden']);
+// Legacy v135 content has no visibility field. The six unfinished stock
+// territories default to hidden; existing first-three disabled flags stay visible.
+function visibility(ch){
+ const c=ch?.conquest;
+ if(visibilityValues.includes(c?.visibility))return c.visibility;
+ if(/^[4-9]$/.test(String(ch?.id??'')))return 'hidden';
+ return c?.enabled===false?'soon':'enabled';
+}
+function normalizeConfig(input,strict=false,territoryId=null){
  const fail=msg=>{if(strict)throw Error('Conquest settings: '+msg);};
  const isObject=x=>x&&typeof x==='object'&&!Array.isArray(x);
- const out={enabled:true,rewards:{max:6,weights:[70,25,5],types:pool.map(e=>e.id),values:{}},operators:{},banner:{color:'',icon:'',art:'',animate:true}};
+ const initial=visibility({id:territoryId,conquest:input});
+ const out={enabled:initial==='enabled',visibility:initial,rewards:{max:6,weights:[70,25,5],types:pool.map(e=>e.id),values:{}},operators:{},banner:{color:'',icon:'',art:'',animate:true}};
  if(input===undefined)return out;
  if(!isObject(input)){fail('invalid configuration');return out;}
- if(input.enabled!==undefined){if(typeof input.enabled==='boolean')out.enabled=input.enabled;else fail('territory enabled must be true or false');}
+ if(input.enabled!==undefined&&typeof input.enabled!=='boolean')fail('territory enabled must be true or false');
+ if(input.visibility!==undefined&&!visibilityValues.includes(input.visibility))fail('invalid territory visibility');
  const b=input.banner;
  if(b!==undefined){if(!isObject(b))fail('invalid banner settings');else{
   if(b.color!==undefined){if(typeof b.color==='string'&&(!b.color||/^#[0-9a-f]{6}$/i.test(b.color)))out.banner.color=b.color;else fail('invalid banner color');}
@@ -74,8 +85,8 @@ function manualDamage(answer,baseHit,bonus,st,random=Math.random){
 function incomingDamage(amount,st){return Math.max(.1,q(amount*(1-st.def)));}
 function begin(ch,ids){
  const encounters=ch.stages.filter(s=>s.type!=='story-only');
- if(ch.conquest?.enabled===false||!encounters.length||ids.length!==3||new Set(ids).size!==3)throw Error('Invalid operation or squad');
- run={chapter:ch,config:normalizeConfig(ch.conquest),encounters,position:0,ids:ids.slice(),index:0,knockedOut:[],hp:null,bonuses:{},rewards:[],records:[],unranked:false};
+ if(visibility(ch)!=='enabled'||!encounters.length||ids.length!==3||new Set(ids).size!==3)throw Error('Invalid operation or squad');
+ run={chapter:ch,config:normalizeConfig(ch.conquest,false,ch.id),encounters,position:0,ids:ids.slice(),index:0,knockedOut:[],hp:null,bonuses:{},rewards:[],records:[],unranked:false};
  return run;
 }
 function award(random=Math.random){
@@ -109,5 +120,5 @@ function finishEncounter(state,random=Math.random){
  run.position++;
  return {final:false,reward,hp:run.hp,next:run.encounters[run.position],healed:displayed(heal)};
 }
-root.RPG_CONQUEST=Object.freeze({q,displayed,letters,normalizeConfig,defaultRewardValues,rewardMax,defaultOperator,operatorRanges,names,rewardLimit,stats,manualDamage,incomingDamage,begin,award,finishEncounter,abort:()=>{run=null;},get run(){return run;},get pool(){return pool;}});
+root.RPG_CONQUEST=Object.freeze({q,displayed,letters,visibility,visibilityValues,normalizeConfig,defaultRewardValues,rewardMax,defaultOperator,operatorRanges,names,rewardLimit,stats,manualDamage,incomingDamage,begin,award,finishEncounter,abort:()=>{run=null;},get run(){return run;},get pool(){return pool;}});
 })(typeof window!=='undefined'?window:globalThis);

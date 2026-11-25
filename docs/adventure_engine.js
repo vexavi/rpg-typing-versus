@@ -2895,7 +2895,7 @@ function setBgm(src, loop=true, autoplay=true){
 async function launchStoryStage(stage){
   if(!stage)return;
   if(Array.isArray(stage.stages)){
-    if(!normalCleared||stage.conquest?.enabled===false){showModeSelectScreen();return;}
+    if(!normalCleared||window.RPG_CONQUEST.visibility(stage)!=='enabled'){showModeSelectScreen();return;}
     const chosen=await chooseStorySquad(stage.conquest);
     if(!chosen){showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage);return;}
     const operation=window.RPG_CONQUEST.begin(stage,chosen);

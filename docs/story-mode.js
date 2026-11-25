@@ -19,6 +19,7 @@ const starsForDamage=(damage,stageId=null)=>{
 };
 let chapters=null,completed=new Set(),bestStars={},startFn=null,view='closed',activeChapter=0,selectedId=null;
 let autoTimer=0,conquestOverlayFinish=null;
+let retiredTerritoryIds=new Set();
 const box=document.createElement('div');box.id='storyRoot';box.hidden=true;document.body.appendChild(box);
 const serverOnline=Boolean(identity.online&&/^[A-HJ-NP-Z2-9]{16}$/.test(String(identity.card_code||'')));
 function storageGet(){try{const v=JSON.parse(localStorage.getItem(STORAGE)||'[]');return Array.isArray(v)?v.filter(validId):[]}catch{return []}}
@@ -49,7 +50,7 @@ function normalizeManifest(raw){
  if(!raw||!Array.isArray(raw.chapters))throw Error('Invalid story chapters file.');
  const ids=new Set();const chaptersOut=[];
  for(const ch of raw.chapters.slice(0,100)){
-   const chapter={id:String(ch.id??''),title:String(ch.title||'Chapter').slice(0,80),subtitle:String(ch.subtitle||'').slice(0,150),stages:[],...(ch.conquest!==undefined&&typeof window!=='undefined'&&window.RPG_CONQUEST?.normalizeConfig?{conquest:window.RPG_CONQUEST.normalizeConfig(ch.conquest)}:{})};
+   const chapter={id:String(ch.id??''),title:String(ch.title||'Chapter').slice(0,80),subtitle:String(ch.subtitle||'').slice(0,150),stages:[],...(ch.conquest!==undefined&&typeof window!=='undefined'&&window.RPG_CONQUEST?.normalizeConfig?{conquest:window.RPG_CONQUEST.normalizeConfig(ch.conquest,false,String(ch.id))}:{})};
    for(const st of (Array.isArray(ch.stages)?ch.stages:[]).slice(0,100)){
      const id=String(st.id||'');if(!validId(id)||ids.has(id))continue;ids.add(id);
      const cleanScenes=arr=>(Array.isArray(arr)?arr:[]).slice(0,100).map(x=>({image:String(x.image||''),caption:String(x.caption||'').slice(0,300)}));
@@ -70,6 +71,7 @@ async function loadManifest(refresh=false){
  const {loadEffectiveStory}=await import('./story-content-cloud.js?v=87.0');
  const {manifest}=await loadEffectiveStory();
  chapters=normalizeManifest(manifest);
+ retiredTerritoryIds=new Set((manifest.retiredChapterIds||[]).map(String));
  return chapters;
 }
 function isUnlocked(id){
@@ -90,37 +92,44 @@ function leaveStoryToModes(){
 }
 function errorScreen(msg){show(`<div class="story-modal"><h1>CONQUEST</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=leaveStoryToModes}
 const starMarkup=(n=0)=>`<span class="story-stars" aria-label="${n} of 4 stars">${Array.from({length:4},(_,i)=>`<span class="${i<n?'earned':'empty'}" aria-hidden="true">★</span>`).join('')}</span>`;
-function openConquestChapter(chIndex,preferred=null,requestedId=null,focus=false){
- const regions=chapters.filter(ch=>ch.stages.some(s=>s.type!=='story-only'));
- const enabledRegions=regions.filter(ch=>ch.conquest?.enabled!==false);
- const atlas=window.RPG_CONQUEST_MAP;
- const cleared=ch=>!!ch&&ch.stages.filter(s=>s.type!=='story-only').every(s=>completed.has(s.id));
- const available=(ch,i)=>!!ch&&ch.conquest?.enabled!==false&&(cleared(ch)||enabledRegions.indexOf(ch)===0||cleared(enabledRegions[enabledRegions.indexOf(ch)-1]));
+function openConquestChapter(chIndex,preferred=null,requestedId=null,focus=false,intermission=null){
+ const core=window.RPG_CONQUEST,atlas=window.RPG_CONQUEST_MAP;
+ const regions=chapters.filter(ch=>core.visibility(ch)!=='hidden');
+ const hasBattles=ch=>!!ch?.stages.some(s=>s.type!=='story-only');
+ const enabledRegions=regions.filter(ch=>core.visibility(ch)==='enabled'&&hasBattles(ch));
+ const cleared=ch=>hasBattles(ch)&&ch.stages.filter(s=>s.type!=='story-only').every(s=>completed.has(s.id));
+ const available=(ch,i)=>enabledRegions.includes(ch)&&(cleared(ch)||enabledRegions.indexOf(ch)===0||cleared(enabledRegions[enabledRegions.indexOf(ch)-1]));
+ const activeRun=intermission&&intermission.run===core.run?intermission.run:null;
+ const isActive=id=>!!activeRun&&String(activeRun.chapter.id)===String(id);
+ // Uncreated Rift/Valcrest/Vesper are visible as Coming Soon, never playable.
+ // All other uncreated or retired stock slots are omitted.
+ const choices=[...regions.map(c=>({id:c.id,name:atlas.byId(c.id)?.name||c.title})),...atlas.regions.filter(r=>['1','2','3'].includes(r.id)&&!chapters.some(c=>c.id===r.id)&&!retiredTerritoryIds.has(r.id)).map(r=>({id:r.id,name:r.name}))];
+ if(!choices.length){show(`<div class="story-modal"><h1>CONQUEST</h1><p>No territories available.</p><button id="story-close" type="button">BACK TO MODES</button></div>`);box.querySelector('#story-close').onclick=activeRun?intermission.back:leaveStoryToModes;return;}
  const preferredIndex=preferred?regions.findIndex(ch=>ch.stages.some(s=>s.id===preferred)):-1;
  activeChapter=preferredIndex>=0?preferredIndex:Math.max(0,Math.min(regions.length-1,chIndex));
- if(requestedId===null&&!available(regions[activeChapter],activeChapter))activeChapter=Math.max(0,regions.findLastIndex(available));
- const selected=String(requestedId??regions[activeChapter]?.id??'1');
+ if(!available(regions[activeChapter],activeChapter))activeChapter=Math.max(0,regions.findLastIndex(available));
+ const requested=String(requestedId??'');
+ const selected=choices.some(c=>c.id===requested)?requested:String(regions[activeChapter]?.id??choices[0].id);
  const selectedIndex=regions.findIndex(ch=>ch.id===selected);
  const ch=regions[selectedIndex];
  const battles=ch?ch.stages.filter(s=>s.type!=='story-only'):[];
  const allowed=!!ch&&available(ch,selectedIndex);
+ const canStart=allowed&&(!activeRun||isActive(selected));
  if(allowed)activeChapter=selectedIndex;
- const state=id=>{const i=regions.findIndex(c=>c.id===id);return i<0?'unpublished':regions[i].conquest?.enabled===false?'disabled':cleared(regions[i])?'captured':available(regions[i],i)?'available':'locked';};
- const status={disabled:'DISABLED',unpublished:'COMING SOON',captured:'CAPTURED',available:'AVAILABLE',locked:'LOCKED'};
- // Published order controls progression; future territories follow in stable ID order.
- const choices=[...regions.map(c=>({id:c.id,name:atlas.byId(c.id)?.name||c.title})),...atlas.regions.filter(r=>!regions.some(c=>c.id===r.id)).map(r=>({id:r.id,name:r.name}))];
- const pageSize=4,selectedChoice=Math.max(0,choices.findIndex(c=>c.id===selected)),page=Math.floor(selectedChoice/pageSize),pageCount=Math.ceil(choices.length/pageSize);
- const banners=choices.slice(page*pageSize,(page+1)*pageSize).map(c=>{const st=state(c.id),data=regions.find(r=>r.id===c.id)||{id:c.id};return `<button type="button" class="cq-banner ${st} ${selected===c.id?'selected':''}" data-territory="${esc(c.id)}" aria-pressed="${selected===c.id}" aria-label="${esc(c.name)}, ${status[st]}">${atlas.banner(data,{captured:st==='captured',artUrl:window.RPG_MEDIA?.url?.(data.conquest?.banner?.art||'')})}<span class="cq-banner-name">${esc(c.name)}</span><span class="cq-banner-state">${st==='captured'?'✓ ':st==='locked'?'🔒 ':''}${status[st]}</span></button>`;}).join('');
+ const state=id=>{const i=regions.findIndex(c=>c.id===id);return i<0?'unpublished':isActive(id)?'inprogress':core.visibility(regions[i])!=='enabled'||!hasBattles(regions[i])?'unpublished':cleared(regions[i])?'captured':available(regions[i],i)?'available':'locked';};
+ const status={inprogress:'IN PROGRESS',unpublished:'COMING SOON',captured:'CAPTURED',available:'AVAILABLE',locked:'LOCKED'};
+ const pageSize=4,selectedChoice=Math.max(0,choices.findIndex(c=>c.id===selected)),page=Math.floor(selectedChoice/pageSize),pageCount=Math.ceil(choices.length/pageSize),pageItems=choices.slice(page*pageSize,(page+1)*pageSize);
+ const banners=pageItems.map(c=>{const st=state(c.id),data=regions.find(r=>r.id===c.id)||{id:c.id};return `<button type="button" class="cq-banner ${st} ${selected===c.id?'selected':''}" data-territory="${esc(c.id)}" aria-pressed="${selected===c.id}" aria-label="${esc(c.name)}, ${status[st]}">${atlas.banner(isActive(c.id)?activeRun.chapter:data,{...atlas.progress(data,activeRun,st==='captured'),segmented:true})}<span class="cq-banner-name">${esc(c.name)}</span><span class="cq-banner-state">${st==='captured'?'✓ ':st==='locked'?'🔒 ':''}${status[st]}${isActive(c.id)?` · ${activeRun.records.length}/${activeRun.encounters.length}`:''}</span></button>`;}).join('');
  const label=atlas.byId(selected)?.name||ch?.title||'Operation';
  const selectedColor=ch?.conquest?.banner?.color||atlas.byId(selected)?.color||'#d9dfe4';
- const entries=battles.map((stage,i)=>`<div class="conquest-encounter"><b>${String(i+1).padStart(2,'0')}</b><span>${esc(stage.battle.bossName||stage.title)}</span><strong>${stage.battle.bossHp*10} HP</strong>${i===battles.length-1?'<small>BOSS</small>':''}</div>`).join('');
- show(`<div class="story-world conquest-world cq-atlas cq-hall"><div class="story-world-top"><button id="story-close" class="story-map-back" type="button" aria-label="Back to Mode Select">‹ <span>MODE SELECT</span></button><div class="story-map-title">CONQUEST</div><div class="cq-progress">TERRITORIES <strong>${enabledRegions.filter(cleared).length} / ${enabledRegions.length}</strong></div></div><div class="cq-main"><section class="cq-map-panel cq-banner-panel" aria-label="Hall of Banners"><div class="cq-hall-heading">HALL OF BANNERS</div><div class="cq-banner-row"><button id="cq-prev" type="button" aria-label="Previous banners" ${page===0?'disabled':''}>‹</button><div class="cq-banner-grid">${banners}</div><button id="cq-next" type="button" aria-label="Next banners" ${page===pageCount-1?'disabled':''}>›</button></div><div class="cq-map-footer"><span class="cq-page">${page+1} / ${pageCount}</span><label class="cq-jump"><span class="cq-jump-label">Territory</span><select id="cq-territory-select" aria-label="Select territory">${choices.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.name)} · ${status[state(c.id)]}</option>`).join('')}</select></label></div></section><aside class="cq-side" style="--territory:${selectedColor}" aria-label="Selected territory"><div class="cq-side-head"><span class="cq-side-status">${status[state(selected)]}</span><h2>${esc(label)}</h2></div>${ch?`<div class="cq-summary"><span><b>${battles.length}</b> ENCOUNTERS</span><span><b>3</b> OPERATORS</span><span><b>${window.RPG_CONQUEST.rewardLimit(ch)}</b> ENHANCEMENTS</span></div><div class="cq-encounters"><h3>ENCOUNTERS</h3>${entries}</div>`:'<div class="cq-empty">No published encounters.</div>'}<div class="cq-actions"><button id="conquest-start" class="story-start" type="button" ${allowed?'':'disabled'}>${allowed?(cleared(ch)?'REPLAY':'START'):(ch?(ch.conquest?.enabled===false?'DISABLED':'LOCKED'):'COMING SOON')} <span>${allowed?'››':''}</span></button></div></aside></div></div>`);
+ const entries=battles.map((stage,i)=>`<div class="conquest-encounter"><b>${String(i+1).padStart(2,'0')}</b><span>${esc(stage.battle.bossName||stage.title)}</span><strong>${stage.battle.bossHp*10} HP</strong>${isActive(selected)&&activeRun.records.some(r=>r.stageId===stage.id)?'<small>✓</small>':i===battles.length-1?'<small>BOSS</small>':''}</div>`).join('');
+ show(`<div class="story-world conquest-world cq-atlas cq-hall"><div class="story-world-top"><button id="story-close" class="story-map-back" type="button" aria-label="${activeRun?'Back to reward':'Back to Mode Select'}">‹ <span>${activeRun?'REWARD':'MODE SELECT'}</span></button><div class="story-map-title">CONQUEST</div><div class="cq-progress">TERRITORIES <strong>${enabledRegions.filter(cleared).length} / ${enabledRegions.length}</strong></div></div><div class="cq-main"><section class="cq-map-panel cq-banner-panel" aria-label="Hall of Banners"><div class="cq-hall-heading">HALL OF BANNERS</div><div class="cq-banner-row ${pageCount===1?'cq-single-page':''}">${pageCount>1?`<button id="cq-prev" type="button" aria-label="Previous banners" ${page===0?'disabled':''}>‹</button>`:''}<div class="cq-banner-grid cq-count-${pageItems.length}">${banners}</div>${pageCount>1?`<button id="cq-next" type="button" aria-label="Next banners" ${page===pageCount-1?'disabled':''}>›</button>`:''}</div><div class="cq-map-footer" ${pageCount===1?'hidden':''}><span class="cq-page">${page+1} / ${pageCount}</span><label class="cq-jump"><span class="cq-jump-label">Territory</span><select id="cq-territory-select" aria-label="Select territory">${choices.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.name)} · ${status[state(c.id)]}</option>`).join('')}</select></label></div></section><aside class="cq-side" style="--territory:${selectedColor}" aria-label="Selected territory"><div class="cq-side-head"><span class="cq-side-status">${status[state(selected)]}</span><h2>${esc(label)}</h2></div>${ch&&state(selected)!=='unpublished'?`<div class="cq-summary"><span><b>${battles.length}</b> ENCOUNTERS</span><span><b>3</b> OPERATORS</span><span><b>${window.RPG_CONQUEST.rewardLimit(ch)}</b> ENHANCEMENTS</span></div><div class="cq-encounters"><h3>ENCOUNTERS</h3>${entries}</div>`:'<div class="cq-empty">Coming soon.</div>'}<div class="cq-actions"><button id="conquest-start" class="story-start" type="button" ${canStart?'':'disabled'}>${activeRun?(isActive(selected)?'CONTINUE':'OPERATION ACTIVE'):allowed?(cleared(ch)?'REPLAY':'START'):(state(selected)==='unpublished'?'COMING SOON':'LOCKED')} <span>${canStart?'››':''}</span></button></div></aside></div></div>`);
  view='map';
- box.querySelector('#story-close').onclick=leaveStoryToModes;
- box.querySelectorAll('[data-territory]').forEach(el=>{el.onclick=()=>openConquestChapter(activeChapter,null,el.dataset.territory,true);});
- for(const [selector,offset] of [['#cq-prev',-1],['#cq-next',1]])box.querySelector(selector).onclick=()=>{const target=choices[(page+offset)*pageSize];if(target)openConquestChapter(activeChapter,null,target.id,true);};
- box.querySelector('#cq-territory-select').onchange=e=>{openConquestChapter(activeChapter,null,e.target.value);box.querySelector('#cq-territory-select')?.focus();};
- box.querySelector('#conquest-start').onclick=()=>{if(!allowed)return;hide();startFn?.(ch);};
+ box.querySelector('#story-close').onclick=activeRun?intermission.back:leaveStoryToModes;
+ box.querySelectorAll('[data-territory]').forEach(el=>{el.onclick=()=>openConquestChapter(activeChapter,null,el.dataset.territory,true,intermission);});
+ for(const [selector,offset] of [['#cq-prev',-1],['#cq-next',1]]){const button=box.querySelector(selector);if(button)button.onclick=()=>{const target=choices[(page+offset)*pageSize];if(target)openConquestChapter(activeChapter,null,target.id,true,intermission);};}
+ box.querySelector('#cq-territory-select').onchange=e=>{openConquestChapter(activeChapter,null,e.target.value,false,intermission);box.querySelector('#cq-territory-select')?.focus();};
+ box.querySelector('#conquest-start').onclick=()=>{if(activeRun){if(canStart)intermission.next();return;}if(!allowed)return;hide();startFn?.(ch);};
  if(focus)Array.from(box.querySelectorAll('[data-territory]')).find(el=>el.dataset.territory===selected)?.focus({preventScroll:true});
 }
 function openChapter(chIndex,preferred=null,focusTarget=''){
@@ -211,15 +220,18 @@ async function markConquestCompleted(run){
 function cancelConquestOverlay(){if(conquestOverlayFinish)conquestOverlayFinish();}
 function conquestBannerResult(run,done,captured,animate){
  const atlas=window.RPG_CONQUEST_MAP;
- return `<div class="cq-result-banner">${atlas.banner(run.chapter,{total:run.encounters.length,cleared:done,segmented:true,captured,animate,artUrl:window.RPG_MEDIA?.url?.(run.chapter.conquest?.banner?.art||'')})}</div>`;
+ return `<div class="cq-result-banner">${atlas.banner(run.chapter,{total:run.encounters.length,cleared:done,segmented:true,captured,animate})}</div>`;
 }
 function showConquestReward(run,step){
  return new Promise(resolve=>{
    const reward=step.reward,done=run.records.length,total=run.encounters.length;
    const body=reward?`<div class="cq-reward-box"><div class="conquest-rarity">${'★'.repeat(reward.rarity)}</div><h2>${esc(reward.name)}</h2><div class="conquest-reward-stat">${esc(reward.label)} ${esc(reward.display)}</div></div>`:'';
-   show(`<div class="story-result conquest-reward cq-banner-result" role="dialog" aria-label="Encounter complete">${conquestBannerResult(run,done,false,true)}<div class="cq-result-info"><div class="story-result-label">ENCOUNTER COMPLETE</div><h2>${esc(window.RPG_CONQUEST_MAP.name(run.chapter.id))}</h2><div class="cq-result-count">${done} / ${total}</div><div class="cq-result-meter"><i style="width:${100*done/total}%"></i></div>${body}<p>HP ${window.RPG_CONQUEST.displayed(step.hp)}${step.healed?` · +${step.healed} HEALED`:''}</p><button type="button" id="conquest-reward-next">NEXT ››</button></div></div>`);
+   const renderReward=(animate=false)=>{show(`<div class="story-result conquest-reward cq-banner-result" role="dialog" aria-label="Encounter complete">${conquestBannerResult(run,done,false,animate)}<div class="cq-result-info"><div class="story-result-label">ENCOUNTER COMPLETE</div><h2>${esc(window.RPG_CONQUEST_MAP.name(run.chapter.id))}</h2><div class="cq-result-count">${done} / ${total}</div><div class="cq-result-meter"><i style="width:${100*done/total}%"></i></div>${body}<p>HP ${window.RPG_CONQUEST.displayed(step.hp)}${step.healed?` · +${step.healed} HEALED`:''}</p><button type="button" id="conquest-reward-next">NEXT ››</button><button type="button" id="conquest-reward-hall" class="cq-hall-return">HALL OF BANNERS</button></div></div>`);
+   box.querySelector('#conquest-reward-next').onclick=finish;
+   box.querySelector('#conquest-reward-hall').onclick=()=>openConquestChapter(activeChapter,null,String(run.chapter.id),false,{run,back:()=>renderReward(false),next:finish});
+   box.querySelector('#conquest-reward-next').focus();};
    const finish=()=>{if(conquestOverlayFinish!==finish)return;conquestOverlayFinish=null;hide();resolve();};
-   conquestOverlayFinish=finish;box.querySelector('#conquest-reward-next').onclick=finish;box.querySelector('#conquest-reward-next').focus();
+   conquestOverlayFinish=finish;renderReward(true);
  });
 }
 function showConquestResult(run,result){
