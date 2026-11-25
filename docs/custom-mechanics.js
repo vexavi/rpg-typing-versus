@@ -34,7 +34,7 @@ window.RPG_MECHANICS?.register({
 (function(){
  'use strict';
  const definitions=[
-  {id:'sleepy',label:'Sleepy · Fighting Sleep',description:'Heavy eyelids droop, flutter partially open, then finally close. Words keep falling even while vision is blocked. New normal spawns pause during complete darkness; Delirium changes words when the eyes close.',
+  {id:'sleepy',label:'Sleepy · Fighting Sleep',description:'Heavy eyelids droop, flutter partially open, then finally close. Regular words keep falling during darkness; Panic words freeze and Disorientation acceleration pauses. New spawns pause.',
    fields:[
     {key:'enabled',label:'Enabled',type:'boolean',default:false},
     {key:'minIntervalSec',label:'Shortest time between blinks (sec)',type:'number',min:4,max:120,step:1,default:16},
@@ -44,12 +44,12 @@ window.RPG_MECHANICS?.register({
     {key:'closedSec',label:'Fully closed (sec)',type:'number',min:0.2,max:4,step:0.1,default:0.8},
     {key:'openingSec',label:'Eyelids reopening (sec)',type:'number',min:0.2,max:4,step:0.1,default:0.8}
    ]},
-  {id:'delirium',label:'Delirium · Changed Words',description:'Requires Sleepy. Each time the eyelids fully close, change the text of existing falling and stacked words using the current stage vocabulary. Positions and special marks are preserved.',
+  {id:'delirium',label:'Delirium · Changed Words',description:'Requires Sleepy. Each time the eyelids fully close, change the text of existing falling and stacked words using the current stage vocabulary. Positions and special marks are preserved. Changed words lose Repression mist.',
    fields:[
     {key:'enabled',label:'Enabled',type:'boolean',default:false},
     {key:'changePercent',label:'Words changed (%)',type:'number',min:0,max:100,step:5,default:100}
    ]},
-  {id:'panic',label:'Panic · Dangerous Words',description:'Some naturally spawned words become red Panic words. They pass through other words, never stack, and deal damage when they reach the bottom.',
+  {id:'panic',label:'Panic · Dangerous Words',description:'Some naturally spawned words become red Panic words. They pass through other words and damage on impact. Immune to Repression and Disorientation acceleration; frozen during complete darkness.',
    fields:[
     {key:'enabled',label:'Enabled',type:'boolean',default:false},
     {key:'chancePct',label:'Chance per regular spawn (%)',type:'number',min:0,max:100,step:1,default:15},
@@ -57,14 +57,14 @@ window.RPG_MECHANICS?.register({
     {key:'minGapSec',label:'Minimum time between Panic spawns (sec)',type:'number',min:0,max:30,step:0.5,default:5},
     {key:'damage',label:'Damage when reaching bottom',type:'number',min:1,max:10,step:1,default:1}
    ]},
-  {id:'disorientation',label:'Disorientation',description:'All falling words freeze, then accelerate. Spawns and typing continue.',fields:[
+  {id:'disorientation',label:'Disorientation',description:'Falling words freeze, then accelerate except Panic words. The cycle pauses during complete darkness. Spawns and typing otherwise continue.',fields:[
     {key:'enabled',label:'Enabled',type:'boolean',default:false},
     {key:'intervalSec',label:'Normal time between cycles (sec)',type:'number',min:3,max:120,step:1,default:15},
     {key:'freezeSec',label:'Freeze duration (sec)',type:'number',min:0.5,max:5,step:0.5,default:2},
     {key:'rushSec',label:'Acceleration duration (sec)',type:'number',min:0.5,max:5,step:0.5,default:2},
     {key:'speedPct',label:'Accelerated falling speed (%)',type:'number',min:100,max:300,step:10,default:200}
    ]},
-  {id:'repression',label:'Repression',description:'Some regular words are briefly hidden by dark mist. They remain typeable and become visible when they land.',fields:[
+  {id:'repression',label:'Repression',description:'Some regular words are briefly hidden by dark mist. They remain typeable. Mist clears on landing, Delirium word changes, or Disorientation acceleration.',fields:[
     {key:'enabled',label:'Enabled',type:'boolean',default:false},
     {key:'chancePct',label:'Affected words (%)',type:'number',min:0,max:100,step:5,default:25},
     {key:'visibleSec',label:'Time before mist (sec)',type:'number',min:0.5,max:10,step:0.5,default:2},
@@ -148,7 +148,7 @@ window.RPG_MECHANICS?.register({
   const s=settings.sleepy;return s.minIntervalSec+Math.random()*(s.maxIntervalSec-s.minIntervalSec);
  }
  // Effects are local to the battle clock; no new timers, network calls or assets.
- let disorientStart=0,disorientPhase='normal',disorientLane=null;
+ let disorientStart=0,disorientLastElapsed=0,disorientPhase='normal',disorientLane=null;
  const repressed=new Map();
  function showPhase(phase,lane=disorientLane){
   if(disorientLane!==lane){disorientLane?.classList?.remove('rift-freeze','rift-rush');disorientLane=lane;disorientPhase='normal';}
@@ -160,28 +160,42 @@ window.RPG_MECHANICS?.register({
   const entry=repressed.get(word);if(!entry)return;
   if(entry.hidden)word.el?.classList?.remove('rift-repressed');repressed.delete(word);
  }
- function updateRift(elapsed,lane){
+ function updateRift(elapsed,lane,blackoutSeconds=0){
   if(!active)return;
   if(settings.disorientation.enabled){
+   // Pause the phase clock for the actual overlap with the fully closed interval.
+   // This also covers a slow frame which crosses both blackout boundaries.
+   disorientStart+=blackoutSeconds;
    const d=settings.disorientation,cycle=d.intervalSec+d.freezeSec+d.rushSec;
    const t=Math.max(0,elapsed-disorientStart)%cycle;
-   showPhase(t<d.intervalSec?'normal':t<d.intervalSec+d.freezeSec?'freeze':'rush',lane);
+   showPhase(t<d.intervalSec?'normal':t<d.intervalSec+d.freezeSec?'freeze':fullyClosed?'normal':'rush',lane);
   }
   for(const [word,entry] of repressed){
-   if(word.state!=='falling'||word.el?.isConnected===false||word.foxfireHidden||word.ex2Hacked||elapsed>=entry.until){clearRepression(word);continue;}
-   if(!entry.hidden&&elapsed>=entry.from){entry.hidden=true;word.el?.classList?.add('rift-repressed');}
+   if(disorientPhase==='rush'||word.chapterPanic||word.state!=='falling'||word.el?.isConnected===false||word.foxfireHidden||word.ex2Hacked||elapsed>=entry.until){clearRepression(word);continue;}
+   if(!entry.hidden&&elapsed>=entry.from){
+    // Do not start a new concealment while the player cannot read the word.
+    if(fullyClosed){clearRepression(word);continue;}
+    entry.hidden=true;word.el?.classList?.add('rift-repressed');
+   }
   }
  }
- function motionMultiplier(){return !active||!settings.disorientation.enabled?1:disorientPhase==='freeze'?0:disorientPhase==='rush'?settings.disorientation.speedPct/100:1;}
+ function motionMultiplier(panic=false){
+  if(!active)return 1;
+  if(panic&&fullyClosed)return 0;
+  if(!settings.disorientation.enabled)return 1;
+  if(disorientPhase==='freeze')return 0;
+  if(disorientPhase==='rush'&&!fullyClosed&&!panic)return settings.disorientation.speedPct/100;
+  return 1;
+ }
  function markRepression(word,elapsed){
   const r=settings.repression;
-  if(!r.enabled||fullyClosed||word.chapterPanic||word.challengeComet||word.ex1Highlighted||word.ex5StarStruck||word.operatorHexSummoned||repressed.has(word)||repressed.size>=Math.floor(r.maxActive)||Math.random()*100>=r.chancePct)return;
+  if(!r.enabled||fullyClosed||disorientPhase==='rush'||word.chapterPanic||word.challengeComet||word.ex1Highlighted||word.ex5StarStruck||word.operatorHexSummoned||repressed.has(word)||repressed.size>=Math.floor(r.maxActive)||Math.random()*100>=r.chancePct)return;
   repressed.set(word,{from:elapsed+r.visibleSec,until:elapsed+r.visibleSec+r.hiddenSec,hidden:false});
  }
  function reset(){showPhase('normal');disorientLane=null;for(const word of repressed.keys())clearRepression(word);active=false;stageId='';blink=null;nextBlink=Infinity;fullyClosed=false;lastPanicAt=-Infinity;eyelidClosure=0;setClosure(0);}
  function start(mode,id,elapsedAtStart=0){
   reset();if(mode!=='story'||!/^1-[1-9]\d*$/.test(String(id||'')))return;
-  active=true;stageId=String(id);config();ensureOverlay();disorientStart=Math.max(0,Number(elapsedAtStart)||0);
+  active=true;stageId=String(id);config();ensureOverlay();disorientStart=Math.max(0,Number(elapsedAtStart)||0);disorientLastElapsed=disorientStart;
   if(settings.sleepy.enabled)nextBlink=Math.max(0,Number(elapsedAtStart)||0)+rollInterval();
  }
  function relabel(word,entry,normalize){
@@ -204,18 +218,21 @@ window.RPG_MECHANICS?.register({
    const choices=vocabulary.filter(x=>x&&x.answer&&x.prompt&&normalize(x.answer)!==(w.answerNorm||normalize(w.answer)));
    const pool=choices.length?choices:vocabulary;
    const entry=pool[Math.floor(Math.random()*pool.length)];if(!entry)continue;
+   const previous=w.chainHexed&&w.chainHexOrigin?w.chainHexOrigin.answerNorm??normalize(w.chainHexOrigin.answer):w.answerNorm||normalize(w.answer);
+   if(normalize(entry.answer)!==previous)clearRepression(w);
    relabel(w,entry,normalize);changed++;
   }
   return changed;
  }
  function frame(elapsed,{words=[],vocabulary=[],normalize=s=>String(s).trim().toLowerCase(),onClosed=null,lane=null}={}){
-  updateRift(elapsed,lane);
-  if(!active||!settings.sleepy.enabled){fullyClosed=false;setClosure(0);return false;}
+  if(!active||!settings.sleepy.enabled){fullyClosed=false;setClosure(0);updateRift(elapsed,lane);disorientLastElapsed=elapsed;return false;}
   if(!blink&&elapsed>=nextBlink)blink={start:elapsed,changed:false};
-  if(!blink){fullyClosed=false;setClosure(0);return false;}
+  if(!blink){fullyClosed=false;setClosure(0);updateRift(elapsed,lane);disorientLastElapsed=elapsed;return false;}
   const s=settings.sleepy;
   const t=Math.max(0,elapsed-blink.start);
   const closing=s.closingSec,closed=s.closedSec,opening=s.openingSec,total=closing+closed+opening;
+  const blackoutStart=blink.start+closing,blackoutEnd=blackoutStart+closed;
+  const blackoutSeconds=Math.max(0,Math.min(elapsed,blackoutEnd)-Math.max(disorientLastElapsed,blackoutStart));
   let fraction=0;
   // Delirium must fire exactly once even if a slow frame skips the closed hold.
   if(t>=closing&&!blink.changed){blink.changed=true;if(typeof onClosed==='function')onClosed();mutateWords(words,vocabulary,normalize);}
@@ -231,7 +248,7 @@ window.RPG_MECHANICS?.register({
    fraction+=0.006*Math.sin(p*32)*Math.sin(Math.PI*p);
   }else{blink=null;nextBlink=elapsed+rollInterval();}
   fullyClosed=!!blink&&t>=closing&&t<closing+closed;
-  setClosure(fraction);return fullyClosed;
+  setClosure(fraction);updateRift(elapsed,lane,blackoutSeconds);disorientLastElapsed=elapsed;return fullyClosed;
  }
  function markSpawn(word,elapsed,words){
   if(!active||!word||word.state!=='falling'||fullyClosed)return false;

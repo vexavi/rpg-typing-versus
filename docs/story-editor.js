@@ -5,7 +5,7 @@
 // Static Firebase imports blocked the entire editor if the CDN was unavailable.
 import './conquest-map.js?v=135.0';
 import './conquest-core.js?v=136.0';
-import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=138.0';
+import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=139.0';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
 import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs?v=131.0';
@@ -490,7 +490,7 @@ function renderFields(){
  ${artEditor(st,'bossSprite','Boss Sprite','boss','Reusable boss art.')} 
  ${artEditor(st,'battleBackground','Battle Background','bg','Reusable background.')}
  ${musicEditor(st)} </div>
- ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>The Rift · Special Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy to all Rift encounters</button></div><p class="muted">Delirium requires Sleepy. Darkness pauses new spawns.</p>${mechanicMarkup(st,true)}</div>`:''}
+ ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>The Rift · Special Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy to all Rift encounters</button></div><p class="muted">Delirium requires Sleepy. Darkness pauses new spawns. Interaction protections apply automatically.</p>${mechanicMarkup(st,true)}</div>`:''}
  <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted"></span></div>${mechanicMarkup(st)}<p class="muted">New mechanics require a code module.</p></div>
  <p class="muted">Encounter ID ${esc(st.id)} is permanent. Changes apply on the next Conquest map opening.</p></section>`;
  fillLiveValues()
@@ -569,7 +569,7 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
  }
  if(a==='copy-ch1-mechanics'){
   if(ch.id!=='1'||!st)return;
-  if(!confirm(`Copy Sleepy, Delirium and Panic from ${st.id} to the other Rift encounters? Existing settings for those three mechanics will be replaced.`))return;
+  if(!confirm(`Copy all five Rift mechanics from ${st.id} to the other Rift encounters? Existing Rift mechanic settings will be replaced.`))return;
   const ids=['sleepy','delirium','panic','disorientation','repression'];const defs=catalog();
   for(const target of battleStages(ch)){if(target===st)continue;target.battle.mechanics ||= {};
    for(const id of ids){const def=defs.find(x=>x.id===id);if(!def)continue;target.battle.mechanics[id]={};

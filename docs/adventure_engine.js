@@ -7830,15 +7830,16 @@ if(gameState === "paused"){
         return;
       }
       // Sleepy runs on the pause-aware stage clock. Delirium changes text once at full closure.
-      // Falling words and impacts CONTINUE even while the eyelids are fully closed.
+      // Regular words and overflow impacts continue; Panic hazards freeze in complete darkness.
       // Only fresh normal spawns wait until the eyes start opening.
       const chapterBlackout=!!window.RPG_CH1_SPECIAL?.frame(elapsed,{
         words:wordsOnField,lane:wordLane,vocabulary:currentMode==='story'?operatorStageWordEntries():[],
         normalize:normalizeAnswer,onClosed:()=>{answerInput.value='';}
       });
       setSleepyBgmGain(window.RPG_CH1_SPECIAL?.bgmGain?.() ?? 1);
-      const battleDt=dt; // No word-motion freeze during Sleepy darkness.
+      const battleDt=dt; // Regular battle time continues during Sleepy darkness.
       const riftMotion=window.RPG_CH1_SPECIAL?.motionMultiplier?.()??1;
+      const panicMotion=window.RPG_CH1_SPECIAL?.motionMultiplier?.(true)??1;
       const spawnDt=chapterBlackout?0:dt; // Do not spawn new, unseen words during the blackout.
       ex4HandlePhaseTriggers(elapsed);
       ex2HandlePhaseTriggers(elapsed);
@@ -7954,9 +7955,10 @@ if(gameState === "paused"){
           ? w.fallSpeedOverride
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
-        if(!frozenByOperator&&riftMotion!==0)w.y += v * battleDt * riftMotion;
+        const wordMotion=w.chapterPanic?panicMotion:riftMotion;
+        if(!frozenByOperator&&wordMotion!==0)w.y += v * battleDt * wordMotion;
         // Word-specific Shield Advance holds also suspend custom movement hooks.
-        if(!frozenByOperator&&riftMotion!==0&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt:battleDt*riftMotion});
+        if(!frozenByOperator&&wordMotion!==0&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt:battleDt*wordMotion});
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
         const gIdx = (w.groupIndex || 0);
@@ -7967,6 +7969,8 @@ if(gameState === "paused"){
           challengeUpdateCometGlow(w, (w.y || 0) / Math.max(1, h - 30));
         }
 
+        // A resize or other position adjustment must not force a frozen Panic impact.
+        if(w.chapterPanic&&(wordMotion===0||frozenByOperator)){setWordY(w.el,w.y);continue;}
         if(w.y >= targetY){
           w.y = targetY;
           // Panic is a falling hazard, never a stacked word. Exactly one hit at the floor.
