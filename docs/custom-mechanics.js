@@ -56,6 +56,20 @@ window.RPG_MECHANICS?.register({
     {key:'maxActive',label:'Maximum active Panic words',type:'number',min:1,max:8,step:1,default:2},
     {key:'minGapSec',label:'Minimum time between Panic spawns (sec)',type:'number',min:0,max:30,step:0.5,default:5},
     {key:'damage',label:'Damage when reaching bottom',type:'number',min:1,max:10,step:1,default:1}
+   ]},
+  {id:'disorientation',label:'Disorientation',description:'All falling words freeze, then accelerate. Spawns and typing continue.',fields:[
+    {key:'enabled',label:'Enabled',type:'boolean',default:false},
+    {key:'intervalSec',label:'Normal time between cycles (sec)',type:'number',min:3,max:120,step:1,default:15},
+    {key:'freezeSec',label:'Freeze duration (sec)',type:'number',min:0.5,max:5,step:0.5,default:2},
+    {key:'rushSec',label:'Acceleration duration (sec)',type:'number',min:0.5,max:5,step:0.5,default:2},
+    {key:'speedPct',label:'Accelerated falling speed (%)',type:'number',min:100,max:300,step:10,default:200}
+   ]},
+  {id:'repression',label:'Repression',description:'Some regular words are briefly hidden by dark mist. They remain typeable and become visible when they land.',fields:[
+    {key:'enabled',label:'Enabled',type:'boolean',default:false},
+    {key:'chancePct',label:'Affected words (%)',type:'number',min:0,max:100,step:5,default:25},
+    {key:'visibleSec',label:'Time before mist (sec)',type:'number',min:0.5,max:10,step:0.5,default:2},
+    {key:'hiddenSec',label:'Mist duration (sec)',type:'number',min:0.5,max:5,step:0.5,default:1.5},
+    {key:'maxActive',label:'Maximum affected words',type:'number',min:1,max:6,step:1,default:2}
    ]}
  ];
  for(const item of definitions)window.RPG_MECHANICS?.register({...item,modes:['story'],defaultEnabled:false});
@@ -63,7 +77,9 @@ window.RPG_MECHANICS?.register({
  const settings={
   sleepy:{enabled:false,minIntervalSec:16,maxIntervalSec:22,bgmDipPct:45,closingSec:1.8,closedSec:0.8,openingSec:0.8},
   delirium:{enabled:false,changePercent:100},
-  panic:{enabled:false,chancePct:15,maxActive:2,minGapSec:5,damage:1}
+  panic:{enabled:false,chancePct:15,maxActive:2,minGapSec:5,damage:1},
+  disorientation:{enabled:false,intervalSec:15,freezeSec:2,rushSec:2,speedPct:200},
+  repression:{enabled:false,chancePct:25,visibleSec:2,hiddenSec:1.5,maxActive:2}
  };
  const number=(v,min,max,otherwise)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max?v:otherwise;
  const get=(id,key,fallback)=>window.RPG_BALANCE?.mechanic(id,key,fallback)??fallback;
@@ -131,10 +147,41 @@ window.RPG_MECHANICS?.register({
  function rollInterval(){
   const s=settings.sleepy;return s.minIntervalSec+Math.random()*(s.maxIntervalSec-s.minIntervalSec);
  }
- function reset(){active=false;stageId='';blink=null;nextBlink=Infinity;fullyClosed=false;lastPanicAt=-Infinity;eyelidClosure=0;setClosure(0);}
+ // Effects are local to the battle clock; no new timers, network calls or assets.
+ let disorientStart=0,disorientPhase='normal',disorientLane=null;
+ const repressed=new Map();
+ function showPhase(phase,lane=disorientLane){
+  if(disorientLane!==lane){disorientLane?.classList?.remove('rift-freeze','rift-rush');disorientLane=lane;disorientPhase='normal';}
+  if(phase===disorientPhase)return;
+  disorientPhase=phase;
+  lane?.classList?.toggle('rift-freeze',phase==='freeze');lane?.classList?.toggle('rift-rush',phase==='rush');
+ }
+ function clearRepression(word){
+  const entry=repressed.get(word);if(!entry)return;
+  if(entry.hidden)word.el?.classList?.remove('rift-repressed');repressed.delete(word);
+ }
+ function updateRift(elapsed,lane){
+  if(!active)return;
+  if(settings.disorientation.enabled){
+   const d=settings.disorientation,cycle=d.intervalSec+d.freezeSec+d.rushSec;
+   const t=Math.max(0,elapsed-disorientStart)%cycle;
+   showPhase(t<d.intervalSec?'normal':t<d.intervalSec+d.freezeSec?'freeze':'rush',lane);
+  }
+  for(const [word,entry] of repressed){
+   if(word.state!=='falling'||word.el?.isConnected===false||word.foxfireHidden||word.ex2Hacked||elapsed>=entry.until){clearRepression(word);continue;}
+   if(!entry.hidden&&elapsed>=entry.from){entry.hidden=true;word.el?.classList?.add('rift-repressed');}
+  }
+ }
+ function motionMultiplier(){return !active||!settings.disorientation.enabled?1:disorientPhase==='freeze'?0:disorientPhase==='rush'?settings.disorientation.speedPct/100:1;}
+ function markRepression(word,elapsed){
+  const r=settings.repression;
+  if(!r.enabled||fullyClosed||word.chapterPanic||word.challengeComet||word.ex1Highlighted||word.ex5StarStruck||word.operatorHexSummoned||repressed.has(word)||repressed.size>=Math.floor(r.maxActive)||Math.random()*100>=r.chancePct)return;
+  repressed.set(word,{from:elapsed+r.visibleSec,until:elapsed+r.visibleSec+r.hiddenSec,hidden:false});
+ }
+ function reset(){showPhase('normal');disorientLane=null;for(const word of repressed.keys())clearRepression(word);active=false;stageId='';blink=null;nextBlink=Infinity;fullyClosed=false;lastPanicAt=-Infinity;eyelidClosure=0;setClosure(0);}
  function start(mode,id,elapsedAtStart=0){
   reset();if(mode!=='story'||!/^1-[1-9]\d*$/.test(String(id||'')))return;
-  active=true;stageId=String(id);config();ensureOverlay();
+  active=true;stageId=String(id);config();ensureOverlay();disorientStart=Math.max(0,Number(elapsedAtStart)||0);
   if(settings.sleepy.enabled)nextBlink=Math.max(0,Number(elapsedAtStart)||0)+rollInterval();
  }
  function relabel(word,entry,normalize){
@@ -161,7 +208,8 @@ window.RPG_MECHANICS?.register({
   }
   return changed;
  }
- function frame(elapsed,{words=[],vocabulary=[],normalize=s=>String(s).trim().toLowerCase(),onClosed=null}={}){
+ function frame(elapsed,{words=[],vocabulary=[],normalize=s=>String(s).trim().toLowerCase(),onClosed=null,lane=null}={}){
+  updateRift(elapsed,lane);
   if(!active||!settings.sleepy.enabled){fullyClosed=false;setClosure(0);return false;}
   if(!blink&&elapsed>=nextBlink)blink={start:elapsed,changed:false};
   if(!blink){fullyClosed=false;setClosure(0);return false;}
@@ -186,18 +234,19 @@ window.RPG_MECHANICS?.register({
   setClosure(fraction);return fullyClosed;
  }
  function markSpawn(word,elapsed,words){
-  if(!active||!settings.panic.enabled||!word||word.state!=='falling'||fullyClosed)return false;
+  if(!active||!word||word.state!=='falling'||fullyClosed)return false;
   const p=settings.panic;
-  if(elapsed-lastPanicAt<p.minGapSec||words.filter(w=>w?.chapterPanic&&w.state==='falling').length>=p.maxActive)return false;
-  if(Math.random()*100>=p.chancePct)return false;
-  word.chapterPanic=true;word.ignoreCollision=true;lastPanicAt=elapsed;
-  word.el?.classList?.add('chapter-panic-word');return true;
+  if(p.enabled&&elapsed-lastPanicAt>=p.minGapSec&&words.filter(w=>w?.chapterPanic&&w.state==='falling').length<p.maxActive&&Math.random()*100<p.chancePct){
+   word.chapterPanic=true;word.ignoreCollision=true;lastPanicAt=elapsed;
+   word.el?.classList?.add('chapter-panic-word');return true;
+  }
+  markRepression(word,elapsed);return false;
  }
  function panicDamage(){return settings.panic.damage;}
  function suspend(){eyelidClosure=0;setClosure(0);}
  // Multiplier follows the visual eyelids, including both groggy partial reopenings.
  // At the default 45% dip, full closure retains 55% of the user's chosen BGM volume.
  function bgmGain(){return active&&settings.sleepy.enabled?1-(settings.sleepy.bgmDipPct/100)*eyelidClosure:1;}
- const api=Object.freeze({start,reset,suspend,frame,markSpawn,panicDamage,bgmGain,isFullyClosed:()=>fullyClosed,inspect:()=>({active,stageId,fullyClosed,eyelidClosure,nextBlink,blinkStart:blink?.start??null,settings:JSON.parse(JSON.stringify(settings))})});
+ const api=Object.freeze({start,reset,suspend,frame,markSpawn,clearRepression,motionMultiplier,panicDamage,bgmGain,isFullyClosed:()=>fullyClosed,inspect:()=>({active,stageId,fullyClosed,eyelidClosure,nextBlink,blinkStart:blink?.start??null,settings:JSON.parse(JSON.stringify(settings))})});
  window.RPG_CH1_SPECIAL=api;
 })();

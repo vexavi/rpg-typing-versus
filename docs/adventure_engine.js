@@ -6166,6 +6166,7 @@ const ex2FallMult = ex2Phase4Plus ? ex2RandomFallMult() : 1;
 
     const obj = {
       id: nextWordId++,
+      operatorHexSummoned,
       prompt,
       answer,
       answerNorm: normalizeAnswer(answer),
@@ -6317,6 +6318,7 @@ if(state === "landed"){
     const idx = wordsOnField.findIndex(w => w.id === id);
     if(idx === -1) return;
 
+    window.RPG_CH1_SPECIAL?.clearRepression?.(wordsOnField[idx]);
     wordsOnField[idx].el.remove();
     wordsOnField.splice(idx,1);
     restackDirty = true; // defer restack to next frame for performance
@@ -7831,11 +7833,12 @@ if(gameState === "paused"){
       // Falling words and impacts CONTINUE even while the eyelids are fully closed.
       // Only fresh normal spawns wait until the eyes start opening.
       const chapterBlackout=!!window.RPG_CH1_SPECIAL?.frame(elapsed,{
-        words:wordsOnField,vocabulary:currentMode==='story'?operatorStageWordEntries():[],
+        words:wordsOnField,lane:wordLane,vocabulary:currentMode==='story'?operatorStageWordEntries():[],
         normalize:normalizeAnswer,onClosed:()=>{answerInput.value='';}
       });
       setSleepyBgmGain(window.RPG_CH1_SPECIAL?.bgmGain?.() ?? 1);
       const battleDt=dt; // No word-motion freeze during Sleepy darkness.
+      const riftMotion=window.RPG_CH1_SPECIAL?.motionMultiplier?.()??1;
       const spawnDt=chapterBlackout?0:dt; // Do not spawn new, unseen words during the blackout.
       ex4HandlePhaseTriggers(elapsed);
       ex2HandlePhaseTriggers(elapsed);
@@ -7951,9 +7954,9 @@ if(gameState === "paused"){
           ? w.fallSpeedOverride
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
-        if(!frozenByOperator)w.y += v * battleDt;
+        if(!frozenByOperator&&riftMotion!==0)w.y += v * battleDt * riftMotion;
         // Word-specific Shield Advance holds also suspend custom movement hooks.
-        if(!frozenByOperator&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt:battleDt});
+        if(!frozenByOperator&&riftMotion!==0&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt:battleDt*riftMotion});
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
         const gIdx = (w.groupIndex || 0);
@@ -7983,6 +7986,7 @@ if(gameState === "paused"){
           }
 
           w.state = "landed";
+          window.RPG_CH1_SPECIAL?.clearRepression?.(w);
           w.el.classList.add("landed");
           mechanicEvent('onLand',w);
           if(shootingStarActive() && w.ex1Highlighted){

@@ -8,3 +8,10 @@
 .word.chapter-panic-word{border-color:#eb465a!important;background:rgba(95,18,38,.90)!important;box-shadow:inset 0 0 0 1px #ffc0cb44,0 0 11px #f73556b0!important}
 .word.chapter-panic-word .tag::before{content:'PANIC ';color:#ff8796;font-size:10px;font-weight:900;letter-spacing:.03em}
 .word.chapter-panic-word .prompt{color:#fff1f4}
+
+/* Rift mechanics: one lane outline and one static mist per affected word. No filters or animation loops. */
+.wordLane.rift-freeze{outline:2px solid #a995d8;outline-offset:-2px}
+.wordLane.rift-rush{outline:2px solid #dc8b64;outline-offset:-2px}
+.word.rift-repressed{background:linear-gradient(120deg,#181321,#30263c 48%,#181321)!important;border-color:#79608e!important;box-shadow:inset 0 0 12px #120d1a!important}
+.word.rift-repressed .prompt,.word.rift-repressed .answer{visibility:hidden!important}
+.word.rift-repressed .prompt::after{content:'…';visibility:visible;color:#b8a5cd;position:absolute;left:12px;top:50%;transform:translateY(-50%)}

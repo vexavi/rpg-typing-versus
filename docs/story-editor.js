@@ -5,7 +5,7 @@
 // Static Firebase imports blocked the entire editor if the CDN was unavailable.
 import './conquest-map.js?v=135.0';
 import './conquest-core.js?v=136.0';
-import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=136.0';
+import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=138.0';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
 import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs?v=131.0';
@@ -151,7 +151,7 @@ function damageSettings(st){
  return `<section class="section damage-settings"><div class="editheading"><h3>Damage Settings</h3></div><div class="grid">${fields}${panic}</div><div class="grid"><label><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Enable Comet (every 4th spawn, starting with the first)</label><label><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Enable Shooting Star (every 3rd spawn, 4-second countdown after landing)</label></div><div class="boss-sprite-actions"><button type="button" data-action="copy-damage">Copy damage to territory</button><button type="button" data-action="reset-damage">Reset damage defaults</button></div><p class="muted">HP and mechanics are unchanged.</p></section>`;
 }
 function mechanicMarkup(st,onlyChapter1=false){
- const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic'].includes(m.id):!['sleepy','delirium','panic'].includes(m.id));if(!plugins.length)return '<p class="muted">No additional mechanics.</p>';
+ const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic','disorientation','repression'].includes(m.id):!['sleepy','delirium','panic','disorientation','repression'].includes(m.id));if(!plugins.length)return '<p class="muted">No additional mechanics.</p>';
  return plugins.map(m=>{
   const settings=st.battle?.mechanics?.[m.id]||{};
   const controls=m.fields.filter(field=>!(m.id==='panic'&&field.key==='damage')).map(field=>{
@@ -570,7 +570,7 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
  if(a==='copy-ch1-mechanics'){
   if(ch.id!=='1'||!st)return;
   if(!confirm(`Copy Sleepy, Delirium and Panic from ${st.id} to the other Rift encounters? Existing settings for those three mechanics will be replaced.`))return;
-  const ids=['sleepy','delirium','panic'];const defs=catalog();
+  const ids=['sleepy','delirium','panic','disorientation','repression'];const defs=catalog();
   for(const target of battleStages(ch)){if(target===st)continue;target.battle.mechanics ||= {};
    for(const id of ids){const def=defs.find(x=>x.id===id);if(!def)continue;target.battle.mechanics[id]={};
     for(const field of def.fields)target.battle.mechanics[id][field.key]=st.battle.mechanics?.[id]?.[field.key]??field.default;

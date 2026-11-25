@@ -62,11 +62,12 @@ export function cleanStory(raw){
     battle.mechanics[mechanicId]=clean;
    }
    // Known Chapter 1 mechanics: reject manipulated imports and impossible intervals before publish.
-   const chapter1Ranges={sleepy:{minIntervalSec:[4,120],maxIntervalSec:[4,120],bgmDipPct:[0,90],closingSec:[0.2,4],closedSec:[0.2,4],openingSec:[0.2,4]},delirium:{changePercent:[0,100]},panic:{chancePct:[0,100],maxActive:[1,8],minGapSec:[0,30],damage:[1,10]}};
+   const chapter1Ranges={sleepy:{minIntervalSec:[4,120],maxIntervalSec:[4,120],bgmDipPct:[0,90],closingSec:[0.2,4],closedSec:[0.2,4],openingSec:[0.2,4]},delirium:{changePercent:[0,100]},panic:{chancePct:[0,100],maxActive:[1,8],minGapSec:[0,30],damage:[1,10]},disorientation:{intervalSec:[3,120],freezeSec:[0.5,5],rushSec:[0.5,5],speedPct:[100,300]},repression:{chancePct:[0,100],visibleSec:[0.5,10],hiddenSec:[0.5,5],maxActive:[1,6]}};
    if(chId==='1')for(const [name,ranges] of Object.entries(chapter1Ranges)){
     const values=battle.mechanics[name];if(!values)continue;
     if(values.enabled!==undefined&&typeof values.enabled!=='boolean')throw Error(`Stage ${id}: ${name}.enabled must be true or false.`);
     for(const [key,[min,max]] of Object.entries(ranges))if(values[key]!==undefined&&(typeof values[key]!=='number'||!Number.isFinite(values[key])||values[key]<min||values[key]>max))throw Error(`Stage ${id}: ${name}.${key} must be ${min}–${max}.`);
+    if(name==='repression'&&values.maxActive!==undefined&&!Number.isInteger(values.maxActive))throw Error(`Stage ${id}: repression.maxActive must be a whole number.`);
     if(name==='sleepy'&&(values.minIntervalSec??16)>(values.maxIntervalSec??22))throw Error(`Stage ${id}: Sleepy shortest interval cannot exceed longest interval.`);
    }
    if(!Number.isInteger(battle.template)||battle.template<1||battle.template>5||!battle.bossName||battle.bossName.length>40||!Number.isInteger(battle.bossHp)||battle.bossHp<1||battle.bossHp>999)throw Error(`Stage ${id}: invalid battle template, boss name or HP.`);
