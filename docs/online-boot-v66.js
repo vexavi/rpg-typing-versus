@@ -2,7 +2,7 @@
  * next time on the same browser the saved Firebase UID restores the card session.
  * No bearer card credentials are persisted in localStorage.
  */
-import {offlineCardCache} from './offline-session.js?v=86.11';
+import {offlineCardCache} from './offline-session.js?v=147.0';
 
 const gate=document.createElement('div');
 gate.id='adventureGate';
@@ -131,7 +131,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=137.0');
+   await import('./online-spark.js?v=147.0');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
@@ -148,16 +148,17 @@ async function load(identity,progress,{offline=false}={}){
  const playerKey=key('bossTyping_profile_v1');let profile={};
  try{profile=JSON.parse(localStorage.getItem(playerKey)||'{}')}catch{}
  profile.xp=Number(progress?.xp)||0;
- profile.achievements=progress?.achievements||[];
+ profile.achievements=(progress?.achievements||[]).filter(x=>!['extra_clear','master_clear'].includes(x));
+ for(const k of ['bossTyping_hiScore_extra_v1','bossTyping_extraCleared_v1'])localStorage.removeItem(key(k));
  profile.name=identity.name;
  localStorage.setItem(playerKey,JSON.stringify(profile));
- for(const [k,val] of [['bossTyping_hiScore_normal_v1',progress?.best_normal],['bossTyping_hiScore_extra_v1',progress?.best_extra]])localStorage.setItem(key(k),String(Number(val)||0));
- for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear],['bossTyping_extraCleared_v1',progress?.extra_clear]])localStorage.setItem(key(k),val?'1':'0');
+ for(const [k,val] of [['bossTyping_hiScore_normal_v1',progress?.best_normal]])localStorage.setItem(key(k),String(Number(val)||0));
+ for(const [k,val] of [['bossTyping_normalCleared_v1',progress?.normal_clear]])localStorage.setItem(key(k),val?'1':'0');
  window.RPG_PERF?.begin('Game scripts');
  if(scriptsStarted)throw Error('Game startup interrupted. Reload to retry.');scriptsStarted=true;
  // Preload all required files together, then execute in dependency order. Preloads
  // have the exact same URLs as the injected scripts and use the HTTP cache.
- const scripts=['conquest-map.js','conquest-core.js','story-mode.js','adventure_rewards.js','guild-coins.js','squad-tutorial.js','adventure_engine.js'].map(file=>({file,url:file+'?v='+(file==='adventure_engine.js'?'144.0':file==='conquest-map.js'?'145.0':file==='story-mode.js'?'145.0':file==='conquest-core.js'?'145.0':file==='squad-tutorial.js'?'131.0':'81')}));
+ const scripts=['conquest-map.js','conquest-core.js','story-mode.js','adventure_rewards.js','guild-coins.js','squad-tutorial.js','adventure_engine.js'].map(file=>({file,url:file+'?v='+(file==='adventure_engine.js'?'147.0':file==='guild-coins.js'?'147.0':file==='conquest-map.js'?'145.0':file==='story-mode.js'?'146.0':file==='conquest-core.js'?'145.0':file==='squad-tutorial.js'?'131.0':'81')}));
  for(const {url} of scripts){if(!Array.from(document.querySelectorAll('link[rel=preload]')).some(link=>link.href===new URL(url,document.baseURI).href)){const link=document.createElement('link');link.rel='preload';link.as='script';link.href=url;document.head.append(link);}}
  for(const {file,url} of scripts)await new Promise((resolve,reject)=>{
    const s=document.createElement('script');s.src=url;s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded. Reload to retry.'));document.body.appendChild(s);

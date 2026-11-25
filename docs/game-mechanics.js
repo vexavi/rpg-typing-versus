@@ -34,7 +34,7 @@
  }
  // Existing Challenge mechanics: enabled toggle and optional spawn chance override.
  // -1 uses the original deterministic 1-in-3 / 1-in-4 spawn cadence.
- register({id:'star_struck',label:'Star Struck',description:'Sunspot words in Challenge Mode',modes:['challenge','extra'],
+ register({id:'star_struck',label:'Star Struck',description:'Sunspot words in Challenge Mode',modes:['challenge'],
   fields:[{key:'enabled',label:'Enabled',type:'boolean',default:true},{key:'chancePct',label:'Spawn chance override (%)',type:'number',min:-1,max:100,step:1,default:-1,help:'-1 preserves original cadence'}]});
  register({id:'comet',label:'Comet',description:'Passing comet words in Challenge Mode',modes:['challenge'],
   fields:[{key:'enabled',label:'Enabled',type:'boolean',default:true},{key:'chancePct',label:'Spawn chance override (%)',type:'number',min:-1,max:100,step:1,default:-1,help:'-1 preserves original cadence'}]});

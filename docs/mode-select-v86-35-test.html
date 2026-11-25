@@ -1043,7 +1043,7 @@ body.adventure-client #overlay.defeat-active .defeat-okay{
   body.adventure-client #overlay.defeat-active .defeat-hearts{animation:none}
 }
 
-/* v63 — Normal / Extra rankings in the shared Profile style. */
+/* v63 — Normal rankings in the shared Profile style. */
 body.adventure-client .overlayBox.rankings-card{
   width:min(740px,calc(100vw - 28px));max-height:calc(100dvh - 36px);
   padding:20px 22px;overflow-y:auto;
@@ -1429,5 +1429,5 @@ const getSelectedOperator=()=>selected;const selectOperator=(id)=>{if(ownedOpera
   refreshHero();
 
 
-for(const mode of ['Story Mode','Practice','Normal Mode','Extra Mode','Challenge Mode','All Grades Challenge','Profile','Recruitment','Rankings','Tournament']){const b=document.createElement('button');b.className='choiceBtn student-mode-card';b.innerHTML='<span class="title">'+mode+'</span>';if(['Extra Mode','Challenge Mode','Tournament'].includes(mode))b.disabled=true;overlayChoices.appendChild(b);}</script>
+for(const mode of ['Story Mode','Practice','Normal Mode','Challenge Mode','All Grades Challenge','Profile','Recruitment','Rankings','Tournament']){const b=document.createElement('button');b.className='choiceBtn student-mode-card';b.innerHTML='<span class="title">'+mode+'</span>';if(['Challenge Mode','Tournament'].includes(mode))b.disabled=true;overlayChoices.appendChild(b);}</script>
 </body></html>

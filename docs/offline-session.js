@@ -61,10 +61,9 @@ async function save(code,identity,progress){
   selected_character:String(identity.selected_character||'mc').slice(0,60),
   tutorial:{version:Number(tutorial.version)||0,step:Number(tutorial.step)||1}
  },progress:{xp:Math.max(0,Math.trunc(Number(progress?.xp)||0)),
-  achievements:Array.isArray(progress?.achievements)?progress.achievements.filter(x=>typeof x==='string').slice(0,100):[],
+  achievements:Array.isArray(progress?.achievements)?progress.achievements.filter(x=>typeof x==='string'&&!['extra_clear','master_clear'].includes(x)).slice(0,100):[],
   best_normal:Math.max(0,Math.trunc(Number(progress?.best_normal)||0)),
-  best_extra:Math.max(0,Math.trunc(Number(progress?.best_extra)||0)),
-  normal_clear:progress?.normal_clear===true,extra_clear:progress?.extra_clear===true}};
+  normal_clear:progress?.normal_clear===true}};
  return safeWrite(key,record);
 }
 async function updateConfirmedProgress(code,payload){
@@ -72,9 +71,9 @@ async function updateConfirmedProgress(code,payload){
  const record=safeRead(key);if(!record||record.v!==1)return false;
  const p=record.progress||{};
  const val=k=>Math.max(0,Math.trunc(Number(payload?.[k])||0));
- record.progress={xp:val('xp'),achievements:Array.isArray(payload?.achievements)?payload.achievements.filter(x=>typeof x==='string').slice(0,100):[],
-   best_normal:val('best_normal'),best_extra:val('best_extra'),
-   normal_clear:payload?.normal_clear===true,extra_clear:payload?.extra_clear===true};
+ record.progress={xp:val('xp'),achievements:Array.isArray(payload?.achievements)?payload.achievements.filter(x=>typeof x==='string'&&!['extra_clear','master_clear'].includes(x)).slice(0,100):[],
+   best_normal:val('best_normal'),
+   normal_clear:payload?.normal_clear===true};
  // Do not extend the offline verification lifetime just because a score saved.
  return safeWrite(key,record);
 }
@@ -86,12 +85,12 @@ async function get(code){
   !idPattern.test(record.identity?.public_id)||
   Number(record.identity?.tutorial?.version)<1)return null;
  const vocabularyAvailable=Boolean(readVocab(record.identity.public_id));
- return {...record,vocabularyAvailable};
+ const {best_extra,extra_clear,...progress}=record.progress||{};progress.achievements=(progress.achievements||[]).filter(x=>!['extra_clear','master_clear'].includes(x));return {...record,progress,vocabularyAvailable};
 }
 function recordLocalResult(publicId,{mode,stageId=null,score=null}={}){
- if(!idPattern.test(publicId)||!['story','normal','extra','practice'].includes(mode))return false;
+ if(!idPattern.test(publicId)||!['story','normal','practice'].includes(mode))return false;
  const key=JOURNAL_PREFIX+publicScope(publicId),stored=safeRead(key);
- const history=Array.isArray(stored?.runs)?stored.runs.slice(-19):[];
+ const history=Array.isArray(stored?.runs)?stored.runs.filter(r=>r.mode!=='extra').slice(-19):[];
  history.push({mode,stageId:typeof stageId==='string'&&/^[\d-]{1,16}$/.test(stageId)?stageId:null,
   score:Number.isFinite(score)?Math.max(0,Math.trunc(score)):null,at:Date.now(),synced:false});
  // Local practice history is informational; it is NEVER replayed to cloud.

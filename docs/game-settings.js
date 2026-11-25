@@ -1,7 +1,7 @@
 import {currentTeacher,googleTeacher,teacherSignOut,errorMessage} from './cloud-api.js';
 import {getFirestore,doc,getDocFromServer,serverTimestamp,runTransaction} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
-import {nextModeConfig} from './dashboard-revisions.mjs?v=133.0';
+import {nextModeConfig} from './dashboard-revisions.mjs?v=147.0';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const el=id=>document.getElementById(id);let teacher=null,db=null,chapters=[],ready=false,reading=0,loading=false,saving=false,dirty=false,loadedScope=null,loadedData=null,selected=null;
 const fields={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,20],bossMaxHp:['Boss HP',1,2000,1],hitDamage:['Damage / word',1,100,1]};
@@ -56,7 +56,7 @@ function stable(value){if(Array.isArray(value))return value.map(stable);if(value
 function stamp(data){return JSON.stringify(stable({values:data?.values||{},mechanics:data?.mechanics||{},updatedAt:data?.updatedAt?.toMillis?.()??null}));}
 async function commit(scope,data,remove=false){
  const mode=scope.split(':')[1],target=doc(db,'gameBalance',scope),config=doc(db,'systemConfig','current');
- const ranked=['normal','extra','challenge'].includes(mode);
+ const ranked=['normal','challenge'].includes(mode);
  await runTransaction(db,async tx=>{const old=await tx.get(target);const cfg=ranked?await tx.get(config):null;
  if(stamp(old.data())!==stamp(loadedData))throw Error('Settings changed in another tab. Reload before publishing.');
  if(!old.exists()&&remove)return;

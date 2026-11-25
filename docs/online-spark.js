@@ -4,7 +4,7 @@
  * Never trust this bridge for paid or scarce rewards. */
 import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js?v=86.30';
 import {combineProgress,validateDelta,planTerritorySave,progressResponse,validStageId,territoryOf,hasClear} from './conquest-progress.mjs?v=132.0';
-import {modeRevision,balanceScopes} from './dashboard-revisions.mjs?v=133.0';
+import {modeRevision,balanceScopes} from './dashboard-revisions.mjs?v=147.0';
 import {makePull,getJstDate} from './recruitment-core.mjs';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
@@ -29,7 +29,7 @@ async function currentPlayer(body={}){
  return {session:s,card:c,player:p,id:s.publicId,playerRef:ref('players',s.publicId)};
 }
 const defaultPlayer=(card)=>({publicId:card.publicId,username:card.username,character:'mc',grade:card.grade||null,rankIconId:'icon01',rankIconUpdatedAt:0,disabled:false,
- adventure:{xp:0,best_normal:0,best_extra:0,normal_clear:false,extra_clear:false,achievements:[]},
+ adventure:{xp:0,best_normal:0,normal_clear:false,achievements:[]},
  cosmetics:{nickname:card.username,motto:'',theme:'signal',background:'default',featured:'mc',showcase:['mc','']},
  story:{completed:[],best_stars:{}},tutorial:{version:0,step:1,updatedAt:null},recruitment:{coins:0,permits:0,pity_six:0,owned:{},recent:[],shards:0,auras:{}},tournament:{count:0,history:[],trophies:{gold:0,silver:0,bronze:0}}});
 // Remembered browser sign-in: Firebase Auth already persists its anonymous UID.
@@ -154,12 +154,12 @@ async function setClass(b){
  return {ok:true,grade};
 }
 async function rankIcon(b){const p=await currentPlayer(b);if(b.action==='set'){const icon=String(b.icon_id||'');if(!/^icon\d{2}$/.test(icon))err('Invalid profile icon.');await updateDoc(p.playerRef,{rankIconId:icon,rankIconUpdatedAt:Date.now()});
- for(const mode of ['normal','extra','challenge','shared']){const r=ref('rankEntries',p.id+'_'+mode),snap=await getDocFromServer(r);
+ for(const mode of ['normal','challenge','shared']){const r=ref('rankEntries',p.id+'_'+mode),snap=await getDocFromServer(r);
   if(snap.exists())try{await updateDoc(r,{icon_id:icon,updatedAt:serverTimestamp()})}catch(e){console.warn('Ranking icon update deferred',e);}}
  return {ok:true,icon_id:icon,updated_at:Date.now()};}
  return {ok:true,icon_id:p.player.rankIconId||'icon01',updated_at:p.player.rankIconUpdatedAt||0};}
 let currentRun=null;
-async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','extra','challenge','shared'].includes(mode))err('Invalid ranking mode.');
+async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','challenge','shared'].includes(mode))err('Invalid ranking mode.');
  const grade=mode==='shared'?'all':p.player.grade;if(!grade)err('Assign class before playing.');
  const [v,configVersion]=await Promise.all([read('vocabPools',mode==='shared'?'all':poolOf(grade)),currentConfig(mode)]);if(!v)err('Vocabulary is missing.');
  const revision=Number(v.revision)||1,token=crypto.randomUUID();
@@ -169,7 +169,7 @@ async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['nor
 }
 function rankQuery(mode,grade,revision,configRevision,n=20){return query(collection(db,'rankEntries'),where('mode','==',mode),where('grade','==',grade),where('vocabRevision','==',revision),where('configRevision','==',configRevision),orderBy('score','desc'),limit(n));}
 async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',grade=mode==='shared'?'all':b.grade||p.player.grade;
- if(!['normal','extra','challenge','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
+ if(!['normal','challenge','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
  const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([read('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
  const revision=Number(v.revision)||1,rule=`spark-${mode}-${grade}-v${revision}-c${c}`;
  const d=await getDocsFromServer(rankQuery(mode,grade,revision,c,Math.min(20,Number(b.limit)||20)));
@@ -177,7 +177,7 @@ async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',g
  return {ok:true,mode,grade,assigned_grade:p.player.grade,entries,current:mine,total:entries.length,ruleset:rule,expected_ruleset:rule,source:'firebase-spark-unverified',completed_only:true,vocab_revision:revision,config_revision:c};
 }
 async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Number.isInteger(b.score)||b.score<=0||b.score>2000000)err('Invalid score.');
- const snap=await getDocFromServer(ref('sparkRuns',uid()));const run=snap.data();if(!run||run.status!=='active'||run.token!==b.run_token)err('Run missing or already completed.');
+ const snap=await getDocFromServer(ref('sparkRuns',uid()));const run=snap.data();if(!run||!['normal','challenge','shared'].includes(run.mode)||run.status!=='active'||run.token!==b.run_token)err('Run missing or already completed.');
  if(b.mode!==run.mode||b.grade!==run.grade||b.vocab_pool!==run.pool||b.vocab_revision!==run.vocabRevision)err('Run config mismatch.');
  if(!run.startedAt||Date.now()-run.startedAt.toMillis()<(['shared','challenge'].includes(run.mode)?115000:15000))err('Run completed too quickly.');
  const [c,v]=await Promise.all([currentConfig(run.mode),read('vocabPools',run.pool)]);
@@ -199,12 +199,12 @@ const GUILD_MAX_BALANCE=1000000000;
 const guildUUID=x=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(String(x||''));
 async function guildClaim(b){
  const p=await currentPlayer(b),mode=String(b.mode||'');
- if(!['normal','extra','story'].includes(mode))err('This mode does not earn Guild Coins.');
+ if(!['normal','story'].includes(mode))err('This mode does not earn Guild Coins.');
  if(!p.player.recruitment||!Number.isInteger(p.player.recruitment.coins))err('Guild Coin wallet is missing. Ask teacher to migrate this card.');
  const correct=Number(b.correct),incorrect=Number(b.incorrect);
  if(!Number.isSafeInteger(correct)||!Number.isSafeInteger(incorrect)||correct<0||incorrect<0||correct>1000000||incorrect>1000000||!correct)err('Invalid run answer counts.');
  let claimKey='',stageId='',runToken=null,attemptId=null,preRank=null;
- if(mode==='normal'||mode==='extra'){
+ if(mode==='normal'){
   runToken=String(b.run_token||'');if(!guildUUID(runToken))err('Invalid ranked token.');
   preRank=await getDocFromServer(ref('sparkRuns',uid()));
   const rank=preRank.data();
@@ -235,7 +235,7 @@ async function guildClaim(b){
    const run=await tx.get(ref('sparkRuns',uid()));
    if(!run.exists()||run.data().status!=='submitted'||run.data().token!==runToken||run.data().mode!==mode||run.data().publicId!==p.id)err('Ranked run is no longer eligible.');
    const accurate=correct*10>=9*(correct+incorrect);
-   amount=(mode==='normal'?10:15)+(accurate?5:0);
+   amount=10+(accurate?5:0);
   }
   const receiptRef=ref('guildClaims',`${p.id}__${refKey}`);
   const prior=await tx.get(receiptRef);
@@ -301,7 +301,7 @@ async function auraChange(b){
  });return result;
 }
 async function profile(b,verifiedPlayer=null){const p=verifiedPlayer||await currentPlayer(b),d=p.player;const owned=Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id));const safe=sanitizedCosmetics(d);
- return {ok:true,public_id:p.id,name:d.username,selected_character:safe.featured,cosmetics:safe,adventure:d.adventure||{},tournament:d.tournament||{},collection:{owned:['mc',...owned],available:['mc',...owned]},recruitment:{coins:Math.max(0,Math.trunc(Number(d.recruitment?.coins)||0)),permits:0,pity_six:Math.max(0,Number(d.recruitment?.pity_six)||0),pity_five:Math.max(0,Number(d.recruitment?.pity_five)||0),featured_guarantee:!!d.recruitment?.featured_guarantee,status:'classroom-browser-reported',daily_claimed:d.recruitment?.lastDailyDate===getJstDate(),shards:Math.max(0,Math.trunc(Number(d.recruitment?.shards)||0)),auras:d.recruitment?.auras||{},owned:Object.fromEntries(Object.entries(d.recruitment?.owned||{}).filter(([id])=>!RETIRED_OPERATORS.has(id)))},tutorial:d.tutorial||{version:1,step:5}};}
+ return {ok:true,public_id:p.id,name:d.username,selected_character:safe.featured,cosmetics:safe,adventure:activeAdventure(d.adventure),tournament:d.tournament||{},collection:{owned:['mc',...owned],available:['mc',...owned]},recruitment:{coins:Math.max(0,Math.trunc(Number(d.recruitment?.coins)||0)),permits:0,pity_six:Math.max(0,Number(d.recruitment?.pity_six)||0),pity_five:Math.max(0,Number(d.recruitment?.pity_five)||0),featured_guarantee:!!d.recruitment?.featured_guarantee,status:'classroom-browser-reported',daily_claimed:d.recruitment?.lastDailyDate===getJstDate(),shards:Math.max(0,Math.trunc(Number(d.recruitment?.shards)||0)),auras:d.recruitment?.auras||{},owned:Object.fromEntries(Object.entries(d.recruitment?.owned||{}).filter(([id])=>!RETIRED_OPERATORS.has(id)))},tutorial:d.tutorial||{version:1,step:5}};}
 
 
 // Share one freshly verified account snapshot only within this login request.
@@ -432,13 +432,14 @@ async function profileCustom(b){
  return {ok:true,cosmetics:c,selected_character:c.featured};
 }
 
-async function adventureProgress(b){const p=await currentPlayer(b);if(b.action==='load')return {ok:true,...(p.player.adventure||{})};if(b.action!=='save')err('Invalid action.');
+function activeAdventure(a={}){const {best_extra,extra_clear,...rest}=a;return {...rest,achievements:(Array.isArray(a.achievements)?a.achievements:[]).filter(x=>!['extra_clear','master_clear'].includes(x))};}
+async function adventureProgress(b){const p=await currentPlayer(b);if(b.action==='load')return {ok:true,...activeAdventure(p.player.adventure)};if(b.action!=='save')err('Invalid action.');
  return runTransaction(db,async tx=>{
  const snapshot=await tx.get(p.playerRef);if(!snapshot.exists()||snapshot.data().disabled)err('Player no longer active.');
  const a=snapshot.data().adventure||{};
- const up={xp:Math.max(a.xp||0,Number(b.xp)||0),best_normal:Math.max(a.best_normal||0,Number(b.best_normal)||0),best_extra:Math.max(a.best_extra||0,Number(b.best_extra)||0),normal_clear:!!(a.normal_clear||b.normal_clear),extra_clear:!!(a.extra_clear||b.extra_clear),achievements:[...new Set([...(a.achievements||[]),...(Array.isArray(b.achievements)?b.achievements:[])])].slice(0,200)};
- if(up.xp>100000000||up.best_normal>2000000||up.best_extra>2000000)err('Progress out of range.');
- if(Object.keys(up).some(k=>JSON.stringify(up[k])!==JSON.stringify(a[k])))tx.update(p.playerRef,{adventure:up});
+ const up={xp:Math.max(a.xp||0,Number(b.xp)||0),best_normal:Math.max(a.best_normal||0,Number(b.best_normal)||0),normal_clear:!!(a.normal_clear||b.normal_clear),achievements:[...new Set([...(a.achievements||[]),...(Array.isArray(b.achievements)?b.achievements:[])])].filter(x=>!['extra_clear','master_clear'].includes(x)).slice(0,200)};
+ if(up.xp>100000000||up.best_normal>2000000)err('Progress out of range.');
+ if(Object.keys(a).length!==Object.keys(up).length||Object.keys(up).some(k=>JSON.stringify(up[k])!==JSON.stringify(a[k])))tx.update(p.playerRef,{adventure:up});
  return {ok:true,...up};});}
 // Per-player, per-territory subcollection; independent from the wallet and profile.
 const territoryRef=(playerId,id)=>doc(db,'players',playerId,'conquestProgress',id);

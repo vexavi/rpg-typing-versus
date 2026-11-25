@@ -9,8 +9,8 @@
   return correct+incorrect>0 ? (100*correct/(correct+incorrect)) : 0;
  }
  function preview(mode,correct=0,incorrect=0,firstClear=false){
-  if(mode==='normal'||mode==='extra'){
-   const base=mode==='normal'?10:15;return base+(accuracy(correct,incorrect)>=90?5:0);
+  if(mode==='normal'){
+   const base=10;return base+(accuracy(correct,incorrect)>=90?5:0);
   }
   return mode==='story'?(firstClear?20:5):0;
  }

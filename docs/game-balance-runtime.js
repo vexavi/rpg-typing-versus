@@ -2,7 +2,7 @@
  * Saved server settings are read-only for offline UNRANKED play. */
 (function(){
  'use strict';
- const allowed=['normal','extra','story','practice','challenge'];
+ const allowed=['normal','story','practice','challenge'];
  const cache=new Map();let effective=null;let storyOverride=null;let active={mode:'normal',stage:'1',chapter:null};
  const STORAGE='rpgTeacherBalance_v869';
  const saved=(()=>{try{const x=JSON.parse(localStorage.getItem(STORAGE)||'null');return x?.v===1&&Number.isFinite(x.updatedAt)&&x.updatedAt<=Date.now()+60000&&Date.now()-x.updatedAt<30*86400000&&Array.isArray(x.items)?x.items:[]}catch{return []}})();
@@ -45,7 +45,7 @@
   return out;
  }
  function apply(scope,data,source='local'){
-  if(!/^((mode:(normal|extra|story|practice|challenge))|(chapter:[a-zA-Z0-9_-]+)|(stage:(normal|extra|story|practice|challenge):[a-zA-Z0-9_-]+))$/.test(scope))return;
+  if(!/^((mode:(normal|story|practice|challenge))|(chapter:[a-zA-Z0-9_-]+)|(stage:(normal|story|practice|challenge):[a-zA-Z0-9_-]+))$/.test(scope))return;
   cache.set(scope,clean(data||{}));effective=null;
   if(source==='server'){cachedScopes.add(scope);schedulePersist();}
   if(scopeList(active).includes(scope))window.dispatchEvent(new Event('rpg-balance-update'));

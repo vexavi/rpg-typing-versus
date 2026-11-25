@@ -45,7 +45,7 @@
     cassian: Object.freeze({id:'cassian',name:'Cassian',rarity:6,title:"Sovereign’s Decree",every:6,maxEliminations:3,invulnerableSec:5,
       description:'Every 6 correct words, instantly eliminate up to 3 falling words. Missing eliminations deal 1 boss damage each; 4+ available words grant 5 seconds of invulnerability.'})
   });
-  const ALLOWED_MODES = new Set(['normal','extra','practice','story','challenge','shared']);
+  const ALLOWED_MODES = new Set(['normal','practice','story','challenge','shared']);
   const validTime=t=>Number.isFinite(t)&&t>=0?t:0;
   const fallingWord=w=>w&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const rewindableWord=w=>w&&!w.vesperExecution&&w.valcrestKind!=='duel'&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
@@ -448,7 +448,7 @@
       // future mode adds one, without bypassing the once-per-stage restriction.
       return lowHp(hp,rule.adrenalineHp)?activateFletcherLastStand(time):null;
     }
-    // Stage transitions retain player HP in Normal/Extra but reset operator
+    // Stage transitions retain player HP in Normal but reset operator
     // counters. Trigger a fresh emergency shield if Fletcher enters at 1 HP.
     // Called after the stage countdown: its 3 seconds are all playable time.
     function onStageStart(hp,time,words=[]){

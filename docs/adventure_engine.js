@@ -281,7 +281,6 @@ function fitAnswerToRight(wordEl){
     try{
       const groups = [
         (typeof STAGES_NORMAL !== "undefined" ? STAGES_NORMAL : null),
-        (typeof STAGES_EXTRA !== "undefined" ? STAGES_EXTRA : null),
         (typeof STAGES_PRACTICE !== "undefined" ? STAGES_PRACTICE : null),
         (typeof STAGES_CHALLENGE !== "undefined" ? STAGES_CHALLENGE : null),
       ];
@@ -377,7 +376,7 @@ function fitAnswerToRight(wordEl){
 
   function cleanStageConfigMode(value){
     const raw = String(value || "").trim().toLowerCase();
-    if(raw === "ex" || raw === "extra" || raw === "extra mode") return "extra";
+    if(raw === "ex" || raw === "extra" || raw === "extra mode") return null;
     if(raw === "practice" || raw === "practice mode") return "practice";
     if(raw === "challenge" || raw === "challenge mode") return "challenge";
     return "normal";
@@ -387,7 +386,7 @@ function fitAnswerToRight(wordEl){
     if(!raw || typeof raw !== "object") return null;
     const mode = cleanStageConfigMode(raw.mode || raw.gameMode || raw.stageMode);
     const stage = Math.trunc(Number(raw.stage || raw.stageNumber || raw.stageIndex || 0));
-    if(!stage || stage < 1 || stage > 50) return null;
+    if(!mode || !stage || stage < 1 || stage > 50) return null;
 
     const out = { mode, stage };
     for(const key of STAGE_CONFIG_FIELDS){
@@ -435,7 +434,6 @@ function fitAnswerToRight(wordEl){
   function stageGroupsForConfig(){
     return {
       normal: (typeof STAGES_NORMAL !== "undefined" ? STAGES_NORMAL : []),
-      extra: (typeof STAGES_EXTRA !== "undefined" ? STAGES_EXTRA : []),
       practice: (typeof STAGES_PRACTICE !== "undefined" ? STAGES_PRACTICE : []),
       challenge: (typeof STAGES_CHALLENGE !== "undefined" ? STAGES_CHALLENGE : [])
     };
@@ -546,8 +544,6 @@ function fitAnswerToRight(wordEl){
     bossHitSfx: "assets/boss_hit.m4a",
     playerHitSfx: "assets/player_hit.m4a",
     dialogueBgm: "",
-    extraDialogueBgm: "",
-    extraVictoryBgm: "",
   };
 
   let STAGES = [
@@ -632,7 +628,7 @@ function fitAnswerToRight(wordEl){
       words: WORDS
     }
   ];
-// ---- Mode select (Normal / Extra) ----
+// ---- Mode select (Normal) ----
 const LS_KEY_NORMAL_CLEARED = adventureKey("bossTyping_normalCleared_v1");
 function loadNormalCleared(){
   try{ return localStorage.getItem(LS_KEY_NORMAL_CLEARED) === "1"; }catch(_){ return false; }
@@ -642,17 +638,6 @@ function saveNormalCleared(){
   try{ localStorage.setItem(LS_KEY_NORMAL_CLEARED, "1"); queueAdventureSync(); }catch(_){}
 }
 
-
-
-// Extra mode cleared (final extra stage beaten) -> unlock Master intro visuals/audio
-const LS_KEY_EXTRA_CLEARED = adventureKey("bossTyping_extraCleared_v1");
-function loadExtraCleared(){
-  try{ return localStorage.getItem(LS_KEY_EXTRA_CLEARED) === "1"; }catch(_){ return false; }
-}
-function saveExtraCleared(){
-  if(unverifiedRun())return;
-  try{ localStorage.setItem(LS_KEY_EXTRA_CLEARED, "1"); queueAdventureSync(); }catch(_){}
-}
 
 
   // ---- Memory wipe cheat (persistent data reset) ----
@@ -681,8 +666,8 @@ function wipeGameMemory(){
   try{ normalCleared = false; }catch(_){/* ignore */}
   try{ introIsUnlocked = false; }catch(_){/* ignore */}
   try{ debugMode = false; }catch(_){/* ignore */}
-  try{ scoreNormal = 0; scoreExtra = 0; }catch(_){/* ignore */}
-  try{ hiScoreNormal = 0; hiScoreExtra = 0; }catch(_){/* ignore */}
+  try{ scoreNormal = 0; }catch(_){/* ignore */}
+  try{ hiScoreNormal = 0; }catch(_){/* ignore */}
   try{ continuesUsedThisRun = 0; }catch(_){/* ignore */}
   try{ profile = null; }catch(_){/* ignore */}
   try{ renderProfileHeader(); }catch(_){/* ignore */}
@@ -698,13 +683,12 @@ function saveDebugMode(on){
 }
 
 // ---- High score (persistent) ----
-// Separate best scores for Normal / Extra. (Current run score resets on restart.)
+// Separate best scores for Normal. (Current run score resets on restart.)
 const LS_KEY_HISCORE_NORMAL = adventureKey("bossTyping_hiScore_normal_v1");
-const LS_KEY_HISCORE_EXTRA  = adventureKey("bossTyping_hiScore_extra_v1");
 
 function loadHighScore(mode){
   try{
-    const k = (mode === "extra") ? LS_KEY_HISCORE_EXTRA : LS_KEY_HISCORE_NORMAL;
+    const k = LS_KEY_HISCORE_NORMAL;
     const v = parseInt(localStorage.getItem(k) || "0", 10);
     return Number.isFinite(v) ? Math.max(0, v) : 0;
   }catch(_){ return 0; }
@@ -712,7 +696,7 @@ function loadHighScore(mode){
 function saveHighScore(mode, val){
   if(unverifiedRun())return;
   try{
-    const k = (mode === "extra") ? LS_KEY_HISCORE_EXTRA : LS_KEY_HISCORE_NORMAL;
+    const k = LS_KEY_HISCORE_NORMAL;
     const n = Math.max(0, Math.floor(Number(val) || 0));
     localStorage.setItem(k, String(n)); queueAdventureSync();
   }catch(_){ /* ignore */ }
@@ -722,29 +706,7 @@ function saveHighScore(mode, val){
 
 
 const STAGES_NORMAL = STAGES;
-// Extra mode: plain copies of Normal Stage 1–5.
-const STAGES_EXTRA = STAGES_NORMAL.map((s, i) => ({
-  ...s,
-  stageName: `EX Stage ${i + 1}`,
-  bossName: i === 0 ? "Luna" : (i === 1 ? "Syntax" : (i === 2 ? "Spook" : (i === 3 ? "Pesty" : s.bossName))),
-  bgFile: `stage${i + 1}_bg.webp`,
-  dialogueBgmFile: AUDIO.extraDialogueBgm,
-  playBgmFile: `stage${i + 1}_bgm.m4a`,
-  bossFile: `stage${i + 1}_boss.webp`,
-  bossFile2: `stage${i + 1}_boss2.webp`,
-}));
-// Keep Extra base pacing on the original copied values.
-[
-  { spawnEveryMs: 2143, fallSpeedPxPerSec: 46 },
-  { spawnEveryMs: 2041, fallSpeedPxPerSec: 49 },
-  { spawnEveryMs: 1993, fallSpeedPxPerSec: 51 },
-  { spawnEveryMs: 2143, fallSpeedPxPerSec: 55 },
-  { spawnEveryMs: 1643, fallSpeedPxPerSec: 65 },
-].forEach((cfg, i) => Object.assign(STAGES_EXTRA[i], cfg));
-
-// Extra Stage 1 now has the shooting-star mechanic; other legacy Extra gimmicks remain disabled.
-const EXTRA_SPECIAL_MECHANICS_ENABLED = false;
-// Clean base: disable all Normal / Extra / Challenge special gameplay mechanics.
+// Clean base: disable all Normal / Challenge special gameplay mechanics.
 // Stage balance still comes from HTML/Google Sheets StageConfig.
 const SPECIAL_STAGE_MECHANICS_ENABLED = false;
 
@@ -869,20 +831,18 @@ applyCachedStageConfigToStageLists();
 
 let storySelectedStage = null;
 let storyBattleStage = null;
-let currentMode = "normal"; // "normal" | "extra" | "practice" | "challenge"
+let currentMode = "normal"; // normal / practice / challenge / story / shared
 // Dev shortcuts are never active in the student-facing game. A teacher can
 // explicitly opt in on the laptop at http://localhost:8765/adventure.html?dev=1.
 const DEV_CHEATS_ENABLED = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
   && new URLSearchParams(location.search).get('dev') === '1';
 let debugMode = DEV_CHEATS_ENABLED && loadDebugMode();
 let normalCleared = loadNormalCleared();
-let extraCleared = loadExtraCleared();
 
 function setMode(mode){
 
-  currentMode = ["normal","extra","practice","challenge","story","shared"].includes(mode) ? mode : "normal";
+  currentMode = ["normal","practice","challenge","story","shared"].includes(mode) ? mode : "normal";
   STAGES = currentMode === "story" ? (storyBattleStage ? [storyBattleStage] : [STAGES_NORMAL[0]])
-    : currentMode === "extra" ? STAGES_EXTRA
     : currentMode === "practice" ? STAGES_PRACTICE
     : currentMode === "challenge" ? STAGES_CHALLENGE
     : currentMode === "shared" ? SHARED_STAGE : STAGES_NORMAL;
@@ -917,10 +877,6 @@ function setMode(mode){
   const bossFallback = document.getElementById("bossFallback");
   const bossBubble = document.getElementById("bossBubble");
   const stage5Timer = document.getElementById("stage5Timer");
-const ex2Timer = document.getElementById("ex2Timer");
-  const ex2EndTimer = document.getElementById("ex2EndTimer");
-  const ex4Timer = document.getElementById("ex4Timer");
-  const ex4ResetScare = document.getElementById("ex4ResetScare");
   const bossMeter = document.getElementById("bossMeter");
 
   const damageFlash = document.getElementById("damageFlash");
@@ -1046,8 +1002,6 @@ const achOverlay = document.getElementById("achOverlay");
   // You can freely edit/replace this list.
   const ACHIEVEMENT_DEFS = [
     { id:"normal_clear", title:"Normal Clear", desc:"Normal Mode をクリアする", icon:"N", unlockIcons:["icon05"] },
-    { id:"extra_clear",  title:"Extra Clear",  desc:"Extra Mode をクリアする",  icon:"E", unlockIcons:["icon06"] },
-    { id:"master_clear", title:"Master Clear", desc:"Normal + Extra を両方クリアする", icon:"M", unlockIcons:["icon07","icon08"] },
     { id:"all_achievements", title:"A perfect day", desc:"すべての実績を達成する。", icon:"✔" },
   ];
 
@@ -1113,9 +1067,7 @@ const achOverlay = document.getElementById("achOverlay");
       classYear: cleanClassYear(p.classYear || activeClassYear || DEFAULT_CLASS_YEAR),
       profile: p,
       normalCleared: loadNormalCleared(),
-      extraCleared: loadExtraCleared(),
       hiScoreNormal: loadHighScore("normal"),
-      hiScoreExtra: loadHighScore("extra"),
       hiScoreChallenge: hiScoreChallenge,
       updatedAt: Date.now()
     };
@@ -1132,18 +1084,13 @@ const achOverlay = document.getElementById("achOverlay");
     if(data.normalCleared === true) localStorage.setItem(LS_KEY_NORMAL_CLEARED, "1");
     else if(data.normalCleared === false) localStorage.removeItem(LS_KEY_NORMAL_CLEARED);
 
-    if(data.extraCleared === true) localStorage.setItem(LS_KEY_EXTRA_CLEARED, "1");
-    else if(data.extraCleared === false) localStorage.removeItem(LS_KEY_EXTRA_CLEARED);
 
     if(Number.isFinite(Number(data.hiScoreNormal))) saveHighScore("normal", Number(data.hiScoreNormal));
-    if(Number.isFinite(Number(data.hiScoreExtra))) saveHighScore("extra", Number(data.hiScoreExtra));
     if(Number.isFinite(Number(data.hiScoreChallenge))) hiScoreChallenge = Math.max(hiScoreChallenge || 0, Number(data.hiScoreChallenge));
 
     saveProfile(profile);
     normalCleared = loadNormalCleared();
-    extraCleared = loadExtraCleared();
     hiScoreNormal = loadHighScore("normal");
-    hiScoreExtra = loadHighScore("extra");
     if(Number.isFinite(Number(data.hiScoreChallenge))) hiScoreChallenge = Math.max(hiScoreChallenge || 0, Number(data.hiScoreChallenge));
 
     renderProfileHeader();
@@ -1382,8 +1329,8 @@ const achOverlay = document.getElementById("achOverlay");
       iconId: String(o.iconId ?? d.iconId),
       xp: Math.max(0, Math.trunc(Number(o.xp ?? d.xp) || 0)),
       coins: Math.max(0, Math.trunc(Number(o.coins ?? d.coins) || 0)),
-      achievements: Array.isArray(o.achievements) ? o.achievements.filter(x => typeof x === "string") : [],
-      unlockedIcons: Array.isArray(o.unlockedIcons) ? o.unlockedIcons.filter(x => typeof x === "string") : [...d.unlockedIcons],
+      achievements: Array.isArray(o.achievements) ? o.achievements.filter(x => typeof x === "string" && !["extra_clear","master_clear"].includes(x)) : [],
+      unlockedIcons: Array.isArray(o.unlockedIcons) ? o.unlockedIcons.filter(x => typeof x === "string" && !["icon06","icon07","icon08"].includes(x)) : [...d.unlockedIcons],
       classYear: cleanClassYear(o.classYear ?? d.classYear),
       cloudId: cleanCloudProfileId(String(o.cloudId ?? d.cloudId)),
       cloudPin: cleanCloudPin(String(o.cloudPin ?? d.cloudPin)),
@@ -1415,8 +1362,8 @@ const achOverlay = document.getElementById("achOverlay");
       const payload = {
         card_code:card,action:"save",xp:Math.max(0,Math.floor(Number(profile.xp)||0)),
         achievements:profile.achievements||[],
-        best_normal:loadHighScore("normal"),best_extra:loadHighScore("extra"),
-        normal_clear:loadNormalCleared(),extra_clear:loadExtraCleared()
+        best_normal:loadHighScore("normal"),
+        normal_clear:loadNormalCleared()
       };
       try{const res=await fetch("/api/adventure/progress",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
         if(res.ok&&!unverifiedRun()){const confirmed=await res.json();if(confirmed?.ok)void window.RPG_LOCAL_PRACTICE?.confirmedProgress?.(confirmed);}
@@ -1444,7 +1391,7 @@ const achOverlay = document.getElementById("achOverlay");
   let rankIconSyncTimer = null;
   let rankIconFetchInProgress = false;
   function knownRankIcon(id){
-    return PROFILE_ICON_PRESETS.some(icon=>icon.id===id) ? id : 'icon01';
+    return !["icon06","icon07","icon08"].includes(id)&&PROFILE_ICON_PRESETS.some(icon=>icon.id===id) ? id : 'icon01';
   }
   async function sendSelectedRankIcon(id){
     if(!ADVENTURE_CONTEXT.card_code || !ADVENTURE_CONTEXT.online)return false;
@@ -1623,10 +1570,7 @@ const achOverlay = document.getElementById("achOverlay");
     // If the player already had clears saved from older builds, auto-grant these.
     try{
       const n = loadNormalCleared();
-      const e = loadExtraCleared();
       if(n) unlockAchievement("normal_clear", true);
-      if(e) unlockAchievement("extra_clear", true);
-      if(n && e) unlockAchievement("master_clear", true);
     }catch(_){/* ignore */}
 
     try{ checkAllAchievementsComplete(); }catch(_){/* ignore */}
@@ -1683,13 +1627,13 @@ const achOverlay = document.getElementById("achOverlay");
       spawn:window.RPG_BALANCE?.get('spawnEveryMs',st.spawnEveryMs)??st.spawnEveryMs,
       fall:window.RPG_BALANCE?.get('fallSpeedPxPerSec',st.fallSpeedPxPerSec)??st.fallSpeedPxPerSec,
       mechanicValues:window.RPG_BALANCE?.configSnapshot?.().mechanics||{},
-      mechanics:[SPECIAL_STAGE_MECHANICS_ENABLED,EXTRA_SPECIAL_MECHANICS_ENABLED],
+      mechanics:[SPECIAL_STAGE_MECHANICS_ENABLED,false],
       fixedStage5Ramp:true});
   }
   function startRankedRun(){
     // Operator passives are allowed in ranked runs. Offline/locally cached runs remain unranked.
     if(runLocalOnly){rankedRun=null;window.RPG_V66_COMPETITIVE_ACTIVE=false;return;}
-    rankedRun=['normal','extra','challenge','shared'].includes(currentMode)
+    rankedRun=['normal','challenge','shared'].includes(currentMode)
       ? {mode:currentMode,grade:currentMode==='shared'?'all':(assignedRankGrade||cleanClassYear(profile?.classYear)),
          vocabPool:currentMode==='shared'?'all':assignedVocabPool,
          vocabRevision:currentMode==='shared'?Number(SHARED_RULESET.match(/-r(\d+)-/)?.[1]||0):assignedVocabRevision,
@@ -1697,7 +1641,7 @@ const achOverlay = document.getElementById("achOverlay");
          stages:[],invalid:!!DEV_CHEATS_ENABLED||!vocabLastServerSuccess,
          submitted:false,lastAuditSec:-1,run_token:null,startPromise:null} : null;
     window.RPG_V66_COMPETITIVE_ACTIVE=!!rankedRun;
-    if(rankedRun){const target=rankedRun;target.startPromise=fetch('/api/rankings/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:target.mode})}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Run not registered.');target.run_token=d.token;if(d.revision!==target.vocabRevision||d.grade!==target.grade || (['normal','extra','challenge'].includes(target.mode)&&Number(d.configVersion)!==Number(window.RPG_V66_PREPARED_REVISION))){target.invalid=true;}return d;}).catch(e=>{target.invalid=true;console.error('Online ranked start failed:',e);});}
+    if(rankedRun){const target=rankedRun;target.startPromise=fetch('/api/rankings/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:target.mode})}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Run not registered.');target.run_token=d.token;if(d.revision!==target.vocabRevision||d.grade!==target.grade || (['normal','challenge'].includes(target.mode)&&Number(d.configVersion)!==Number(window.RPG_V66_PREPARED_REVISION))){target.invalid=true;}return d;}).catch(e=>{target.invalid=true;console.error('Online ranked start failed:',e);});}
   }
   function recordRankedStage(){
     if(!rankedRun||rankedRun.mode!==currentMode)return;
@@ -1762,7 +1706,7 @@ const achOverlay = document.getElementById("achOverlay");
     return `<span class="ranking-identity"><img class="ranking-avatar" data-rank-icon src="${escapeHtml(rankingIconSrc(row.icon_id))}" alt="" loading="lazy"><span class="ranking-name">${escapeHtml(row.name||'Player')}${own?'<span class="ranking-you">YOU</span>':''}</span></span>`;
   }
   function rankingsView(mode,grade,data=null,message=''){
-    rankingMode=mode==='extra'?'extra':mode==='challenge'?'challenge':mode==='shared'?'shared':'normal';
+    rankingMode=mode==='challenge'?'challenge':mode==='shared'?'shared':'normal';
     rankingGrade=visibleRankingGrade(grade);
     if(rankingGrade!=='all')lastStandardRankingGrade=rankingGrade;
     gameState='rankings';setInputsEnabled(false);showOverlay(true);
@@ -1785,7 +1729,6 @@ const achOverlay = document.getElementById("achOverlay");
     const description=rankingGrade==='all'?'ALL GRADES · IDENTICAL VOCAB & SETTINGS':(rankingGrade.endsWith('b')?'CLASS '+rankingGrade.toUpperCase():'GRADE '+rankingGrade)+' · COMPLETED RUNS ONLY';
     overlayChoices.innerHTML=`<div class="ranking-tabs">
        <button class="ranking-tab${rankingMode==='normal'?' active':''}" aria-pressed="${rankingMode==='normal'}" data-mode="normal" type="button">NORMAL</button>
-       <button class="ranking-tab${rankingMode==='extra'?' active':''}" aria-pressed="${rankingMode==='extra'}" data-mode="extra" type="button">EXTRA</button>
        <button class="ranking-tab${rankingMode==='challenge'?' active':''}" aria-pressed="${rankingMode==='challenge'}" data-mode="challenge" type="button">CHALLENGE</button>
       </div>
       <div class="ranking-grades">${PUBLIC_RANKING_GRADES.map(y=>`<button type="button" class="ranking-grade${rankingGrade===y?' active':''}" aria-pressed="${rankingGrade===y}" data-grade="${y}">${y==='all'?'ALL GRADES':y+'年生'}</button>`).join('')}</div>
@@ -1804,7 +1747,7 @@ const achOverlay = document.getElementById("achOverlay");
   }
   async function openRankings(mode='normal',grade=assignedRankGrade||cleanClassYear(profile?.classYear)){
     grade=visibleRankingGrade(grade);
-    mode=grade==='all'?'shared':mode==='extra'?'extra':mode==='challenge'?'challenge':'normal';
+    mode=grade==='all'?'shared':mode==='challenge'?'challenge':'normal';
     if(stopLiveRankings){stopLiveRankings();stopLiveRankings=null;}
     const req=++rankingRequest;rankingsView(mode,grade,null,'LOADING…');
     if(!rankIconInitialized)void initializeRankIcon();
@@ -2332,7 +2275,6 @@ const iconDef = PROFILE_ICON_PRESETS.find(x=>x.id===iconId) || PROFILE_ICON_PRES
 
   const bossFill = document.getElementById("bossFill");
   const bossHpText = document.getElementById("bossHpText");
-  const ex4EyeBanner = document.getElementById("ex4EyeBanner");
 
 
   const playerFill = document.getElementById("playerFill");
@@ -2608,30 +2550,12 @@ function setBgm(src, loop=true, autoplay=true){
     bgm.load();
   }
 
-  // Clear Extra Stage 2 only when its stage BGM finishes (boss takes no damage).
-  // NOTE: We guard by (1) stage, (2) gameState, and (3) currentBgm matching the stage BGM.
-  bgm.addEventListener("ended", () => {
-    try{
-      if(!ex2ClearOnBgmEndActive) return;
-      if(!isExtraStage2()) return;
-      if(gameState !== "playing") return;
-      if(!ex2ClearOnBgmEndSrc || currentBgm !== ex2ClearOnBgmEndSrc) return;
-
-      ex2ClearOnBgmEndActive = false; // prevent double-fire
-      ex2ClearOnBgmEndSrc = "";
-
-      onBossDefeated();
-    }catch(_){/* ignore */}
-  });
-
   // ---- Intro start screen (pre-menu) ----
   // Replace these drop-in filenames anytime you want by overwriting the files in the same folder.
   const INTRO_BG_LOCKED = "";
   const INTRO_BG_UNLOCKED = "";
-  const INTRO_BG_MASTER = "";
   const INTRO_BGM_LOCKED = "";
   const INTRO_BGM_UNLOCKED = "";
-  const INTRO_BGM_MASTER = "";
   const INTRO_FAKE_LOAD_MS = 400;
 
   const introOverlay = document.getElementById("introOverlay");
@@ -2746,8 +2670,6 @@ function setBgm(src, loop=true, autoplay=true){
     setIntroState("ready");
 
     const normalDone = loadNormalCleared();
-    const extraDone = loadExtraCleared();
-    const masterDone = (normalDone && extraDone);
 
     introIsUnlocked = !!normalDone; // any Normal clear unlocks the "LOAD->reveal" behavior
     stopIntroBgGlitch();
@@ -2755,8 +2677,8 @@ function setBgm(src, loop=true, autoplay=true){
     setIntroBgHidden(introIsUnlocked);
 
 
-    const bgFile = masterDone ? INTRO_BG_MASTER : (normalDone ? INTRO_BG_UNLOCKED : INTRO_BG_LOCKED);
-    const bgmFile = masterDone ? INTRO_BGM_MASTER : (normalDone ? INTRO_BGM_UNLOCKED : INTRO_BGM_LOCKED);
+    const bgFile = normalDone ? INTRO_BG_UNLOCKED : INTRO_BG_LOCKED;
+    const bgmFile = normalDone ? INTRO_BGM_UNLOCKED : INTRO_BGM_LOCKED;
 // Background: set directly (more robust) + keep CSS var for fallback.
     const introArt=window.RPG_MEDIA?.classify(bgFile);
     const introBackground=introArt ? introArt.url : bgFile;
@@ -3184,12 +3106,8 @@ function showModeSelectScreen(){
   addMode('Normal Mode', {onClick:()=>{
     setMode('normal');showOverlay(false);startGame();
   }});
-  addMode('Extra Mode', {disabled:!normalCleared,
-    lockedReason:'Clear Normal Mode to unlock',onClick:()=>{
-      setMode('extra');showOverlay(false);startGame();
-    }});
-  addMode('Challenge Mode', {disabled:!extraCleared||!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
-    lockedReason:!extraCleared?'Clear Extra Mode to unlock':'Online Firebase required',onClick:()=>{
+  addMode('Challenge Mode', {disabled:!normalCleared||!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
+    lockedReason:!normalCleared?'Clear Normal Mode to unlock':'Online Firebase required',onClick:()=>{
       setMode('challenge');showOverlay(false);startGame();
     }});
   addMode('All Grades Challenge', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
@@ -3250,12 +3168,9 @@ function showModeSelectScreen(){
   let bossHp = 0;
   let bossMaxHp = 0;
 
-  // For non-Stage5 bosses: swap to phase 2 art when HP drops below half (used by Extra stages)
+  // For non-Stage5 bosses: swap to phase 2 art when HP drops below half
   let bossVariantPhase = 1;
   let baseHitDamage = 1;
-
-  // Extra Stage 1: phase state (1 or 2)
-  let ex1Phase = 1;
 
   let playerMaxHp = BASE_PLAYER_MAX_HP;
   let playerHp = BASE_PLAYER_MAX_HP;
@@ -3270,10 +3185,9 @@ function showModeSelectScreen(){
   let pausedBgmState = null;
 
   // ---- Scoring ----
-  // Normal and Extra have separate scores (no carryover between modes).
+  // Modes have separate scores.
   // Score carries across stages within the same run/mode.
   let scoreNormal = 0;
-  let scoreExtra = 0;
   let scorePractice = 0;
   let scoreChallenge = 0;
   let scoreStory = 0;
@@ -3281,7 +3195,6 @@ function showModeSelectScreen(){
   let hiScoreShared = 0;
 
   let hiScoreNormal = loadHighScore("normal");
-  let hiScoreExtra  = loadHighScore("extra");
   let hiScorePractice = 0; // session-only (not saved)
   let hiScoreChallenge = 0; // session-only (not saved)
   let continuesUsedThisRun = 0; // affects future points: ×(0.8^continuesUsed)
@@ -3289,7 +3202,6 @@ function showModeSelectScreen(){
   let damageTakenThisRun = 0;
 
   function getActiveScore(){
-    if(currentMode === "extra") return scoreExtra;
     if(currentMode === "practice") return scorePractice;
     if(currentMode === "challenge") return scoreChallenge;
     if(currentMode === "story") return scoreStory;
@@ -3298,15 +3210,13 @@ function showModeSelectScreen(){
   }
   function setActiveScore(v){
     v = Math.max(0, Math.trunc(Number(v) || 0));
-    if(currentMode === "extra") scoreExtra = v;
-    else if(currentMode === "practice") scorePractice = v;
+    if(currentMode === "practice") scorePractice = v;
     else if(currentMode === "challenge") scoreChallenge = v;
     else if(currentMode === "story") scoreStory = v;
     else if(currentMode === "shared") scoreShared = v;
     else scoreNormal = v;
   }
   function getActiveHiScore(){
-    if(currentMode === "extra") return hiScoreExtra;
     if(currentMode === "practice") return hiScorePractice;
     if(currentMode === "challenge") return hiScoreChallenge;
     if(currentMode === "story") return 0;
@@ -3316,9 +3226,7 @@ function showModeSelectScreen(){
   function setActiveHiScore(v){
     if(unverifiedRun())return;
     v = Math.max(0, Math.trunc(Number(v) || 0));
-    if(currentMode === "extra"){
-      hiScoreExtra = v; saveHighScore("extra", v);
-    }else if(currentMode === "practice"){
+    if(currentMode === "practice"){
       // Practice scores are session-only (do not write to localStorage)
       hiScorePractice = v;
     }else if(currentMode === "challenge"){
@@ -3338,8 +3246,8 @@ function showModeSelectScreen(){
   }
 
   function scoreModeMultiplier(){
-    // Challenge or Extra: ×2 score
-    return (currentMode === "extra") ? 2 : 1;
+    // Mode score multiplier
+    return 1;
   }
   function resetRunScoring(){
 // Reset current mode run score + penalty.
@@ -3351,7 +3259,7 @@ function showModeSelectScreen(){
   }
   function resetAllRunScoring(){
     scoreNormal = 0;
-    scoreExtra = 0;
+   
     scoreChallenge = 0;
     scoreStory = 0;
     scoreShared = 0;
@@ -3405,7 +3313,7 @@ function showModeSelectScreen(){
   function calcMinimumWordScore(word){
     // Seraphine's automatically eliminated words use the LOW end (1.2x) of
     // the existing length-based scoring range, with normal mode/continue modifiers.
-    // Example: 8 letters = 8 * 10 * 1.2 = 96 (Normal) or 192 (Extra).
+    // Example: 8 letters = 8 * 10 * 1.2 = 96 (Normal).
     return Math.max(1, Math.round(basePointsForAnswer(word?.answer || "") * 1.2
       * scorePenaltyMultiplier() * scoreModeMultiplier()));
   }
@@ -3495,12 +3403,9 @@ function showModeSelectScreen(){
     grid.appendChild(btn);
   };
 
-  // Buttons: Normal 1-5, Extra 1-2
+  // Buttons: Normal and Challenge
   for(let i=0;i<STAGES_NORMAL.length;i++){
     addBtn(`N${i+1}`, "normal", i);
-  }
-  for(let i=0;i<STAGES_EXTRA.length;i++){
-    addBtn(`EX${i+1}`, "extra", i);
   }
   for(let i=0;i<STAGES_CHALLENGE.length;i++){
     addBtn(`C${i+1}`, "challenge", i);
@@ -3530,7 +3435,7 @@ async function debugJumpTo(mode, idx){
 
 
   // v114 — Chapters 1 and 2 only. The three existing lives are three operators.
-  // This is isolated from the normal/extra/practice/tournament battle rules.
+  // This is isolated from the normal/practice/tournament battle rules.
   const storySquad={ids:[],index:0,knockedOut:[],enabled:false};
   let storySquadSwitchTimer=null;
   let storySquadGraceUntil=0;
@@ -3855,7 +3760,7 @@ async function debugJumpTo(mode, idx){
     return true;
   }
   // v86.31 — choose an owned operator for this run; passive effects reset each stage.
-  const operatorModeEligible=()=>['normal','extra','practice','story','challenge','shared'].includes(currentMode);
+  const operatorModeEligible=()=>['normal','practice','story','challenge','shared'].includes(currentMode);
   const ownedOperatorIds=()=>{
     const data=window.ADVENTURE_PLAYER?.recruitment?.owned||{};
     const safe=Object.keys(data).filter(id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)&&!['mc','crimson_knight','silver_knight'].includes(id));
@@ -4077,7 +3982,7 @@ async function debugJumpTo(mode, idx){
     // Survival/time trials have a visible boss HP bar but no boss to defeat.
     const stage=STAGES[stageIndex];
     return ['challenge','shared','practice'].includes(currentMode)
-      || !!stage?.bossInvulnerable || !!stage?.endStageOnBgmEnd || isExtraStage2();
+      || !!stage?.bossInvulnerable || !!stage?.endStageOnBgmEnd;
   }
 
   let cachedOperatorWords=null,cachedOperatorEntries=[];
@@ -4356,7 +4261,6 @@ async function debugJumpTo(mode, idx){
         if(wasLanded){
           // Landed-only special timers should not expire while rewound.
           word.ex1DamageArmed=false;word.ex1DeadlineMs=0;
-          word.ex3DeadlineMs=0;word.ex4DeadlineMs=0;
           word.el?.classList?.remove('ex1StarArmed');
         }
         setWordY(word.el,word.y);
@@ -4490,7 +4394,7 @@ async function debugJumpTo(mode, idx){
   let stagePauseStartMs = null;
 
   let spawnAccMs = 0;
-  let autoSpawnEnabled = true; // can be disabled for the EX2 Phase 5 wake-up sequence
+  let autoSpawnEnabled = true;
 
   let spawnCountThisStage = 0;
   let midFightBubbleShown = false;
@@ -4560,20 +4464,16 @@ function updatePauseCmdUI(){
   let disabled = false;
 
   if(gameState === "playing"){
-    if(isExtraStage2()){
-      disabled = true;
-      label = "Pause (N/A in EX2)";
-    }
   }else if(gameState === "paused"){
     disabled = false;
   }else{
     disabled = true;
-    label = isExtraStage2() ? "Pause (N/A in EX2)" : "Pause";
+    label = "Pause";
   }
 
   pauseCmd.classList.toggle("disabled", disabled);
   pauseCmd.disabled = disabled;
-  pauseCmd.classList.toggle("crossedOut", isExtraStage2());
+  pauseCmd.classList.remove("crossedOut");
   pauseCmdText.textContent = label;
 }
 
@@ -4620,11 +4520,6 @@ function updateUI(){
       bossNameEl.textContent = bossName;
     }
 
-    // EX4: cover boss HP with eye banner (HP line only)
-    if(ex4EyeBanner){
-      const showEye = (currentMode === "extra" && stageIndex === 3 && gameState === "playing");
-      ex4EyeBanner.style.opacity = showEye ? "1" : "0";
-    }
 
     const conquest=currentMode==='story'&&window.RPG_CONQUEST?.run;
     const showHp=n=>conquest?window.RPG_CONQUEST.displayed(n):n;
@@ -4717,9 +4612,7 @@ function updateUI(){
     }
 
     // ---- Score UI ----
-    const modeLabel = (currentMode === "extra")
-      ? "Extra"
-      : ((currentMode === "practice")
+    const modeLabel = ((currentMode === "practice")
           ? "Practice"
           : ((currentMode === "challenge") ? "Challenge" : currentMode === "shared" ? "All Grades" : currentMode === "story" ? (conquest?"Conquest":"Story") : "Normal"));
     if(scoreModeLabel && modeLabel !== uiCache.scoreMode){
@@ -4797,7 +4690,7 @@ function laneHeight(){ return wordLane.clientHeight; }
   function wordRows(w){return Math.max(1,Number(w?.valcrestRows)||1);}
   function laneCapacity(){ return Math.floor(laneHeight() / 30); }
   function landedWords(){
-    // Expired Extra Stage 3 ghosts are non-interactive, but they still count as solid landed words.
+    // Solid landed words count toward capacity.
     return wordsOnField.filter(w => w.state === "landed");
   }
 
@@ -4892,12 +4785,10 @@ function laneHeight(){ return wordLane.clientHeight; }
     }
 
     if(currentMode === "shared") return sharedWordForSpawn();
-    if(currentMode==='normal'||currentMode==='extra')return gradedWordForSpawn(valid);
+    if(currentMode==='normal')return gradedWordForSpawn(valid);
     const w = valid[Math.floor(Math.random() * valid.length)];
     return w ? { prompt: w.prompt, answer: w.answer } : null;
   }
-
-  // (Extra Stage 1 unique mechanics removed)
 
 
   function makeUnreadableAnswer(original){
@@ -5046,19 +4937,15 @@ function stage5IsFrozenInput(_norm){ return false; }
 function ex1IsFrozenInput(_norm){ return false; }
 
 
-  // ---- Extra Stage 1 mechanic: shooting star countdown damage ----
-  function isExtraStage1(){
-    return currentMode === "extra" && stageIndex === 0;
-  }
-  function shootingStarActive(){return isExtraStage1()||storyHazardEnabled('shootingStarEnabled');}
+  // ---- Optional Conquest shooting star countdown damage ----
+  function shootingStarActive(){return storyHazardEnabled('shootingStarEnabled');}
   function shootingStarClockMs(){return currentMode==='story'?stageElapsedSec()*1000:nowMs();}
   function ex1HighlightFrequency(){
     // Every 3 spawned words becomes a shooting star.
     return shootingStarActive() ? 3 : 0;
   }
   function ex1ShootingStarWindowSec(){
-    // Below half boss HP: countdown becomes 3 seconds instead of 4.
-    return (isExtraStage1() && bossMaxHp > 0 && bossHp < (bossMaxHp / 2)) ? 3 : 4;
+    return 4;
   }
   function ex1RandomFallMult(){ return 1; }
   function ex1SetShootingStarGlow(wordObj, progress){
@@ -5122,256 +5009,10 @@ function ex1IsFrozenInput(_norm){ return false; }
       }
     }
   }
-  function ex1EnterPhase2(){ /* Old Extra Stage 1 phase mechanic removed. */ }
 
 
 
 
-  // ---- Extra Stage 2 mechanic: timer + highlight + scramble ----
-  function isExtraStage2(){
-    return false;
-  }
-  function ex2HighlightFrequency(){
-    if(!isExtraStage2()) return 0;
-    // Phase mechanics removed for Extra Stage 2: keep a constant difficulty
-    return 3;
-  }
-  function ex2CycleSeconds(){
-    if(!isExtraStage2()) return 0;
-    // Phase mechanics removed for Extra Stage 2: keep a constant shuffle timer
-    return 5;
-  }
-
-function ex2RandRange(a, b){
-  return a + (b - a) * Math.random();
-}
-function ex2RandomFallMult(){
-  // Noticeable variation but still readable/playable.
-  return (Math.random() < 0.5) ? ex2RandRange(0.60, 0.95) : ex2RandRange(1.15, 1.70);
-}
-function ex2ApplyPhase4ToExistingWords(){
-  // Phase 4: all words ignore collision while falling, and fall at different rates.
-  for(const w of wordsOnField){
-    if(!w) continue;
-    w.ignoreCollision = true;
-    if(w.state === "falling"){
-      w.ex2FallMult = ex2RandomFallMult();
-    }
-  }
-}
-  function ex2BossVariantForPhase(p){
-    // EX2 boss art is time-phase locked (not HP-based):
-    // Phase 1-2 => v1, Phase 3 => v2, Phase 4+ => v3.
-    if(p >= 4) return 3;
-    if(p >= 3) return 2;
-    return 1;
-  }
-
-
-
-
-
-    function ex2HandlePhaseTriggers(elapsedSec){
-    if(!isExtraStage2()) return;
-
-    // Time-based phases:
-    // Phase 1: 0–40s    (obscure every 3 spawns)
-    // Phase 2: 40–68s   (obscure every 2 spawns)
-    // Phase 3: 68–98s   (Phase 2 cadence carries over; on LAND: toggle reveal/obscure)
-    // Phase 4: 98s+     (Phase 2+3 carry over; ALL words ignore collision while falling + per-word fall speed variance)
-    let target = 1;
-    if(elapsedSec >= EX2_PHASE1_END_SEC) target = 2;
-    if(elapsedSec >= EX2_PHASE2_END_SEC) target = 3;
-    if(elapsedSec >= EX2_PHASE3_END_SEC) target = 4;
-
-    if(target !== ex2Phase){
-      ex2Phase = target;
-      ex2PhaseSpawnCount = 0; // restart per-phase cadence
-
-      // Phase-locked EX2 boss sprite
-      const desiredV = ex2BossVariantForPhase(ex2Phase);
-      if(desiredV !== bossVariantPhase){
-        bossVariantPhase = desiredV;
-        try{ setBossVariant(STAGES[stageIndex], desiredV); }catch(_){/* ignore */}
-      }
-
-      if(ex2Phase === 2 && !ex2Phase2Announced){
-        ex2Phase2Announced = true;
-        try{ pushMsg("PHASE 2", true); }catch(_){}
-      }
-      if(ex2Phase === 3 && !ex2Phase3Announced){
-        ex2Phase3Announced = true;
-        try{ pushMsg("PHASE 3", true); }catch(_){}
-      }
-      if(ex2Phase === 4 && !ex2Phase4Announced){
-        ex2Phase4Announced = true;
-        try{ pushMsg("PHASE 4", true); }catch(_){}
-        ex2ApplyPhase4ToExistingWords();
-      }
-    }
-  }
-
-
-function ex2ToggleObscureOnLand(w){
-    if(!w || w.ex2LandToggled) return;
-    w.ex2LandToggled = true;
-
-    w.hidePromptWhileFalling = !w.hidePromptWhileFalling;
-
-    const aEl = w.answerEl || (w.el ? w.el.querySelector(".answer") : null);
-    if(aEl){
-      aEl.textContent = w.hidePromptWhileFalling ? makeUnreadableAnswer(w.answer) : w.answer;
-      try{ aEl.setAttribute("title", aEl.textContent || ""); }catch(_){/* ignore */}
-      try{ fitAnswerToRight(w.el || (aEl.closest ? aEl.closest(".word") : null)); }catch(_){/* ignore */}
-    }
-  }
-
-  // ---- Extra Stage 3 mechanic: ghost words ----
-  function isExtraStage3(){
-    return currentMode === "extra" && stageIndex === 2;
-  }
-  function ex3SpecialFrequency(){
-    // Every other spawned word becomes a ghost word.
-    return isExtraStage3() ? 2 : 0;
-  }
-  function ex3GhostWindowSec(){
-    // Below half boss HP: ghost timer becomes 4 seconds instead of 6.
-    return (isExtraStage3() && bossMaxHp > 0 && bossHp < (bossMaxHp / 2)) ? 4 : 6;
-  }
-  function ex3RandomFallMult(){
-    // Ghost words fall faster; after half HP they fall a bit faster again.
-    return (isExtraStage3() && bossMaxHp > 0 && bossHp < (bossMaxHp / 2)) ? 1.85 : 1.55;
-  }
-  function ex3ArmGhostTimer(wordObj){
-    if(!isExtraStage3() || !wordObj || !wordObj.ex3Ghost || wordObj.ex3ExpiredGhost) return;
-    if(wordObj.ex3DeadlineMs) return;
-    const sec = ex3GhostWindowSec();
-    wordObj.ex3CountdownMs = sec * 1000;
-    wordObj.ex3DeadlineMs = nowMs() + wordObj.ex3CountdownMs;
-    if(wordObj.tagEl) wordObj.tagEl.textContent = `👻 ${sec}`;
-  }
-  function ex3ExpireGhostWord(wordObj){
-    if(!wordObj || wordObj.ex3ExpiredGhost) return;
-    wordObj.ex3ExpiredGhost = true;
-    wordObj.ex3ExpiredAnswerNorm = wordObj.answerNorm || normalizeAnswer(wordObj.answer);
-    wordObj.ex3Ghost = false;
-    wordObj.ex3DeadlineMs = 0;
-    wordObj.ex3CountdownMs = 0;
-    wordObj.answerNorm = "";
-    try{
-      if(wordObj.el){
-        wordObj.el.classList.remove("ghost", "ex3GhostWord");
-        wordObj.el.classList.add("ex3ExpiredGhost");
-      }
-      if(wordObj.promptEl) wordObj.promptEl.textContent = "👻";
-      if(wordObj.answerEl) wordObj.answerEl.textContent = "";
-      if(wordObj.tagEl) wordObj.tagEl.textContent = "";
-    }catch(_){/* ignore */}
-    restackDirty = true;
-  }
-  function ex3UpdateGhostTimers(){
-    if(!isExtraStage3()) return;
-    const t = nowMs();
-    for(const w of [...wordsOnField]){
-      if(!w || !w.ex3Ghost || w.ex3ExpiredGhost || w.state !== "landed") continue;
-      if(!w.ex3DeadlineMs) ex3ArmGhostTimer(w);
-      if(!w.ex3DeadlineMs) continue;
-      const remMs = w.ex3DeadlineMs - t;
-      if(remMs <= 0){
-        ex3ExpireGhostWord(w);
-      }else if(w.tagEl){
-        w.tagEl.textContent = `👻 ${Math.ceil(remMs / 1000)}`;
-      }
-    }
-  }
-
-
-  // ---- Extra Stage 4 mechanic: infected words multiply ----
-  function isExtraStage4Infection(){
-    return currentMode === "extra" && stageIndex === 3;
-  }
-  function ex4InfectFrequency(){
-    if(!isExtraStage4Infection()) return 0;
-    // Below half boss HP: every 3rd word instead of every 4th.
-    return (bossMaxHp > 0 && bossHp < (bossMaxHp / 2)) ? 3 : 4;
-  }
-  function ex4InfectWindowSec(){ return 4; }
-  function ex4ArmInfectionTimer(wordObj){
-    if(!isExtraStage4Infection() || !wordObj || !wordObj.ex4Infected || wordObj.ex4Multiplied) return;
-    if(wordObj.ex4DeadlineMs) return;
-    const sec = ex4InfectWindowSec();
-    wordObj.ex4CountdownMs = sec * 1000;
-    wordObj.ex4DeadlineMs = nowMs() + wordObj.ex4CountdownMs;
-    try{ wordObj.el && wordObj.el.classList.add("ex4InfectionArmed"); }catch(_){}
-    if(wordObj.tagEl) wordObj.tagEl.textContent = `⚠️ ${sec}`;
-  }
-  function ex4ResetInfectionTimerAfterMultiply(wordObj){
-    if(!wordObj) return;
-    // Keep the original infected and restart its timer if it still has not been cleared.
-    wordObj.ex4Infected = true;
-    wordObj.ex4Multiplied = false;
-    const sec = ex4InfectWindowSec();
-    wordObj.ex4CountdownMs = sec * 1000;
-    wordObj.ex4DeadlineMs = nowMs() + wordObj.ex4CountdownMs;
-    try{
-      if(wordObj.el){
-        wordObj.el.classList.add("ex4Infected", "ex4InfectionArmed");
-      }
-      if(wordObj.tagEl) wordObj.tagEl.textContent = `⚠️ ${sec}`;
-    }catch(_){}
-  }
-  function ex4MultiplyInfectedWord(wordObj){
-    if(!wordObj || !wordObj.ex4Infected || wordObj.state !== "landed") return;
-
-    // 2x means the original stays infected and creates one normal duplicate.
-    // The duplicate is not infected and cannot trigger this mechanic.
-    const copy = spawnOneWord({
-      state: "landed",
-      prompt: wordObj.prompt,
-      answer: wordObj.answer,
-      y: Math.max(0, (Number(wordObj.y) || 0) - 30),
-      countSpawn: false,
-      preventEx4Infection: true,
-    });
-    if(copy){
-      copy.ex4Infected = false;
-      copy.ex4Multiplied = true;
-      copy.ex4DeadlineMs = 0;
-      copy.ex4CountdownMs = 0;
-      try{ copy.el && copy.el.classList.remove("ex4Infected", "ex4InfectionArmed"); }catch(_){}
-      if(copy.tagEl) copy.tagEl.textContent = "";
-    }
-
-    ex4ResetInfectionTimerAfterMultiply(wordObj);
-    restackDirty = true;
-    try{ pushMsg("⚠️ INFECTED word multiplied! Timer reset!", true); }catch(_){}
-  }
-  function ex4UpdateInfectionTimers(){
-    if(!isExtraStage4Infection()) return;
-    const t = nowMs();
-    for(const w of [...wordsOnField]){
-      if(!w || !w.ex4Infected || w.ex4Multiplied || w.state !== "landed") continue;
-      if(!w.ex4DeadlineMs) ex4ArmInfectionTimer(w);
-      if(!w.ex4DeadlineMs) continue;
-      const remMs = w.ex4DeadlineMs - t;
-      if(remMs <= 0){
-        ex4MultiplyInfectedWord(w);
-      }else if(w.tagEl){
-        w.tagEl.textContent = `⚠️ ${Math.ceil(remMs / 1000)}`;
-      }
-    }
-  }
-
-
-  // ---- Extra Stage 5 mechanic: star-struck words create temporary sun spots ----
-  function isExtraStage5StarStruck(){
-    return currentMode === "extra" && stageIndex === 4;
-  }
-  function ex5StarStruckFrequency(){
-    if(!isExtraStage5StarStruck()) return 0;
-    // Below half boss HP: every 2nd word instead of every 3rd.
-    return (bossMaxHp > 0 && bossHp < (bossMaxHp / 2)) ? 2 : 3;
-  }
   function ex5CreateSunSpotAt(y){
     try{
       const spot = document.createElement("div");
@@ -5385,702 +5026,6 @@ function ex2ToggleObscureOnLand(w){
   }
   function ex5ClearSunSpots(){
     try{ wordLane.querySelectorAll(".sunSpot").forEach(el => el.remove()); }catch(_){/* ignore */}
-  }
-
-
-  let ex2Active = false;
-  let ex2NextShuffleAtMs = 0;
-  let ex2CycleSec = 0;
-
-  // Extra Stage 2 phases (time-based)
-  let ex2Phase = 0; // 1..5 (0 = inactive)
-  let ex2Phase2Announced = false;
-  let ex2Phase3Announced = false;
-  let ex2Phase4Announced = false;
-let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
-
-  // Extra Stage 2: clear condition (survival) — clear ONLY when the stage BGM ends
-  let ex2ClearOnBgmEndActive = false;
-  let ex2ClearOnBgmEndSrc = "";
-  const EX2_PHASE1_END_SEC = 40;
-  const EX2_PHASE2_END_SEC = 68;
-  const EX2_PHASE3_END_SEC = 98;
-
-
-
-  function showEx2Timer(show){
-    if(!ex2Timer) return;
-    ex2Timer.classList.toggle("show", !!show);
-  }
-
-  function showEx2EndTimer(show){
-    if(!ex2EndTimer) return;
-    ex2EndTimer.classList.toggle("show", !!show);
-  }
-
-  function stopEx2Mechanic(){
-    ex2Active = false;
-    ex2NextShuffleAtMs = 0;
-    ex2CycleSec = 0;
-    showEx2Timer(false);
-  }
-
-  function startEx2Mechanic(){
-    if(!(gameState === "playing" && isExtraStage2())){
-      stopEx2Mechanic();
-      return;
-    }
-    ex2Active = true;
-    ex2CycleSec = ex2CycleSeconds() || 5;
-    ex2NextShuffleAtMs = nowMs() + ex2CycleSec * 1000;
-    showEx2Timer(true);
-    updateEx2Mechanic();
-  }
-
-  function pickRandomDifferent(stage, curPrompt, curAnswer){
-    const arr = stage?.words || [];
-    if(arr.length === 0) return { prompt: curPrompt, answer: curAnswer };
-
-    let choice = null;
-    for(let i=0;i<12;i++){
-      const w = arr[Math.floor(Math.random() * arr.length)];
-      if((w.prompt !== curPrompt) || (w.answer !== curAnswer)){
-        choice = w;
-        break;
-      }
-    }
-    if(!choice) choice = arr[Math.floor(Math.random() * arr.length)];
-    return { prompt: choice.prompt, answer: choice.answer };
-  }
-
-  function ex2ShuffleHighlightedWords(){
-    if(!isExtraStage2()) return;
-    const stage = STAGES[stageIndex];
-    const targets = wordsOnField.filter(w => w && w.ex2Highlighted);
-    if(targets.length === 0) return;
-
-    for(const w of targets){
-      const nw = pickRandomDifferent(stage, w.prompt, w.answer);
-      w.prompt = nw.prompt;
-      w.answer = nw.answer;
-      w.answerNorm = normalizeAnswer(w.answer);
-
-      if(w.promptEl){
-        w.promptEl.textContent = w.prompt;
-      }
-      const aEl = w.answerEl || (w.el ? w.el.querySelector(".answer") : null);
-      if(aEl){
-        aEl.textContent = w.hidePromptWhileFalling ? makeUnreadableAnswer(w.answer) : w.answer;
-      }
-    }
-  }
-
-    let ex2TimerLastText = "";
-    let ex2EndTimerLastText = "";
-
-  function updateEx2Mechanic(){
-    if(!(gameState === "playing" && isExtraStage2() && ex2Active)){
-      showEx2Timer(false);
-      showEx2EndTimer(false);
-      return;
-    }
-
-    // Ensure the timers are visible again after pauses/continues
-    showEx2Timer(true);
-
-    // EX2 stage-end countdown (clears when the EX2 BGM ends)
-    if(ex2ClearOnBgmEndActive){
-      showEx2EndTimer(true);
-      let txt = "残り --:--";
-      if(Number.isFinite(bgm.duration) && bgm.duration > 0){
-        const ct = (Number.isFinite(bgm.currentTime) ? bgm.currentTime : 0);
-        const remain = Math.max(0, bgm.duration - ct);
-        txt = `残り ${formatTime(remain)}`;
-      }
-      if(ex2EndTimer && txt !== ex2EndTimerLastText){
-        ex2EndTimerLastText = txt;
-        ex2EndTimer.textContent = txt;
-      }
-    }else{
-      showEx2EndTimer(false);
-      ex2EndTimerLastText = "";
-    }
-
-    const now = nowMs();
-    const desired = ex2CycleSeconds() || 5;
-
-    // If we switched into the "below half HP" mode mid-cycle, shorten the remaining time if needed
-    if(desired !== ex2CycleSec){
-      const remaining = (ex2NextShuffleAtMs - now) / 1000;
-      if(remaining > desired){
-        ex2NextShuffleAtMs = now + desired * 1000;
-      }
-      ex2CycleSec = desired;
-    }
-
-    const left = Math.max(0, (ex2NextShuffleAtMs - now) / 1000);
-    if(ex2Timer){
-      const txt = `変化まで ${Math.ceil(left)}秒`;
-      if(txt !== ex2TimerLastText){
-        ex2TimerLastText = txt;
-        ex2Timer.textContent = txt;
-      }
-    }
-
-    if(now >= ex2NextShuffleAtMs){
-      ex2ShuffleHighlightedWords();
-      ex2CycleSec = ex2CycleSeconds() || desired || 5;
-      ex2NextShuffleAtMs = nowMs() + ex2CycleSec * 1000;
-    }
-  }
-
-
-  // ---- Extra Stage 2 mechanic: hacked freeze cycle ----
-  // Every 4 active seconds, existing words are hacked/frozen for 4 seconds.
-  // After each freeze, hacked words become the longest available word.
-  // A word can only be hacked once, and each freeze can hack at most 2 words.
-  // Below half boss HP, each completed freeze ramps spawn/fall speed upward.
-  const EX2_HACK_ACTIVE_SEC = 4;
-  const EX2_HACK_FREEZE_SEC = 4;
-  const EX2_HACK_MAX_WORDS = 2;
-  const EX2_HACK_SPAWN_RAMP = 1.12;
-  const EX2_HACK_FALL_RAMP = 1.08;
-  const EX2_HACK_MAX_SPAWN_MULT = 2.35;
-  const EX2_HACK_MAX_FALL_MULT = 1.85;
-
-  let ex2HackActive = false;
-  let ex2HackNextStartMs = 0;
-  let ex2HackReleaseMs = 0;
-  let ex2HackSpawnMult = 1;
-  let ex2HackFallMult = 1;
-
-  function isExtraStage2Hack(){
-    return (currentMode === "extra" && stageIndex === 1 && gameState === "playing");
-  }
-
-  function ex2HackLongestWord(){
-    const stage = STAGES[stageIndex] || {};
-    const arr = Array.isArray(stage.words) ? stage.words : [];
-    if(arr.length === 0) return null;
-
-    let best = null;
-    let bestLen = -1;
-    for(const w of arr){
-      if(!w || !w.prompt || !w.answer) continue;
-      const len = String(w.answer || "").replace(/[^A-Za-z]/g, "").length || String(w.answer || "").length;
-      if(len > bestLen){
-        best = w;
-        bestLen = len;
-      }
-    }
-    return best || arr[0] || null;
-  }
-
-  function ex2HackSetWord(w, hacked){
-    if(!w || !w.el) return;
-    w.ex2Hacked = !!hacked;
-    w.el.classList.toggle("ex2Hacked", !!hacked);
-    if(w.tagEl){
-      w.tagEl.textContent = hacked ? "HACKED" : "";
-    }
-  }
-
-  function ex2HackApplyLongestWord(w){
-    const longest = ex2HackLongestWord();
-    if(!w || !longest) return;
-
-    w.prompt = longest.prompt;
-    w.answer = longest.answer;
-    w.answerNorm = normalizeAnswer(w.answer);
-    w.hidePromptWhileFalling = false;
-    w.ex2Obscured = false;
-
-    try{ w.el && w.el.classList.remove("obscured"); }catch(_){}
-    if(w.promptEl) w.promptEl.textContent = w.prompt;
-    if(w.answerEl) w.answerEl.textContent = w.answer;
-    fitAnswerToRight(w.el);
-  }
-
-  function ex2HackStartFreeze(){
-    if(!isExtraStage2Hack()) return;
-
-    const targets = wordsOnField
-      .filter(w => w && !w.foxfireHidden && !w.ex2Hacked && !w.ex2HackUsed && (w.state === "falling" || w.state === "landed"))
-      .sort((a,b) => (b.y || 0) - (a.y || 0))
-      .slice(0, EX2_HACK_MAX_WORDS);
-    ex2HackActive = true;
-    ex2HackReleaseMs = nowMs() + EX2_HACK_FREEZE_SEC * 1000;
-
-    for(const w of targets){
-      w.ex2HackUsed = true;
-      ex2HackSetWord(w, true);
-    }
-
-    showEx2Timer(true);
-    pushMsg(`⚡ HACKED! ${targets.length} word(s) frozen.`, true);
-  }
-
-  function ex2HackEndFreeze(){
-    const hacked = wordsOnField.filter(w => w && w.ex2Hacked);
-
-    for(const w of hacked){
-      ex2HackApplyLongestWord(w);
-      ex2HackSetWord(w, false);
-    }
-
-    ex2HackActive = false;
-    ex2HackReleaseMs = 0;
-    ex2HackNextStartMs = nowMs() + EX2_HACK_ACTIVE_SEC * 1000;
-
-    if(bossMaxHp > 0 && bossHp < (bossMaxHp / 2)){
-      ex2HackSpawnMult = Math.min(EX2_HACK_MAX_SPAWN_MULT, ex2HackSpawnMult * EX2_HACK_SPAWN_RAMP);
-      ex2HackFallMult = Math.min(EX2_HACK_MAX_FALL_MULT, ex2HackFallMult * EX2_HACK_FALL_RAMP);
-      pushMsg("⚡ Syntax's hack speeds up the stage!", true);
-    }
-
-    showEx2Timer(true);
-    restackDirty = true;
-  }
-
-  function resetEx2HackMechanic(){
-    ex2HackActive = false;
-    ex2HackNextStartMs = 0;
-    ex2HackReleaseMs = 0;
-    ex2HackSpawnMult = 1;
-    ex2HackFallMult = 1;
-
-    for(const w of wordsOnField){
-      if(!w) continue;
-      w.ex2HackUsed = false;
-      if(w.ex2Hacked) ex2HackSetWord(w, false);
-    }
-    showEx2Timer(false);
-  }
-
-  function startEx2HackMechanic(){
-    resetEx2HackMechanic();
-    if(!isExtraStage2Hack()) return;
-    ex2HackNextStartMs = nowMs() + EX2_HACK_ACTIVE_SEC * 1000;
-    showEx2Timer(true);
-  }
-
-  function updateEx2HackMechanic(){
-    if(!(gameState === "playing" && currentMode === "extra" && stageIndex === 1)){
-      if(ex2HackActive || ex2HackNextStartMs || ex2HackReleaseMs) resetEx2HackMechanic();
-      return;
-    }
-
-    const now = nowMs();
-
-    if(ex2HackActive){
-      const left = Math.max(0, (ex2HackReleaseMs - now) / 1000);
-      showEx2Timer(true);
-      if(ex2Timer){
-        ex2Timer.textContent = `解除まで ${Math.ceil(left)}秒`;
-      }
-      if(now >= ex2HackReleaseMs){
-        ex2HackEndFreeze();
-      }
-      return;
-    }
-
-    if(!ex2HackNextStartMs){
-      ex2HackNextStartMs = now + EX2_HACK_ACTIVE_SEC * 1000;
-    }
-
-    const left = Math.max(0, (ex2HackNextStartMs - now) / 1000);
-    showEx2Timer(true);
-    if(ex2Timer){
-      ex2Timer.textContent = `HACKまで ${Math.ceil(left)}秒`;
-    }
-
-    if(now >= ex2HackNextStartMs){
-      ex2HackStartFreeze();
-    }
-  }
-
-
-  // ---- Extra Stage 4 mechanic: survive phases until BGM ends ----
-  function isExtraStage4(){
-    return false;
-  }
-
-  let ex4Phase = 0; // 1..5
-  let ex4SpawnEnabled = false;
-
-  // Shuffle queue: every 2 doubles/triples, shuffle those words after 5 seconds
-  let ex4BatchIds = [];
-  let ex4ShuffleQueue = []; // {atMs:number, ids:number[]}
-
-  // EX4 constants (seconds from stage start)
-  const EX4_T_PHASE2 = 25;
-  const EX4_T_PHASE3 = 71;
-  const EX4_T_PHASE4 = 134;
-  const EX4_T_PHASE5 = 157;
-
-  let nextGroupId = 1;
-
-  function showEx4Timer(show){
-    if(!ex4Timer) return;
-    ex4Timer.classList.toggle("show", !!show);
-  }
-
-  function ex4GroupSize(){
-    if(!isExtraStage4()) return 1;
-    if(ex4Phase === 2 || ex4Phase === 3) return 2;
-    if(ex4Phase === 5) return 3;
-    return 1;
-  }
-
-  function ex4ClearShuffleState(){
-    ex4BatchIds = [];
-    ex4ShuffleQueue = [];
-  }
-
-  function ex4QueueShuffleIfReady(){
-    const need = (ex4Phase === 3) ? 4 : (ex4Phase === 5 ? 6 : 0);
-    if(!need) return;
-
-    while(ex4BatchIds.length >= need){
-      const ids = ex4BatchIds.splice(0, need);
-      ex4ShuffleQueue.push({ atMs: nowMs() + 5000, ids });
-    }
-  }
-
-  function ex4DoShuffle(ids){
-    for(const id of ids){
-      const w = wordsOnField.find(x => x.id === id);
-      if(!w || w.foxfireOrigin) continue; // Preserve Foxfire's original shortest-first order.
-      // pick a different word if possible
-      const before = `${w.prompt}||${w.answer}`;
-      let picked = null;
-      for(let tries=0; tries<8; tries++){
-        const cand = pickStageWord();
-        if(!cand) continue;
-        const after = `${cand.prompt}||${cand.answer}`;
-        if(after !== before){
-          picked = cand;
-          break;
-        }
-      }
-      if(!picked) picked = pickStageWord();
-      if(!picked) continue;
-
-      w.prompt = picked.prompt;
-      w.answer = picked.answer;
-      w.answerNorm = normalizeAnswer(w.answer);
-
-      const pEl = w.promptEl || w.el.querySelector(".prompt");
-      if(pEl) pEl.textContent = w.prompt;
-
-      // IMPORTANT: update the visible English too, otherwise players will type what they see
-      // and the internal answer may have already changed (EX4 shuffle phases).
-      const aEl = w.answerEl || w.el.querySelector(".answer");
-      if(aEl){
-        aEl.textContent = w.hidePromptWhileFalling ? makeUnreadableAnswer(w.answer) : w.answer;
-      }
-    }
-  }
-
-  function ex4UpdateShuffleQueue(){
-    if(!isExtraStage4()) return;
-    if(!(gameState === "playing")) return;
-    const now = nowMs();
-    for(let i=ex4ShuffleQueue.length - 1; i>=0; i--){
-      const ev = ex4ShuffleQueue[i];
-      if(now >= ev.atMs){
-        ex4DoShuffle(ev.ids);
-        ex4ShuffleQueue.splice(i, 1);
-      }
-    }
-  }
-
-    let ex4TimerLastText = "";
-
-  function updateEx4Timer(){
-    if(!(gameState === "playing" && isExtraStage4())){
-      showEx4Timer(false);
-      return;
-    }
-    showEx4Timer(true);
-
-    let txt = "残り --:--";
-    if(Number.isFinite(bgm.duration) && bgm.duration > 0){
-      const ct = (Number.isFinite(bgm.currentTime) ? bgm.currentTime : 0);
-      const remain = Math.max(0, bgm.duration - ct);
-      txt = `残り ${formatTime(remain)}`;
-    }
-    if(txt !== ex4TimerLastText){
-      ex4TimerLastText = txt;
-      ex4Timer.textContent = txt;
-    }
-  }
-
-    function ex4Prestack(n){
-      const h = laneHeight();
-  
-      // Extra Stage 4 Phase 1: randomly obscure 3 of the pre-stacked English answers
-      const obscureCount = (isExtraStage4() && ex4Phase === 1) ? Math.min(3, n) : 0;
-      const obscureSet = new Set();
-      while(obscureSet.size < obscureCount){
-        obscureSet.add(Math.floor(Math.random() * n));
-      }
-  
-      for(let i=0;i<n;i++){
-        const cand = pickStageWord();
-        if(!cand) continue;
-  
-        const shouldObscure = obscureSet.has(i);
-        const shownAnswer = shouldObscure ? makeUnreadableAnswer(cand.answer) : cand.answer;
-  
-        const el = document.createElement("div");
-        el.className = "word landed" + (shouldObscure ? " obscured" : "");
-        el.innerHTML = `<div class="prompt" title="${escapeHtml(cand.prompt)}">${escapeHtml(cand.prompt)}</div>
-          <div class="right">
-            <span class="tag"></span>
-            <span class="answer muted" title="${escapeHtml(shownAnswer)}">${escapeHtml(shownAnswer)}</span>
-          </div>`;
-        wordLane.appendChild(el);
-  
-        const y = h - 30 * (i + 1);
-        const obj = {
-          id: nextWordId++,
-          prompt: cand.prompt,
-          answer: cand.answer,
-          answerNorm: normalizeAnswer(cand.answer),
-          y,
-          state: "landed",
-          el,
-          promptEl: el.querySelector(".prompt"),
-          answerEl: el.querySelector(".answer"),
-          tagEl: el.querySelector(".tag"),
-          hidePromptWhileFalling: shouldObscure, // keep obscured even while landed
-          ex2Highlighted: false,
-          fallMult: 1,
-          ex3Ghost: false,
-        };
-        setWordY(el, y);
-        wordsOnField.push(obj);
-        fitAnswerToRight(el);
-      }
-      restackLanded();
-    }
-
-  function ex4ShowFakeDeath(show){
-    if(!show){
-      showOverlay(false);
-      return;
-    }
-    // Fake death overlay that doesn't clear
-    setOverlayText("GIVE UP", "", "");
-    overlay.style.cursor = "default";
-    showOverlay(true);
-  }
-
-  const ex4Laugh = new Audio();
-  ex4Laugh.preload = "auto";
-
-  // EX4 Phase 4: reset scare image overlay (sync to ex4 laugh BGM duration)
-  let ex4ResetAnim = null;
-
-  function ex4PrepareLaugh(){
-    const stage = STAGES[stageIndex];
-    const src = stage?.ex4LaughBgm || "";
-    if(!src) return;
-    if(ex4Laugh.src !== src){
-      ex4Laugh.src = src;
-    }
-    try{ ex4Laugh.load(); }catch(_){}
-  }
-
-  function ex4WaitLaughDurationMs(timeoutMs = 300){
-    return new Promise((resolve) => {
-      const d0 = ex4Laugh.duration;
-      if(Number.isFinite(d0) && d0 > 0){
-        resolve(Math.round(d0 * 1000));
-        return;
-      }
-
-      let done = false;
-      const finish = (ms) => {
-        if(done) return;
-        done = true;
-        ex4Laugh.removeEventListener("loadedmetadata", onMeta);
-        ex4Laugh.removeEventListener("durationchange", onMeta);
-        resolve(ms);
-      };
-
-      const onMeta = () => {
-        const d = ex4Laugh.duration;
-        finish((Number.isFinite(d) && d > 0) ? Math.round(d * 1000) : 2500);
-      };
-
-      ex4Laugh.addEventListener("loadedmetadata", onMeta, { once:true });
-      ex4Laugh.addEventListener("durationchange", onMeta, { once:true });
-      setTimeout(() => finish(2500), timeoutMs);
-    });
-  }
-
-  function ex4StopResetScare(fast = false){
-    if(!ex4ResetScare) return;
-
-    if(ex4ResetAnim){
-      try{ ex4ResetAnim.cancel(); }catch(_){}
-      ex4ResetAnim = null;
-    }
-
-    if(fast){
-      // Requirement: fade out immediately when entering phase 5
-      ex4ResetScare.style.transition = "none";
-      ex4ResetScare.style.opacity = "0";
-      return;
-    }
-
-    ex4ResetScare.style.opacity = "0";
-  }
-
-  async function ex4PlayResetScare(){
-    if(!ex4ResetScare) return;
-
-    // Ensure metadata is available so the fade matches the laugh BGM duration
-    ex4PrepareLaugh();
-    playEx4Laugh();
-
-    const durationMs = await ex4WaitLaughDurationMs(350);
-
-    // Restart animation from 0 every time
-    ex4StopResetScare(false);
-    ex4ResetScare.style.transition = "none";
-    ex4ResetScare.style.opacity = "0";
-    void ex4ResetScare.offsetWidth;
-
-    ex4ResetAnim = ex4ResetScare.animate(
-      [{opacity:0},{opacity:0.8, offset:0.5},{opacity:0}],
-      {duration: Math.max(300, durationMs), easing:"linear", fill:"forwards"}
-    );
-    ex4ResetAnim.onfinish = () => {
-      ex4ResetAnim = null;
-      ex4ResetScare.style.opacity = "0";
-    };
-  }
-
-  function playEx4Laugh(){
-    const stage = STAGES[stageIndex];
-    const src = stage?.ex4LaughBgm || "";
-    if(!src) return;
-    if(isMuted) return;
-
-    try{
-      ex4Laugh.pause();
-      ex4Laugh.currentTime = 0;
-    }catch(_){}
-
-    ex4Laugh.src = src;
-    ex4Laugh.loop = false;
-    ex4Laugh.volume = clamp(lastVol * 2.5, 0, 1); // 2.5x louder for EX4 laugh BGM
-
-    ex4Laugh.play().catch(()=>{});
-  }
-
-  function ex4HandlePhaseEnter(newPhase){
-    ex4Phase = newPhase;
-
-    // EX4: swap boss art by phase group (1–2 / 3–4 / 5)
-    const ex4Stage = STAGES[stageIndex];
-    if(ex4Stage && isExtraStage4()){
-      const desiredVariant = (ex4Phase === 5) ? 3 : (ex4Phase >= 3 ? 2 : 1);
-      if(bossVariantPhase !== desiredVariant){
-        bossVariantPhase = desiredVariant;
-        // async swap; no need to await
-        setBossVariant(ex4Stage, desiredVariant);
-      }
-    }
-
-    // Always reset shuffle batch when switching phases
-    ex4ClearShuffleState();
-
-    if(ex4Phase === 1){
-      // Phase 1: start with 5 words already stacked; no spawns
-      ex4SpawnEnabled = false;
-      showOverlay(false);
-      setInputsEnabled(true);
-      resetField({ preservePermafrost: isNormalStage5() });
-      ex4Prestack(5);
-      spawnAccMs = 0;
-      return;
-    }
-
-    if(ex4Phase === 2){
-      ex4SpawnEnabled = true;
-      showOverlay(false);
-      setInputsEnabled(true);
-      spawnAccMs = 0;
-      return;
-    }
-
-    if(ex4Phase === 3){
-      ex4SpawnEnabled = true;
-      showOverlay(false);
-      setInputsEnabled(true);
-      spawnAccMs = 0;
-      showBossBubble("I\'ll show you crazy!", 5000);
-      return;
-    }
-
-    if(ex4Phase === 4){
-      // Clear stack + stop spawns + fake death overlay
-      ex4SpawnEnabled = false;
-      resetField();
-      spawnAccMs = 0;
-      setInputsEnabled(false);
-      ex4PrepareLaugh();
-      ex4ShowFakeDeath(true);
-      return;
-    }
-
-    if(ex4Phase === 5){
-      // Resume play, remove fake death prompts
-      ex4SpawnEnabled = true;
-      // If the reset scare image is showing, fade it out immediately on Phase 5
-      ex4StopResetScare(true);
-      showOverlay(false);
-      setInputsEnabled(true);
-      spawnAccMs = 0;
-      showBossBubble("Let\'s end this!", 5000);
-      return;
-    }
-  }
-
-  function ex4HandlePhaseTriggers(elapsedSec){
-    if(!(gameState === "playing" && isExtraStage4())) return;
-
-    let target = 1;
-    if(elapsedSec >= EX4_T_PHASE5) target = 5;
-    else if(elapsedSec >= EX4_T_PHASE4) target = 4;
-    else if(elapsedSec >= EX4_T_PHASE3) target = 3;
-    else if(elapsedSec >= EX4_T_PHASE2) target = 2;
-
-    if(target !== ex4Phase){
-      ex4HandlePhaseEnter(target);
-    }
-  }
-
-  function ex4OnGroupSpawn(ids){
-    if(!(isExtraStage4() && (ex4Phase === 3 || ex4Phase === 5))) return;
-    ex4BatchIds.push(...ids);
-    ex4QueueShuffleIfReady();
-  }
-
-  function updateEx4Mechanic(){
-    updateEx4Timer();
-    ex4UpdateShuffleQueue();
-
-    // Keep EX4 overlay text correct if blocked reset got triggered
-    if(gameState === "playing" && isExtraStage4() && ex4Phase === 4){
-      // ensure overlay stays on
-      showOverlay(true);
-      overlayTitle.textContent = "GIVE UP";
-    }
   }
 
 
@@ -6103,7 +5048,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     const {prompt, answer} = stagePick;
 
     if(countSpawn && state === "falling") spawnCountThisStage++;
-    // Extra Stage 1: every 3rd spawned word becomes a shooting star.
+    // Every 3rd eligible Conquest word becomes a shooting star.
     const ex1Freq = ex1HighlightFrequency();
     const ex1Highlighted = (!operatorHexSummoned && state === "falling" && ex1Freq > 0 && (spawnCountThisStage % ex1Freq === 0) && (currentMode!=='story'||(countSpawn&&!willBeChallengeComet)));
 
@@ -6113,64 +5058,25 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     const ex1Ghost = false;
     const ex1FrostTarget = ex1Highlighted;
 
-    // Extra Stage 2: time-based phases obscure the English every N spawns (per-phase cadence)
-    let ex2ShouldObscure = false;
-    if(!operatorHexSummoned && isExtraStage2() && state === "falling" && countSpawn){
-      const n = (ex2Phase === 1) ? 3 : (ex2Phase >= 2 ? 2 : 0);
-      if(n > 0){
-        ex2PhaseSpawnCount++;
-        ex2ShouldObscure = (ex2PhaseSpawnCount % n === 0);
-      }
-    }
-
-    let hidePromptWhileFalling = ex2ShouldObscure;
-    const shouldObscureAnswer = hidePromptWhileFalling;
-
-// Extra Stage 2 Phase 4+: all words ignore collision while falling and fall at different rates
-const ex2Phase4Plus = (!operatorHexSummoned && isExtraStage2() && ex2Phase >= 4 && state === "falling");
-const ex2IgnoreCollision = ex2Phase4Plus;
-const ex2FallMult = ex2Phase4Plus ? ex2RandomFallMult() : 1;
-
-    // Extra Stage 2: every Nth word highlighted (phase mechanics removed: constant frequency)
-    const ex2Freq = ex2HighlightFrequency();
-    const ex2Highlighted = (!operatorHexSummoned && state === "falling" && ex2Freq > 0 && (spawnCountThisStage % ex2Freq === 0));
-
-    // Normal Stage 5 mechanic removed: no special highlighted/frozen words.
+    const shouldObscureAnswer = false;
     const s5Highlighted = false;
-
-    // Extra Stage 3: every other word becomes a ghost word.
-    const ex3Freq = ex3SpecialFrequency();
-    const ex3Special = (!operatorHexSummoned && state === "falling" && ex3Freq > 0 && (spawnCountThisStage % ex3Freq === 0));
-    const ex3FallMult = ex3Special ? ex3RandomFallMult() : 1;
-
-    // Extra Stage 4: every Nth spawned word becomes infected.
-    const ex4Freq = ex4InfectFrequency();
-    const ex4Infected = (!operatorHexSummoned && state === "falling" && countSpawn && !opts.preventEx4Infection && ex4Freq > 0 && (spawnCountThisStage % ex4Freq === 0));
 
     // Challenge: star-struck every 3, comet every 4; after 60s special words become both; after 120s all words become both.
     const challengeComet = (!operatorHexSummoned && state === "falling" && countSpawn && challengeIsCometSpawn());
     const challengeStarStruck = (!operatorHexSummoned && state === "falling" && countSpawn && challengeIsStarStruckSpawn());
 
-    // Extra Stage 5: every Nth spawned word becomes star-struck.
-    const ex5Freq = ex5StarStruckFrequency();
-    const ex5StarStruck = challengeStarStruck || (!operatorHexSummoned && state === "falling" && countSpawn && ex5Freq > 0 &&
-      (window.RPG_BALANCE?.mechanic('star_struck','enabled',true)!==false) &&
-      (()=>{const pct=window.RPG_BALANCE?.mechanic('star_struck','chancePct',-1)??-1;
-        return pct>=0?Math.random()*100<pct:(((spawnCountThisStage-1)%ex5Freq)===0)})());
+    const ex5StarStruck = challengeStarStruck;
 
     const el = document.createElement("div");
     el.className = "word"
             + (shouldObscureAnswer ? " obscured" : "")
-      + ((ex1Ghost || ex3Special) ? " ghost" : "")
-      + (ex3Special ? " ex3GhostWord" : "")
-      + (ex4Infected ? " ex4Infected" : "")
+
       + (ex5StarStruck ? " ex5StarStruck" : "")
       + (challengeComet ? " challengeComet" : "")
-      + (ex1FrostTarget ? " ex1Target ex1ShootingStar" : "")
-      + (ex2Highlighted ? " ex2Target" : "");
+      + (ex1FrostTarget ? " ex1Target ex1ShootingStar" : "");
 
     const shownPrompt = prompt;
-    const shownAnswer = shouldObscureAnswer ? makeUnreadableAnswer(answer) : answer;
+    const shownAnswer = answer;
     el.innerHTML = `<div class="prompt">${escapeHtml(shownPrompt)}</div>
       <div class="right">
         <span class="tag"></span>
@@ -6199,51 +5105,28 @@ const ex2FallMult = ex2Phase4Plus ? ex2RandomFallMult() : 1;
       ex1Permafrost: false,
       ex1DamageArmed: false,
       ex1Ghost,
-      ex2Obscured: hidePromptWhileFalling,
-      ex2Highlighted,
-      ex2Hacked: false,
-      ex2HackUsed: false,
       s5Highlighted,
       s5FrostArmed: false,
       s5FrostDeadlineSec: 0,
       s5FrostLastShown: null,
       s5Permafrost: false,
-      ignoreCollision: (ex2IgnoreCollision || challengeComet),
+      ignoreCollision: challengeComet,
       challengeComet,
       challengeStarStruck,
-      ex2FallMult: ex2FallMult,
-      fallMult: ex3FallMult,
+      fallMult: 1,
       fallSpeedOverride: ex1FallSpeedOverride,
-      ex3Ghost: ex3Special,
-      ex3DeadlineMs: 0,
-      ex3CountdownMs: 0,
-      ex3ExpiredGhost: false,
-      ex4Infected,
-      ex4DeadlineMs: 0,
-      ex4CountdownMs: 0,
-      ex4Multiplied: false,
       ex5StarStruck,
       groupId: opts.groupId || 0,
       groupIndex: opts.groupIndex || 0,
       spawnBaseCount: (Number.isFinite(opts.spawnBaseCount) ? opts.spawnBaseCount : undefined),
     };
 if(state === "landed"){
-      obj.hidePromptWhileFalling = (obj.hidePromptWhileFalling || (obj.ex2Obscured ? true : false));
-      if(obj.ex3Ghost){
-        obj.el.classList.add("ex3GhostWord");
-        ex3ArmGhostTimer(obj);
-      }
-      if(obj.ex4Infected){
-        obj.el.classList.add("ex4Infected");
-        ex4ArmInfectionTimer(obj);
-      }
       if(obj.ex5StarStruck){
         obj.el.classList.add("ex5StarStruck");
       }
       if(obj.challengeComet){
         obj.el.classList.add("challengeComet");
       }
-      obj.ex2Highlighted = false;
       el.classList.add("landed");
       // ensure prompt is readable
       const pEl = obj.promptEl || el.querySelector(".prompt");
@@ -6251,12 +5134,8 @@ if(state === "landed"){
       const tEl = obj.tagEl || el.querySelector(".tag");
       if(tEl) tEl.textContent = "";
     }
-    // EX1 shooting star: visible marker while falling.
     if(ex1FrostTarget){
       try{ obj.tagEl && (obj.tagEl.textContent = "★"); }catch(_){/* ignore */}
-    }
-    if(ex4Infected){
-      try{ obj.tagEl && (obj.tagEl.textContent = "⚠️"); }catch(_){/* ignore */}
     }
     if(challengeComet && ex5StarStruck){
       try{ obj.tagEl && (obj.tagEl.textContent = "☄️☀️"); }catch(_){/* ignore */}
@@ -6282,44 +5161,8 @@ if(state === "landed"){
     return obj;
   }
 
-  function spawnWordGroup(size){
-    if(gameState !== "playing") return;
-    const gid = nextGroupId++;
-
-    // include current falling words (non-ghost) so groups don't overlap them
-    const baseCount = wordsOnField.filter(w => (w.state === "landed") || (w.state === "falling" && !w.ex3Ghost)).length;
-
-    const ids = [];
-    for(let i=0;i<size;i++){
-      const obj = spawnOneWord({
-        state: "falling",
-        y: -30 - 30 * i,
-        groupId: gid,
-        groupIndex: i,
-        spawnBaseCount: baseCount,
-      });
-      if(obj) ids.push(obj.id);
-    }
-    ex4OnGroupSpawn(ids);
-  }
-
   function spawnWord(){
-    if(gameState !== "playing") return;
-
-    // Extra Stage 4: phase-based spawning (none / doubles / triples)
-    if(isExtraStage4()){
-      if(!ex4SpawnEnabled) return;
-      const size = ex4GroupSize();
-      if(size > 1){
-        spawnWordGroup(size);
-      }else{
-        spawnOneWord();
-      }
-      return;
-    }
-
-    // Default: single word
-    spawnOneWord();
+    if(gameState === "playing") spawnOneWord();
   }
 
   function normalizeAnswer(s){
@@ -6449,16 +5292,12 @@ if(state === "landed"){
     if(stageIndex === 4){
       return;
     }
-
-
-    // EX Stage 4: win by BGM end
     if(stage && stage.endStageOnBgmEnd){
       (async () => {
         if(gameState !== "playing") return;
         setInputsEnabled(false);
         hideBossBubble();
         showStage5Timer(false);
-        showEx4Timer(false);
 
         await showStageClearScreen(stage);
         try{ requestCloudCheckpointSave("stage-clear"); }catch(_){/* ignore */}
@@ -6479,7 +5318,6 @@ if(state === "landed"){
       if(w.ex2Hacked) continue;
       if(w.foxfireHidden) continue;
       if(w.ex3ExpiredGhost) continue;
-      if(isExtraStage1() && w.s5Permafrost) continue;
       // answerNorm is cached on spawn/shuffle for speed + reliability
       if((w.answerNorm || normalizeAnswer(w.answer)) !== norm) continue;
 
@@ -6494,25 +5332,6 @@ if(state === "landed"){
 
     if(!best){
       if(wordsOnField.some(w=>window.RPG_VESPER?.locked(w)&&(w.answerNorm||normalizeAnswer(w.answer))===norm)){pushMsg('LOCKED',true);return true;}
-      // Extra Stage 2: hacked words are intentionally non-interactive.
-      // If the player types a hacked word's answer while it is frozen,
-      // ignore the input without counting it as a miss or dealing damage.
-      const hackedMatch = wordsOnField.some(w =>
-        w && w.ex2Hacked && ((w.answerNorm || normalizeAnswer(w.answer)) === norm)
-      );
-      if(hackedMatch){
-        pushMsg("HACKED — input ignored", true);
-        return true;
-      }
-
-      const expiredGhostMatch = wordsOnField.some(w =>
-        w && w.ex3ExpiredGhost && ((w.ex3ExpiredAnswerNorm || "") === norm)
-      );
-      if(expiredGhostMatch){
-        pushMsg("👻 GHOST — input ignored", true);
-        return true;
-      }
-
       if(stage5IsFrozenInput(norm) || ex1IsFrozenInput(norm)){
         pushMsg("FROZEN", true);
         return true;
@@ -6578,15 +5397,13 @@ if(state === "landed"){
 
     pushMsg(`HIT! 「${best.prompt}」→ ${best.answer} (+${pts})`);
 
-    // Boss can be invulnerable (EX4), so ensure score UI updates even if no HP changes.
+    // Boss can be invulnerable, so ensure score UI updates even if no HP changes.
     if(dmg <= 0) updateUI();
     return true;
   }
 
   function damageBoss(amount){
     if(amount <= 0) return;
-    // Extra Stage 2: boss takes no damage (stage clears when BGM ends)
-    if(isExtraStage2()) return;
 
     const stage = STAGES[stageIndex] || null;
     if(currentMode === "practice" || (stage && stage.bossInvulnerable)){
@@ -6626,11 +5443,6 @@ if(state === "landed"){
     updateUI();
 
     if(bossHp === 0){
-      // Extra Stage 2: survival stage — ignore boss HP (clear ONLY on BGM end)
-      if(isExtraStage2()){
-        return;
-      }
-      // Extra Stage 1 clears normally by boss HP; old phase-revive mechanic removed.
       onBossDefeated();
     }
   }
@@ -6687,10 +5499,6 @@ if(state === "landed"){
 
     // Safety: if a resume countdown was somehow running, stop it.
     clearResumeCountdown();
-    if(isExtraStage2()){
-      pushMsg("⛔ Pause disabled in EX Stage 2", true);
-      return;
-    }
 
     gameState = "paused";
     window.RPG_CH1_SPECIAL?.suspend(); // Paused UI must remain visible even during blackout.
@@ -7160,7 +5968,7 @@ function storyIncomingDamage(key,fallback){
       gameState = "stageclear";
       setInputsEnabled(false);
 
-      const stageClearBgm = (currentMode === "extra") ? AUDIO.extraVictoryBgm : AUDIO.victoryBgm;
+      const stageClearBgm = AUDIO.victoryBgm;
       setBgm(stageClearBgm, true);
 
       showOverlay(true);
@@ -7251,7 +6059,6 @@ function storyIncomingDamage(key,fallback){
     bossHp = bossMaxHp;
     bossVariantPhase = 1;
     baseHitDamage = currentMode === 'shared' ? stage.hitDamage : (window.RPG_BALANCE?.get('hitDamage',stage.hitDamage) ?? stage.hitDamage);
-    // Extra Stage 1 uses the stage/Google Sheets boss HP; shooting-star timer checks half HP dynamically.
 
     // Let already-prefetched artwork decode; never stall gameplay indefinitely for art.
     const artReady=window.RPG_MEDIA?.stage(stage,true);
@@ -7290,7 +6097,7 @@ function storyIncomingDamage(key,fallback){
     window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'');
     window.RPG_VALCREST?.start(currentMode,storySelectedStage?.id||'');
     window.RPG_VESPER?.start(currentMode,storySelectedStage?.id||'');
-    // Normal/Extra carry HP. Fletcher can activate Last Stand at 1 HP;
+    // Normal carry HP. Fletcher can activate Last Stand at 1 HP;
     // Mara queues Emergency Readiness if already below her HP threshold.
     // Both are initialized after the countdown, with a fresh stage clock.
     const fletcherStageEffect=operatorPassive?.onStageStart?.(playerHp,stageElapsedSec(),wordsOnField);
@@ -7303,38 +6110,6 @@ function storyIncomingDamage(key,fallback){
 
     // Normal Stage 4 mechanic removed.
 
-    // Extra Stage 2: time-based phases
-    // Phase 1: 0–40s, Phase 2: 40–68s, Phase 3: 68–98s, Phase 4: 98–130s, Phase 5: 130s+
-    if(isExtraStage2()){
-      ex2Phase = 1;
-      ex2Phase2Announced = false;
-      ex2Phase3Announced = false;
-      ex2Phase4Announced = false;ex2PhaseSpawnCount = 0;
-    }else{
-      ex2Phase = 0;
-      ex2Phase2Announced = false;
-      ex2Phase3Announced = false;
-      ex2Phase4Announced = false;ex2PhaseSpawnCount = 0;
-    }
-
-    // Extra Stage 4: always reset + enter Phase 1 right after the countdown
-    if(isExtraStage4()){
-      ex4Phase = 0;
-      ex4SpawnEnabled = false;
-      ex4ClearShuffleState();
-      ex4ShowFakeDeath(false);
-      showEx4Timer(true);
-      ex4HandlePhaseEnter(1);
-    }else{
-      showEx4Timer(false);
-      ex4Phase = 0;
-      ex4SpawnEnabled = false;
-      ex4ClearShuffleState();
-      ex4ShowFakeDeath(false);
-    }
-
-    startEx2Mechanic();
-    startEx2HackMechanic();
     stagePausedTotalMs = 0;
     stagePauseStartMs = null;
 
@@ -7342,14 +6117,6 @@ function storyIncomingDamage(key,fallback){
 
     setBgm(stage.playBgmFile, stage.playBgmLoop !== false);
 
-    // Extra Stage 2: survival clear — activate "clear on BGM end"
-    if(isExtraStage2()){
-      ex2ClearOnBgmEndActive = true;
-      ex2ClearOnBgmEndSrc = stage.playBgmFile || "";
-    }else{
-      ex2ClearOnBgmEndActive = false;
-      ex2ClearOnBgmEndSrc = "";
-    }
   }
 
   // A cloud/balance fetch can finish after the player has pressed BACK.
@@ -7365,7 +6132,6 @@ function storyIncomingDamage(key,fallback){
     window.__adventureChallengeClearing = false;
     cleanupContinueListeners();
     resetField();
-    resetEx2HackMechanic();
     hideBossBubble();
     showStage5Timer(false);
 
@@ -7376,8 +6142,8 @@ function storyIncomingDamage(key,fallback){
     // The sign-in prefetch stores verified vocabulary but does not populate WORDS.
     // Restore it before deciding a recent server download can be reused.
     if(vocabLastServerSuccess && !assignedVocabPool && !restoreVerifiedVocab())vocabLastServerSuccess=false;
-    const modeNeedsRank=['normal','extra','challenge','shared'].includes(currentMode);
-    const supportsCache=['practice','story','normal','extra'].includes(currentMode);
+    const modeNeedsRank=['normal','challenge','shared'].includes(currentMode);
+    const supportsCache=['practice','story','normal'].includes(currentMode);
     const connectionOkay=Boolean(ADVENTURE_CONTEXT.online&&!window.RPG_V66_DISCONNECTED&&navigator.onLine);
     const needsRefresh=modeNeedsRank||vocabRefreshedForMode!=='normal'||!vocabLastServerSuccess||Date.now()-vocabRefreshedAt>VOCAB_REFRESH_INTERVAL_MS;
     let live=false;
@@ -7407,7 +6173,7 @@ function storyIncomingDamage(key,fallback){
       return;
     }
     // Do not pretend a cached/unverified snapshot is an official ranked game.
-    if(['normal','extra','challenge'].includes(currentMode)&&!runLocalOnly){
+    if(['normal','challenge'].includes(currentMode)&&!runLocalOnly){
       try{await window.RPG_V66.prepareBalanceRun(currentMode,currentMode==='challenge'?['1']:['1','2','3','4','5']);if(!stillStarting())return;}
       catch(e){
         if(supportsCache&&restoreVerifiedVocab())setLocalOnlyRun(true);
@@ -7465,7 +6231,6 @@ setMode("normal");
 
     gameState = "idle";
     resetField();
-    resetEx2HackMechanic();
     hideBossBubble();
     showStage5Timer(false);
 
@@ -7539,13 +6304,6 @@ setMode("normal");
     clearResumeCountdown();
     pausedBgmState = null;
 if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
-    // EX4 Phase 4: completely block reset/run (fake death lockout)
-    if(gameState === "playing" && isExtraStage4() && ex4Phase === 4){
-      ex4ShowFakeDeath(true);
-      overlayDesc.textContent = "HAHAHAHAHAHA";
-      ex4PlayResetScare();
-      return;
-    }
 
     // Cancel any in-progress async UI flow (countdown/dialogue/etc.) so it can’t resume after reset.
     cancelUiFlow();
@@ -7602,7 +6360,6 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
       msgBox.innerHTML = "";
       
       
-      pushMsg(normalCleared ? "Extra Mode: UNLOCKED" : "Extra Mode: LOCKED（Normal クリアで解放）", true);
 
       showModeSelectScreen();
     }
@@ -7624,10 +6381,6 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
     window.RPG_CH1_SPECIAL?.suspend(); // Never obscure the clear screen.
     setSleepyBgmGain(1);
     if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
-    // Ensure EX2 survival flag doesn't linger into clear screens/next stages
-    resetEx2HackMechanic();
-    ex2ClearOnBgmEndActive = false;
-    ex2ClearOnBgmEndSrc = "";
 
     setInputsEnabled(false);
     hideBossBubble();
@@ -7670,7 +6423,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
   // Coin payment requires a successfully submitted, non-cheat, online ranked run.
   // Each rank token is redeemable for Guild Coins only once in Firestore.
-  const guildEligible=!runLocalOnly&&['normal','extra'].includes(currentMode);
+  const guildEligible=!runLocalOnly&&['normal'].includes(currentMode);
   const guildMode=currentMode,guildCorrect=guildCorrectThisRun,guildMisses=mistakes;
   const guildSync=guildEligible ? (async()=>{
     const ranked=await submitRankedCompletion();
@@ -7681,36 +6434,21 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
 
   // Keep first-clear unlocks, but never change victory navigation based on them.
   const firstNormalClear = currentMode === "normal" && !normalCleared;
-  const firstExtraClear = currentMode === "extra" && !extraCleared;
 
-  // If Normal mode was cleared, unlock Extra permanently
+  // If Normal mode was cleared, unlock Challenge permanently
   if(currentMode === "normal" && !normalCleared && !runLocalOnly){
     normalCleared = true;
     saveNormalCleared();
     try{ unlockAchievement("normal_clear"); }catch(_){/* ignore */}
-    try{ if(loadExtraCleared()) unlockAchievement("master_clear"); }catch(_){/* ignore */}
-    pushMsg("EXTRA UNLOCKED", true);
+    pushMsg("CHALLENGE UNLOCKED", true);
     try{ requestCloudCheckpointSave("normal-mode-clear"); }catch(_){/* ignore */}
   }
 
-  // If Extra mode was cleared for the first time, unlock the Master intro (Normal + Extra clear).
-  // (Extra is normally only accessible after Normal clear, but debug mode may bypass that.)
-  if(currentMode === "extra" && !extraCleared && !runLocalOnly){
-    extraCleared = true;
-    saveExtraCleared();
-    try{ unlockAchievement("extra_clear"); }catch(_){/* ignore */}
-    try{ if(loadNormalCleared()) unlockAchievement("master_clear"); }catch(_){/* ignore */}
-    pushMsg("MASTER INTRO UNLOCKED", true);
-    try{ requestCloudCheckpointSave("extra-mode-clear"); }catch(_){/* ignore */}
-  }
-
-
-  const victoryBgmFile = (currentMode === "extra") ? AUDIO.extraVictoryBgm : AUDIO.victoryBgm;
+  const victoryBgmFile = AUDIO.victoryBgm;
   setBgm(victoryBgmFile, true);
 
   const clearedCount = STAGES.length;
-  const unlocked = firstNormalClear ? " · EXTRA UNLOCKED" :
-                   firstExtraClear ? " · MASTER INTRO UNLOCKED" : "";
+  const unlocked = firstNormalClear ? " · CHALLENGE UNLOCKED" : "";
   const desc = runLocalOnly?`${clearedCount} STAGES CLEARED · UNRANKED · NOT SAVED`:`${clearedCount} STAGES CLEARED${unlocked}`;
 
   showOverlay(true);
@@ -7872,9 +6610,6 @@ if(gameState === "paused"){
       const riftMotion=window.RPG_CH1_SPECIAL?.motionMultiplier?.()??1;
       const panicMotion=window.RPG_CH1_SPECIAL?.motionMultiplier?.(true)??1;
       const spawnDt=chapterBlackout?0:dt; // Do not spawn new, unseen words during the blackout.
-      ex4HandlePhaseTriggers(elapsed);
-      ex2HandlePhaseTriggers(elapsed);
-      updateEx2HackMechanic();
       const readableHeight=laneHeight();
       if(readableHeight!==lastBattleLaneHeight||restackDirty){lastBattleLaneHeight=readableHeight;restackLanded();restackDirty=false;}
       const isReadable=w=>window.RPG_WORD_READABLE(w,readableHeight);
@@ -7910,22 +6645,6 @@ if(gameState === "paused"){
         spawnMs = stage5CurrentSpawnMs(elapsed);
       }
 
-      // EX Stage 4: Phase-based spawn rate adjustment
-      // Phases 2–3: 55% of original spawn rate (=> longer interval)
-      // Phase 5: 2x 10% slower than phases 2–3 (i.e., 44.55% of original)
-      const isEx4 = isExtraStage4();
-      const ex4Adj = isEx4 && (ex4Phase === 2 || ex4Phase === 3 || ex4Phase === 5);
-      if(isEx4 && (ex4Phase === 2 || ex4Phase === 3)){
-        spawnMs = Math.round(spawnMs / 0.55);
-      }else if(isEx4 && ex4Phase === 5){
-        spawnMs = Math.round(spawnMs / 0.55 / 0.9 / 0.9);
-      }
-
-
-      // Extra Stage 3 keeps the base spawn rate; below half HP only ghost fall speed/timer change.
-      if(currentMode === "extra" && stageIndex === 1){
-        spawnMs = Math.max(250, Math.round(spawnMs / Math.max(1, ex2HackSpawnMult || 1)));
-      }
       if(currentMode === "challenge"){
         spawnMs = Math.max(220, Math.round(spawnMs / challengeRampMultiplier(elapsed)));
       }
@@ -7978,13 +6697,6 @@ if(gameState === "paused"){
         ? stage5CurrentFallSpeed(elapsed)
         : (currentMode === 'shared' ? stage.fallSpeedPxPerSec : (window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec) ?? stage.fallSpeedPxPerSec));
 
-      // EX Stage 4: Phase 2/3/5 fall speed adjustment (+10% of original)
-      if(ex4Adj){
-        fallSpeed *= 1.10;
-      }
-      if(currentMode === "extra" && stageIndex === 1){
-        fallSpeed *= Math.max(1, ex2HackFallMult || 1);
-      }
       if(currentMode === "challenge"){
         fallSpeed *= challengeRampMultiplier(elapsed);
       }
@@ -8009,7 +6721,7 @@ if(gameState === "paused"){
 
         let v = (Number.isFinite(w.fallSpeedOverride)
           ? w.fallSpeedOverride
-          : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
+          : (fallSpeed * (w.fallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
         // Only Panic and Duel have the two-second readability cap. Infiltration retains its configured speed.
         if(w.chapterPanic||w.valcrestKind==='duel')v=Math.min(v,Math.max(1,h-30*wordRows(w))/2);
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
@@ -8025,7 +6737,7 @@ if(gameState === "paused"){
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
         const gIdx = (w.groupIndex || 0);
-        const ignoreCollide = !!w.ex3Ghost || !!w.ignoreCollision;
+        const ignoreCollide = !!w.ignoreCollision;
         const targetY = ignoreCollide ? (h - 30*wordRows(w)) : (h - 30 * (baseCount + gIdx + wordRows(w)));
 
         if(w.challengeComet){
@@ -8062,15 +6774,6 @@ if(gameState === "paused"){
           if(shootingStarActive() && w.ex1Highlighted){
             ex1ArmPermafrost(w);
           }
-          if(isExtraStage2() && ex2Phase >= 3){
-            ex2ToggleObscureOnLand(w);
-          }
-          if(isExtraStage3() && w.ex3Ghost){
-            ex3ArmGhostTimer(w);
-          }
-          if(isExtraStage4Infection() && w.ex4Infected){
-            ex4ArmInfectionTimer(w);
-          }
 
           landedCount+=wordRows(w);
           needsRestack = true;
@@ -8090,8 +6793,6 @@ if(gameState === "paused"){
       stage5UpdateFrost();
       ex1UpdatePermafrost();
       if(storySquad.enabled&&gameState!=='playing'){scheduleTick(true);return;}
-      ex3UpdateGhostTimers();
-      ex4UpdateInfectionTimers();
 
 
       if(needsRestack) restackLanded();
@@ -8117,14 +6818,10 @@ if(gameState === "paused"){
 
       handleStage5PhaseTriggers();
       updateStage5Timer();
-      updateEx2Mechanic();
-      updateEx4Mechanic();
       updateUIThrottled();
     } else {
       updateStage5Timer();
       updateStage4Timer();
-      updateEx2Mechanic();
-      updateEx2HackMechanic();
       updateUIThrottled();
     }
 
@@ -8140,10 +6837,6 @@ if(gameState === "paused"){
 
 
 pauseCmd && pauseCmd.addEventListener("click", (e) => {
-  if(gameState === "playing" && isExtraStage2()){
-    pushMsg("⛔ Pause disabled in EX Stage 2", true);
-    return;
-  }
   // A click is a real user gesture: make resuming audio reliable on Safari/iPad.
   try{ tryPlayBgmFromGesture(); }catch(_){/* ignore */}
   togglePause(true);
@@ -8153,10 +6846,6 @@ pauseCmd && pauseCmd.addEventListener("click", (e) => {
 window.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
   if(gameState === "playing"){
-    if(isExtraStage2()){
-      pushMsg("⛔ Pause disabled in EX Stage 2", true);
-      return;
-    }
     e.preventDefault();
     pauseGame();
   }else if(gameState === "paused"){
@@ -8166,22 +6855,9 @@ window.addEventListener("keydown", (e) => {
 });
 
   resetCmd && resetCmd.addEventListener("click", () => {
-    if(gameState === "playing" && isExtraStage4() && ex4Phase === 4){
-      // Block reset during the fake death phase
-      ex4ShowFakeDeath(true);
-      overlayDesc.textContent = "HAHAHAHAHAHA";
-      ex4PlayResetScare();
-      return;
-    }
     resetGame(false);
   });
 runCmd.addEventListener("click", () => {
-    if(gameState === "playing" && isExtraStage4() && ex4Phase === 4){
-      ex4ShowFakeDeath(true);
-      overlayDesc.textContent = "HAHAHAHAHAHA";
-      ex4PlayResetScare();
-      return;
-    }
     if(gameState === 'playing' && !window.confirm('Leave this run and return to Mode Select?')) return;
     resetGame(false);
   });

@@ -186,7 +186,7 @@ function showModeSelect(){
  const choices=$('tutorialModeChoices');
  choices.replaceChildren();
  // The names and ordering intentionally match the real post-login Mode Select.
- const names=['Story Mode','Practice','Normal Mode','Extra Mode','Challenge Mode',
+ const names=['Story Mode','Practice','Normal Mode','Challenge Mode',
    'All Grades Challenge','Profile','Recruitment','Rankings','Tournament'];
  for(const title of names){
   const button=document.createElement('button');
