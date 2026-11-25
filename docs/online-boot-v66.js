@@ -157,7 +157,7 @@ async function load(identity,progress,{offline=false}={}){
  if(scriptsStarted)throw Error('Game startup interrupted. Reload to retry.');scriptsStarted=true;
  // Preload all required files together, then execute in dependency order. Preloads
  // have the exact same URLs as the injected scripts and use the HTTP cache.
- const scripts=['conquest-map.js','conquest-core.js','story-mode.js','adventure_rewards.js','guild-coins.js','squad-tutorial.js','adventure_engine.js'].map(file=>({file,url:file+'?v='+(file==='adventure_engine.js'?'140.0':file==='conquest-map.js'?'135.0':file==='story-mode.js'?'137.0':file==='conquest-core.js'?'136.0':file==='squad-tutorial.js'?'131.0':'81')}));
+ const scripts=['conquest-map.js','conquest-core.js','story-mode.js','adventure_rewards.js','guild-coins.js','squad-tutorial.js','adventure_engine.js'].map(file=>({file,url:file+'?v='+(file==='adventure_engine.js'?'141.0':file==='conquest-map.js'?'135.0':file==='story-mode.js'?'137.0':file==='conquest-core.js'?'136.0':file==='squad-tutorial.js'?'131.0':'81')}));
  for(const {url} of scripts){if(!Array.from(document.querySelectorAll('link[rel=preload]')).some(link=>link.href===new URL(url,document.baseURI).href)){const link=document.createElement('link');link.rel='preload';link.as='script';link.href=url;document.head.append(link);}}
  for(const {file,url} of scripts)await new Promise((resolve,reject)=>{
    const s=document.createElement('script');s.src=url;s.onload=resolve;s.onerror=()=>reject(Error(file+' not loaded. Reload to retry.'));document.body.appendChild(s);

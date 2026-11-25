@@ -32,3 +32,23 @@ body.adventure-client .word.valcrest-duel .tag::before{content:'DUEL';font-size:
 .wordLane[data-valcrest-event="duel"]::before{background:#624b22;color:#fff0b9}
 .wordLane[data-valcrest-event="encirclement"][data-valcrest-side="right"]::before{content:'ENCIRCLEMENT ←';left:auto;right:0;transform:none}
 .wordLane[data-valcrest-event="encirclement"][data-valcrest-side="left"]::before{content:'→ ENCIRCLEMENT';left:0;transform:none}
+
+/* Vesper: color + short readable labels; translations retain v140 contrast. */
+body.adventure-client .word.vesper-poison{background:#29432f;border:2px solid #8ecb83}
+body.adventure-client .word.vesper-poison .tag::before{content:'POISON';color:#b9efad}
+body.adventure-client .word.vesper-poison-active{box-shadow:inset 0 0 0 2px #a8e690}
+body.adventure-client .word.vesper-blood_pact{background:#592c42;border:2px solid #e39ab1}
+body.adventure-client .word.vesper-blood_pact .tag::before{content:'HEAL';color:#ffd0df}
+body.adventure-client .word.vesper-infiltration{background:#512e58;border:2px solid #d79de4}
+body.adventure-client .word.vesper-infiltration:not(.landed){z-index:8500!important}
+body.adventure-client .word.vesper-infiltration .tag::before{content:'LOCK';color:#f4c7ff}
+body.adventure-client .word.vesper-death_mark{background:#592a32;border:2px solid #f08b99}
+body.adventure-client .word.vesper-death_mark .tag::before{content:attr(data-vesper-time) 's';color:#ffc2c8}
+body.adventure-client .word.vesper-locked:not(.operator-lupa-weakpoint){opacity:.58;filter:saturate(.4)}
+body.adventure-client .word.vesper-locked .tag::before{content:'LOCKED';color:#eee}
+body.adventure-client .word.vesper-poison .tag,body.adventure-client .word.vesper-blood_pact .tag,body.adventure-client .word.vesper-infiltration .tag,body.adventure-client .word.vesper-death_mark .tag,body.adventure-client .word.vesper-locked .tag,body.adventure-client .word.vesper-execution-target .tag{display:inline-block;font:800 9px/1 Arial,sans-serif}
+body.adventure-client .wordLane[data-vesper-execution]{outline:2px solid #f08ba9;outline-offset:-2px}
+body.adventure-client .wordLane[data-vesper-execution]::before{content:attr(data-vesper-execution);position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:9999;white-space:nowrap;background:#532239;color:#ffe2ed;font:800 12px/1.3 Arial,sans-serif;padding:3px 8px;pointer-events:none}
+body.adventure-client .wordLane[data-vesper-execution] .word:not(.vesper-execution-target){opacity:.65}
+body.adventure-client .word.vesper-execution-target{background:#59263c;border:2px solid #f08ba9;box-shadow:inset 0 0 0 1px #f4b4c6}
+body.adventure-client .word.vesper-execution-target .tag::before{content:'TARGET';color:#ffcade}

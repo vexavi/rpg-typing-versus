@@ -327,3 +327,82 @@ window.RPG_MECHANICS?.register({
  function motion(w,t){if(!active)return 1;if(event?.id==='duel'&&event.wordId!=null&&w.id!==event.wordId)return 0;if(w.valcrestEntryUntil){if(t<w.valcrestEntryUntil)return 0;delete w.valcrestEntryUntil;w.el?.classList?.remove('valcrest-entering');}return 1;}
  window.RPG_VALCREST=Object.freeze({start,reset,markSpawn,armorHit,frame,motion,removed,rows,active:()=>active,inspect:()=>({active,event:event?{...event}:null,recovery,due:{...due}})});
 })();
+
+/* Vesper: exclusive word modifiers and one execution event on the battle clock. */
+(function(){
+ 'use strict';
+ const n=(key,label,min,max,step,def)=>({key,label,type:'number',min,max,step,default:def});
+ const enable={key:'enabled',label:'Enabled',type:'boolean',default:false};
+ const definitions=[
+  {id:'poison',label:'Poison',description:'Landing applies damage over time. Clearing its source stops the damage; poison never stacks.',fields:[enable,n('chancePct','Chance (%)',0,100,1,15),n('damage','Damage per second (displayed HP)',1,10,1,2),n('durationSec','Duration (sec)',1,15,1,5),n('maxActive','Maximum words',1,4,1,2),n('speedPct','Falling speed (%)',50,200,5,100)]},
+  {id:'blood_pact',label:'Blood Pact',description:'A marked word heals the boss once if it lands.',fields:[enable,n('chancePct','Chance (%)',0,100,1,15),n('healPct','Boss maximum HP restored (%)',0,15,1,3),n('maxActive','Maximum words',1,3,1,1),n('speedPct','Falling speed (%)',50,200,5,100)]},
+  {id:'infiltration',label:'Infiltration',description:'A fast word bypasses the stack, inserts at the bottom and temporarily locks ordinary stacked words.',fields:[enable,n('chancePct','Chance (%)',0,100,1,10),n('speedPct','Falling speed (%)',100,300,5,200),n('lockSec','Maximum lockdown (sec)',1,10,1,5),n('maxActive','Maximum words',1,1,1,1),n('minGapSec','Minimum spawn gap (sec)',5,60,1,10)]},
+  {id:'death_mark',label:'Death Mark',description:'Clear before its countdown ends. On expiry, one hit occurs and the word becomes normal.',fields:[enable,n('chancePct','Chance (%)',0,100,1,10),n('durationSec','Countdown (sec)',3,20,1,6),n('damage','Expiration damage (displayed HP)',0,100,1,10),n('maxActive','Maximum words',1,3,1,1),n('speedPct','Falling speed (%)',50,200,5,100)]},
+  {id:'moonlit_execution',label:'Moonlit Execution',description:'Freeze falling words and spawning while marked existing words must be cleared. Lupa’s passive cannot overlap.',fields:[enable,n('intervalSec','Interval (sec)',10,120,1,25),n('count','Maximum targets',1,5,1,3),n('durationSec','Countdown (sec)',4,20,1,8),n('damage','Damage per remaining target (displayed HP)',0,100,1,10),n('maxDamage','Maximum total damage (displayed HP)',0,100,1,30)]}
+ ];
+ for(const d of definitions)window.RPG_MECHANICS?.register({...d,modes:['story'],defaultEnabled:false});
+ let active=false,settings={},lastTime=0,lastInfil=-Infinity,due=Infinity,execution=null,poison=null,lock=null,lane=null,fieldWords=[],lupaPending=false,weakPoints=new Set();
+ const enabled=id=>settings[id]?.enabled===true;
+ const klass=(w,c,on)=>{const cl=w?.el?.classList;if(!cl)return;if(cl.contains?.(c)===on)return;if(on)cl.add(c);else cl.remove(c);};
+ const has=(w,c)=>!!w?.el?.classList?.contains?.(c);
+ const eligible=w=>w&&!w.operatorHexSummoned&&!w.chainHexed&&!w.foxfireHidden&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.challengeComet&&!w.ex1Highlighted&&!w.chapterPanic&&!w.valcrestKind;
+ const normal=w=>eligible(w)&&!w.vesperKind&&!w.vesperExecution;
+ const display=(el,key,text)=>{if(el?.getAttribute?.(key)!==text)el?.setAttribute?.(key,text);};
+ const markTime=(w,text)=>{display(w.el,'data-vesper-time',text);display(w.tagEl,'data-vesper-time',text);};
+ function refreshLocks(words=fieldWords){for(const w of words){if(lock||has(w,'vesper-locked'))klass(w,'vesper-locked',locked(w));}}
+ function locked(w){return !!(active&&lock&&!execution&&w?.state==='landed'&&!w.vesperKind&&!w.vesperExecution&&!weakPoints.has(w.id)&&!has(w,'operator-lupa-weakpoint')&&!has(w,'operator-hound-prey')&&!has(w,'operator-phantom-mark')&&!has(w,'operator-nitrate-wrath')&&!has(w,'operator-crossbow-bullseye'));}
+ function clearExecution(t){if(!execution)return;for(const w of fieldWords){delete w.vesperExecution;klass(w,'vesper-execution-target',false);}execution=null;due=t+settings.moonlit_execution.intervalSec;lane?.removeAttribute?.('data-vesper-execution');refreshLocks();}
+ function reset(){for(const w of fieldWords){delete w.vesperExecution;klass(w,'vesper-execution-target',false);klass(w,'vesper-locked',false);}lane?.removeAttribute?.('data-vesper-execution');lane=null;active=false;settings={};lastTime=0;lastInfil=-Infinity;due=Infinity;execution=poison=lock=null;fieldWords=[];weakPoints=new Set();lupaPending=false;}
+ function start(mode,id,t=0){reset();if(mode!=='story'||!/^3-[1-9]\d*$/.test(String(id)))return;
+  for(const d of definitions){settings[d.id]={};for(const f of d.fields){const v=window.RPG_BALANCE?.mechanic(d.id,f.key,f.default)??f.default;settings[d.id][f.key]=f.type==='boolean'?v===true:typeof v==='number'&&Number.isFinite(v)?Math.min(f.max,Math.max(f.min,f.step===1?Math.round(v):v)):f.default;}}
+  active=definitions.some(d=>enabled(d.id));lastTime=t;due=t+settings.moonlit_execution.intervalSec;
+ }
+ function markSpawn(w,words,t=lastTime){if(!active||execution||!normal(w)||w.state!=='falling')return;fieldWords=words;
+  // A single probability roll gives exclusive modifiers their actual configured chance when total <=100%.
+  let roll=Math.random()*100;
+  for(const id of ['infiltration','death_mark','poison','blood_pact']){
+   const s=settings[id];if(!enabled(id)||words.filter(v=>v.vesperKind===id).length>=s.maxActive||(id==='infiltration'&&t-lastInfil<s.minGapSec))continue;
+   if(roll>=s.chancePct){roll-=s.chancePct;continue;}
+   w.vesperKind=id;klass(w,'vesper-'+id,true);w.fallMult=(w.fallMult||1)*s.speedPct/100;
+   if(id==='infiltration'){lastInfil=t;w.ignoreCollision=true;}
+   if(id==='death_mark'){w.vesperRemaining=s.durationSec;w.vesperClock=t;markTime(w,s.durationSec.toFixed(1));}
+   return;
+  }
+ }
+ function land(w,t,heal=()=>{}){if(!active||!w?.vesperKind||w.vesperLanded)return;w.vesperLanded=true;
+  if(w.vesperKind==='blood_pact')heal(settings.blood_pact.healPct/100);
+  else if(w.vesperKind==='poison'&&!poison){poison={id:w.id,remaining:settings.poison.durationSec,acc:0,clock:t};klass(w,'vesper-poison-active',true);}
+  else if(w.vesperKind==='infiltration'){lock={id:w.id,remaining:settings.infiltration.lockSec,clock:t};w.ignoreCollision=false;w.vesperBottom=true;refreshLocks();}
+ }
+ function removed(w,t=lastTime){if(!active||!w)return;if(poison?.id===w.id)poison=null;if(lock?.id===w.id){lock=null;refreshLocks();}if(execution?.ids.delete(w.id)&&!execution.ids.size)clearExecution(t);}
+ function frame(t,{words=[],field=null,lupaActive=false,lupaTargets=[],paused=false,grace=false,damage=()=>{},notify=()=>{}}={}){
+  if(!active)return false;fieldWords=words;lane=field||lane;const dt=Math.max(0,t-lastTime);lastTime=t;weakPoints=new Set(lupaTargets);let hits=0,executionHit=0;
+  const wasExecution=!!execution;
+  if(execution){for(const id of execution.ids)if(!words.some(w=>w.id===id&&!w.foxfireHidden))execution.ids.delete(id);
+   if(!execution.ids.size)clearExecution(t);
+   else {execution.remaining=Math.max(0,execution.remaining-(grace?0:dt));if(execution.remaining<=0){executionHit=Math.min(settings.moonlit_execution.maxDamage,execution.ids.size*settings.moonlit_execution.damage);clearExecution(t);}
+    else display(lane,'data-vesper-execution',`MOONLIT EXECUTION · ${execution.remaining.toFixed(1)}s · ${execution.ids.size}`);}
+  }
+  // Resolve a due execution before ticking other threats; no concurrent deadline damage.
+  if(!wasExecution&&!execution&&enabled('moonlit_execution')&&t>=due&&!lupaActive&&!lupaPending&&!paused){
+   const candidates=words.filter(w=>normal(w)&&(w.state==='landed'||(w.state==='falling'&&w.y>=0))&&!has(w,'operator-hound-prey')&&!has(w,'operator-phantom-mark')).sort((a,b)=>(b.state==='landed')-(a.state==='landed')||b.y-a.y).slice(0,settings.moonlit_execution.count);
+   if(candidates.length){execution={ids:new Set(candidates.map(w=>w.id)),remaining:settings.moonlit_execution.durationSec};for(const w of candidates){w.vesperExecution=true;klass(w,'vesper-execution-target',true);}display(lane,'data-vesper-execution',`MOONLIT EXECUTION · ${execution.remaining.toFixed(1)}s · ${execution.ids.size}`);notify('MOONLIT EXECUTION');}
+  }
+  const suspended=wasExecution||!!execution||grace;
+  if(lock){const w=words.find(v=>v.id===lock.id&&v.state==='landed');if(!w)lock=null;else {if(!suspended)lock.remaining-=Math.max(0,t-Math.max(t-dt,lock.clock));if(lock.remaining<=0)lock=null;}}
+  if(poison){const w=words.find(v=>v.id===poison.id&&v.state==='landed');if(!w){if(words.some(v=>v.id===poison.id))klass(words.find(v=>v.id===poison.id),'vesper-poison-active',false);poison=null;}
+   else if(!suspended){const d=Math.min(poison.remaining,Math.max(0,t-Math.max(t-dt,poison.clock)));poison.remaining-=d;poison.acc+=d;const ticks=Math.floor(poison.acc+1e-8);poison.acc-=ticks;hits+=ticks*settings.poison.damage;if(poison.remaining<=1e-8){klass(w,'vesper-poison-active',false);poison=null;}}
+  }
+  for(const w of words){if(w.vesperKind!=='death_mark')continue;const d=Math.max(0,t-Math.max(t-dt,w.vesperClock??t));w.vesperClock=t;if(!suspended&&!w.foxfireHidden)w.vesperRemaining-=d;
+   if(w.vesperRemaining<=0){hits+=settings.death_mark.damage;delete w.vesperKind;klass(w,'vesper-death_mark',false);w.el?.removeAttribute?.('data-vesper-time');w.tagEl?.removeAttribute?.('data-vesper-time');w.fallMult=(w.fallMult||1)*100/settings.death_mark.speedPct;}
+   else markTime(w,Math.max(0,w.vesperRemaining).toFixed(1));}
+  refreshLocks();
+  if(executionHit>0)damage(executionHit/10,'Moonlit Execution');else if(hits>0)damage(hits/10,'Vesper');
+  return !!execution;
+ }
+ function motion(){return execution?0:1;}
+ function deferLupa(){if(!execution)return false;lupaPending=true;return true;}
+ function takeLupa(){if(execution||!lupaPending)return false;lupaPending=false;return true;}
+ function retireLupa(){lupaPending=false;weakPoints.clear();}
+ window.RPG_VESPER=Object.freeze({start,reset,markSpawn,land,removed,frame,motion,locked,deferLupa,takeLupa,retireLupa,active:()=>active,executing:()=>!!execution,inspect:()=>({active,lock:lock?{...lock}:null,poison:poison?{...poison}:null,execution:execution?{remaining:execution.remaining,ids:[...execution.ids]}:null,lupaPending})});
+})();

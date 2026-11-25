@@ -3822,6 +3822,7 @@ async function debugJumpTo(mode, idx){
     storySquad.index=next;
     gameState='squad-deploy';setInputsEnabled(false);answerInput.value='';
     pauseStageClock();window.RPG_CH1_SPECIAL?.suspend?.();setSleepyBgmGain(1);
+    window.RPG_VESPER?.retireLupa();
     resetOperatorForStage(); // Retire the outgoing rules engine and its temporary hexes.
     clearOutgoingSquadEffects();
     renderStorySquad();updateUI();
@@ -4171,7 +4172,7 @@ async function debugJumpTo(mode, idx){
     }
   }
   function operatorPrepareLupaTargets(){
-    const chosen=landedWords().sort((a,b)=>b.y-a.y).slice(0,3);
+    const chosen=landedWords().filter(w=>!window.RPG_VESPER?.active()||(!w.vesperKind&&!w.vesperExecution&&!w.foxfireHidden)).sort((a,b)=>b.y-a.y).slice(0,3);
     const need=Math.max(0,3-chosen.length);
     if(!need)return chosen;
     const exclude=new Set(wordsOnField.map(w=>normalizeAnswer(w.answer)));
@@ -4189,6 +4190,9 @@ async function debugJumpTo(mode, idx){
     return chosen.concat(spawned).slice(0,3);
   }
   function operatorStartLupa(){
+    if(window.RPG_VESPER?.deferLupa())return null;
+    window.RPG_VESPER?.takeLupa();
+    if(operatorPassive?.debug?.().lupaActive)return null;
     const targets=operatorPrepareLupaTargets();
     const effect=operatorPassive?.startLupa?.(targets.map(w=>w.id),stageElapsedSec());
     if(effect)applyOperatorFieldEffect(effect);
@@ -4319,7 +4323,7 @@ async function debugJumpTo(mode, idx){
       const ids=new Set(effect.wordIds);
       const rewound=[];
       for(const word of wordsOnField){
-        if(!ids.has(word.id)||word.valcrestKind==='duel')continue;
+        if(!ids.has(word.id)||word.valcrestKind==='duel'||word.vesperExecution)continue;
         // The simulation is safely moved to -30 immediately, but an independent
         // CSS `translate` starts at the original on-screen coordinate. All
         // affected words visibly travel BACK up the lane before entering stasis.
@@ -4740,6 +4744,7 @@ function updateUI(){
     clearChainCleaveHex();
     cancelFoxfireRewind();
     window.RPG_VALCREST?.reset();
+    window.RPG_VESPER?.reset();
     const preservePermafrost = !!opts.preservePermafrost;
 
     if(!preservePermafrost){
@@ -6250,6 +6255,7 @@ if(state === "landed"){
     // Panic consumes a normal spawn; never generate extra words or interfere with operator marks.
     if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&currentMode==='story'&&!obj.challengeComet&&!obj.ex1Highlighted)window.RPG_CH1_SPECIAL?.markSpawn(obj,stageElapsedSec(),wordsOnField);
     if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&!opts.forceOperatorSpawn)window.RPG_VALCREST?.markSpawn(obj,wordsOnField);
+    if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&!opts.forceOperatorSpawn)window.RPG_VESPER?.markSpawn(obj,wordsOnField,stageElapsedSec());
     setWordY(el,obj.y);
     fitAnswerToRight(el);
     return obj;
@@ -6313,6 +6319,7 @@ if(state === "landed"){
 
     window.RPG_CH1_SPECIAL?.clearRepression?.(wordsOnField[idx]);
     window.RPG_VALCREST?.removed(wordsOnField[idx],stageElapsedSec());
+    window.RPG_VESPER?.removed(wordsOnField[idx],stageElapsedSec());
     wordsOnField[idx].el.remove();
     wordsOnField.splice(idx,1);
     restackDirty = true; // defer restack to next frame for performance
@@ -6455,7 +6462,9 @@ if(state === "landed"){
       // answerNorm is cached on spawn/shuffle for speed + reliability
       if((w.answerNorm || normalizeAnswer(w.answer)) !== norm) continue;
 
+      if(window.RPG_VESPER?.locked(w))continue;
       let rank = w.valcrestKind==='duel'?1:0;
+      if(w.vesperExecution)rank=5;else if(window.RPG_VESPER?.active()&&w.el?.classList?.contains('operator-lupa-weakpoint'))rank=4;else if(w.vesperKind)rank=3;
       if(rank > bestRank || (rank === bestRank && (!best || w.y > best.y))){
         best = w;
         bestRank = rank;
@@ -6463,6 +6472,7 @@ if(state === "landed"){
     }
 
     if(!best){
+      if(wordsOnField.some(w=>window.RPG_VESPER?.locked(w)&&(w.answerNorm||normalizeAnswer(w.answer))===norm)){pushMsg('LOCKED',true);return true;}
       // Extra Stage 2: hacked words are intentionally non-interactive.
       // If the player types a hacked word's answer while it is frozen,
       // ignore the input without counting it as a miss or dealing damage.
@@ -6985,6 +6995,7 @@ function storyIncomingDamage(key,fallback){
     setSleepyBgmGain(1);
     window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
     window.RPG_VALCREST?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
+    window.RPG_VESPER?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
     restoreBgmState();
     gameState = "playing";
     if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
@@ -7257,6 +7268,7 @@ function storyIncomingDamage(key,fallback){
     setSleepyBgmGain(1);
     window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'');
     window.RPG_VALCREST?.start(currentMode,storySelectedStage?.id||'');
+    window.RPG_VESPER?.start(currentMode,storySelectedStage?.id||'');
     // Normal/Extra carry HP. Fletcher can activate Last Stand at 1 HP;
     // Mara queues Emergency Readiness if already below her HP threshold.
     // Both are initialized after the countdown, with a fresh stage clock.
@@ -7857,8 +7869,12 @@ if(gameState === "paused"){
       wordLane?.classList?.toggle('operator-sovereign-guard',operatorPassive?.rule?.id==='cassian'&&!!operatorPassive?.isInvulnerable(elapsed));
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
+      const vesperDebug=window.RPG_VESPER?.active()?operatorPassive?.debug?.():null;
+      const vesperEvent=window.RPG_VESPER?.frame(elapsed,{words:wordsOnField,field:wordLane,lupaActive:!!vesperDebug?.lupaActive,lupaTargets:vesperDebug?.lupaTargets||[],paused:elapsed<storySquadGraceUntil||!!operatorPassive?.isFieldFrozen(elapsed),grace:elapsed<storySquadGraceUntil,damage:damagePlayer,notify:text=>pushMsg(text,true)})??false;
+      if(gameState!=='playing'){scheduleTick(true);return;}
+      if(window.RPG_VESPER?.takeLupa()&&operatorPassive?.rule?.id==='lupa')operatorStartLupa();
       const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec,paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed),spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
-      if(!overflowSpawnPaused && !operatorPause && !valcrestEvent){
+      if(!overflowSpawnPaused && !operatorPause && !valcrestEvent && !vesperEvent){
         spawnAccMs += spawnDt * 1000;
       }else{
         spawnAccMs = 0;
@@ -7891,7 +7907,7 @@ if(gameState === "paused"){
       // Apply after stage mechanics so both phases scale the actual stage pace.
       spawnMs = Math.max(80, Math.round(spawnMs * (operatorPassive?.getSpawnIntervalMultiplier?.(elapsed)||1)));
         let loops = 0;
-        if(!overflowSpawnPaused && !operatorPause && !chapterBlackout && !valcrestEvent){
+        if(!overflowSpawnPaused && !operatorPause && !chapterBlackout && !valcrestEvent && !vesperEvent){
           while(spawnAccMs >= spawnMs && loops < 6){
             spawnWord();
             spawnAccMs -= spawnMs;
@@ -7958,6 +7974,7 @@ if(gameState === "paused"){
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
         const wordMotion=w.chapterPanic?panicMotion:riftMotion;
         const valcrestMotion=window.RPG_VALCREST?.motion(w,elapsed)??1;
+        if(vesperEvent){setWordY(w.el,w.y);continue;}
         if(valcrestMotion===0){if(window.RPG_VALCREST?.active()&&!w.ignoreCollision)valcrestCeiling=Math.min(valcrestCeiling,w.y);setWordY(w.el,w.y);continue;}
         if(!frozenByOperator&&wordMotion!==0)w.y += v * battleDt * wordMotion;
         if(window.RPG_VALCREST?.active()&&!w.ignoreCollision){w.y=Math.min(w.y,valcrestCeiling-30*wordRows(w));valcrestCeiling=w.y;}
@@ -7997,6 +8014,9 @@ if(gameState === "paused"){
 
           w.state = "landed";
           window.RPG_CH1_SPECIAL?.clearRepression?.(w);
+          window.RPG_VESPER?.land(w,elapsed,fraction=>{if(bossHp>0){bossHp=Math.min(bossMaxHp,window.RPG_CONQUEST?.q?.(bossHp+bossMaxHp*fraction)??(bossHp+bossMaxHp*fraction));updateUI();}});
+          // Bottom insertion must win the tie against an existing lowest row.
+          if(w.vesperBottom){w.y=h;delete w.vesperBottom;}
           if(window.RPG_VALCREST?.active()&&!w.ignoreCollision)valcrestCeiling=w.y;
           w.el.classList.add("landed");
           mechanicEvent('onLand',w);
@@ -8041,7 +8061,7 @@ if(gameState === "paused"){
       overflow = wordsOnField.reduce((count,w)=>count+(w.state==='landed'?wordRows(w):0),0) >= Math.floor(h / 30);
       if(overflow){
         overflowSpawnGraceUntilMs = 0;
-        overflowAcc += battleDt;
+        if(!vesperEvent)overflowAcc += battleDt;
         if(overflowAcc >= 1){
           const ticks = Math.floor(overflowAcc);
           overflowAcc -= ticks;

@@ -5,7 +5,7 @@
 // Static Firebase imports blocked the entire editor if the CDN was unavailable.
 import './conquest-map.js?v=135.0';
 import './conquest-core.js?v=136.0';
-import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=140.0';
+import {cleanStory,safeStoryImage,safeStoryAudio} from './story-format.mjs?v=141.0';
 import {optimizePhoto,photoPackZip} from './story-photo-pack.mjs';
 import {planImageRepairs,applyImageRepairs,githubRepoGuess,validGithubRepo,imageSlots} from './story-image-repair.mjs';
 import {imageExt,shortSlideName,nextSharedName,sharedOptions,referencedImages,shortRenamePlan,applyShortRename,storyPath,storyAudioPath,nextBgmName,referencedMusic,musicOptions} from './story-asset-names.mjs?v=131.0';
@@ -151,8 +151,8 @@ function damageSettings(st){
  return `<section class="section damage-settings"><div class="editheading"><h3>Damage Settings</h3></div><div class="grid">${fields}${panic}</div><div class="grid"><label><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Enable Comet (every 4th spawn, starting with the first)</label><label><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Enable Shooting Star (every 3rd spawn, 4-second countdown after landing)</label></div><div class="boss-sprite-actions"><button type="button" data-action="copy-damage">Copy damage to territory</button><button type="button" data-action="reset-damage">Reset damage defaults</button></div><p class="muted">HP and mechanics are unchanged.</p></section>`;
 }
 function mechanicMarkup(st,onlyChapter1=false){
- const rift=['sleepy','delirium','panic','disorientation','repression'],valcrest=['fortification','reinforcements','siege','encirclement','duel'];
- const plugins=catalog().filter(m=>onlyChapter1==='valcrest'?valcrest.includes(m.id):onlyChapter1?rift.includes(m.id):!rift.includes(m.id)&&!valcrest.includes(m.id));if(!plugins.length)return '<p class="muted">No additional mechanics.</p>';
+ const rift=['sleepy','delirium','panic','disorientation','repression'],valcrest=['fortification','reinforcements','siege','encirclement','duel'],vesper=['poison','blood_pact','infiltration','death_mark','moonlit_execution'];
+ const plugins=catalog().filter(m=>onlyChapter1==='vesper'?vesper.includes(m.id):onlyChapter1==='valcrest'?valcrest.includes(m.id):onlyChapter1?rift.includes(m.id):!rift.includes(m.id)&&!valcrest.includes(m.id)&&!vesper.includes(m.id));if(!plugins.length)return '<p class="muted">No additional mechanics.</p>';
  return plugins.map(m=>{
   const settings=st.battle?.mechanics?.[m.id]||{};
   const controls=m.fields.filter(field=>!(m.id==='panic'&&field.key==='damage')).map(field=>{
@@ -493,6 +493,7 @@ function renderFields(){
  ${musicEditor(st)} </div>
  ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>The Rift · Special Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy to all Rift encounters</button></div><p class="muted">Delirium requires Sleepy. Darkness pauses new spawns. Interaction protections apply automatically.</p>${mechanicMarkup(st,true)}</div>`:''}
  ${String(ch.id)==='2'?`<div class="section chapter-special-editor"><div class="editheading"><h3>Valcrest · Special Mechanics</h3></div>${mechanicMarkup(st,'valcrest')}</div>`:''}
+ ${String(ch.id)==='3'?`<div class="section chapter-special-editor"><div class="editheading"><h3>Vesper · Special Mechanics</h3></div>${mechanicMarkup(st,'vesper')}</div>`:''}
  <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted"></span></div>${mechanicMarkup(st)}<p class="muted">New mechanics require a code module.</p></div>
  <p class="muted">Encounter ID ${esc(st.id)} is permanent. Changes apply on the next Conquest map opening.</p></section>`;
  fillLiveValues()

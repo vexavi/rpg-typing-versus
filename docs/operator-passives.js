@@ -48,7 +48,7 @@
   const ALLOWED_MODES = new Set(['normal','extra','practice','story','challenge','shared']);
   const validTime=t=>Number.isFinite(t)&&t>=0?t:0;
   const fallingWord=w=>w&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
-  const rewindableWord=w=>w&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
+  const rewindableWord=w=>w&&!w.vesperExecution&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const lowestWord=words=>(Array.isArray(words)?words:[]).filter(fallingWord).reduce((best,w)=>!best||w.y>best.y?w:best,null);
 
   function create(characterId,mode,random=Math.random,preciseHp=false){

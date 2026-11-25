@@ -76,6 +76,12 @@ export function cleanStory(raw){
     if(v.enabled!==undefined&&typeof v.enabled!=='boolean')throw Error(`Stage ${id}: ${name}.enabled must be boolean.`);
     for(const [key,[min,max]] of Object.entries(ranges))if(v[key]!==undefined&&(typeof v[key]!=='number'||!Number.isFinite(v[key])||v[key]<min||v[key]>max||(['count','rows','hits','maxActive','damage'].includes(key)&&!Number.isInteger(v[key]))))throw Error(`Stage ${id}: invalid ${name}.${key}.`);
    }
+   const vesperRanges={poison:{chancePct:[0,100],damage:[1,10],durationSec:[1,15],maxActive:[1,4],speedPct:[50,200]},blood_pact:{chancePct:[0,100],healPct:[0,15],maxActive:[1,3],speedPct:[50,200]},infiltration:{chancePct:[0,100],speedPct:[100,300],lockSec:[1,10],maxActive:[1,1],minGapSec:[5,60]},death_mark:{chancePct:[0,100],durationSec:[3,20],damage:[0,100],maxActive:[1,3],speedPct:[50,200]},moonlit_execution:{intervalSec:[10,120],count:[1,5],durationSec:[4,20],damage:[0,100],maxDamage:[0,100]}};
+   for(const [name,ranges] of Object.entries(vesperRanges)){const v=battle.mechanics[name];if(!v)continue;
+    if(chId!=='3'&&v.enabled===true)throw Error(`Stage ${id}: ${name} is exclusive to Vesper.`);
+    if(v.enabled!==undefined&&typeof v.enabled!=='boolean')throw Error(`Stage ${id}: ${name}.enabled must be boolean.`);
+    for(const [key,[min,max]] of Object.entries(ranges))if(v[key]!==undefined&&(typeof v[key]!=='number'||!Number.isFinite(v[key])||v[key]<min||v[key]>max||!Number.isInteger(v[key])))throw Error(`Stage ${id}: invalid ${name}.${key}.`);
+   }
    if(!Number.isInteger(battle.template)||battle.template<1||battle.template>5||!battle.bossName||battle.bossName.length>40||!Number.isInteger(battle.bossHp)||battle.bossHp<1||battle.bossHp>999)throw Error(`Stage ${id}: invalid battle template, boss name or HP.`);
    function scenes(items,phase){
     if(!Array.isArray(items)||items.length>50)throw Error(`Stage ${id}: too many ${phase} slides (max 50).`);
