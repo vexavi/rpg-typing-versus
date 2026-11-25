@@ -8010,8 +8010,8 @@ if(gameState === "paused"){
         let v = (Number.isFinite(w.fallSpeedOverride)
           ? w.fallSpeedOverride
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
-        // Preserve configured speed unless a floor-bypass hazard would be readable for under two seconds.
-        if(w.chapterPanic||w.valcrestKind==='duel'||w.vesperKind==='infiltration'&&w.ignoreCollision)v=Math.min(v,Math.max(1,h-30*wordRows(w))/2);
+        // Only Panic and Duel have the two-second readability cap. Infiltration retains its configured speed.
+        if(w.chapterPanic||w.valcrestKind==='duel')v=Math.min(v,Math.max(1,h-30*wordRows(w))/2);
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
         const wordMotion=w.chapterPanic?panicMotion:riftMotion;
         const valcrestMotion=window.RPG_VALCREST?.motion(w,elapsed)??1;
