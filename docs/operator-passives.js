@@ -51,6 +51,9 @@
   const rewindableWord=w=>w&&!w.vesperExecution&&w.valcrestKind!=='duel'&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const lowestWord=words=>(Array.isArray(words)?words:[]).filter(fallingWord).reduce((best,w)=>!best||w.y>best.y?w:best,null);
 
+  const readableWord=(w,height=Infinity)=>window.RPG_WORD_READABLE?window.RPG_WORD_READABLE(w,height):!!w&&w.y>=0&&w.y+30*(w.valcrestRows||1)<=height&&!w.foxfireHidden&&!w.el?.classList?.contains?.('rift-repressed');
+  const houndTarget=(words,visibleOnly=false,height=Infinity)=>{const eligible=(Array.isArray(words)?words:[]).filter(w=>fallingWord(w)&&!w.foxfireHidden);const visible=eligible.filter(w=>readableWord(w,height));return lowestWord(visible.length||visibleOnly?visible:eligible);};
+
   function create(characterId,mode,random=Math.random,preciseHp=false){
     const rule=ALLOWED_MODES.has(mode)?RULES[characterId]||null:null;
     const lowHp=(hp,threshold)=>preciseHp?Number(hp)>0&&Number(hp)<=threshold:Number(hp)===threshold;
@@ -311,11 +314,11 @@
       adrenalineMomentumStreak=0;adrenalineMomentumUnlocked=false;
     }
     // Extend only interactive deadlines; the ordinary passive clock still advances.
-    function protectDeadlines(dt,{blackout=false,blackoutSeconds=blackout?dt:0}={}){
+    function protectDeadlines(dt,{blackout=false,blackoutSeconds=blackout?dt:0,words=[],isReadable=readableWord}={}){
       const delta=Math.max(0,Number(dt)||0);
       const closed=Math.min(delta,Math.max(0,Number(blackoutSeconds)||0));
-      if(lupaActive)lupaDeadline+=closed;
-      if(houndMarked){const hidden=houndMarked.foxfireHidden||houndMarked.el?.classList?.contains('rift-repressed')||(houndMarked.state==='falling'&&houndMarked.y<0);houndDeadline+=hidden?delta:closed;}
+      if(lupaActive)lupaDeadline+=words.some(w=>lupaTargets.includes(w.id)&&!isReadable(w))?delta:closed;
+      if(houndMarked){const hidden=!isReadable(houndMarked);houndDeadline+=hidden?delta:closed;}
     }
     function tick(time){
       const t=validTime(time);
@@ -610,7 +613,7 @@
           if(houndChainHits>=rule.maxChain){
             endHound();return {type:'hound-complete',damage:awarded,characterId:rule.id};
           }
-          const next=lowestWord(words);
+          const next=houndTarget(words);
           if(next)markHound(next,t);
           else houndNeedSpawn=true;
           return {type:'hound-next',damage:awarded,chainHits:houndChainHits,
@@ -620,7 +623,7 @@
         if(houndPhase!=='none')return null;
         if(++houndProgress>=rule.every){
           houndProgress=0;houndPhase='initial';
-          const target=lowestWord(words);
+          const target=houndTarget(words);
           if(target)return markHound(target,t);
           return {type:'hound-await-prey',characterId:rule.id};
         }
@@ -794,8 +797,12 @@
       }
       if(rule?.id==='hound'){
         const t=validTime(time);tick(t);
-        if(houndPhase==='none'||houndMarked)return null;
-        const target=lowestWord(words);
+        if(houndPhase==='none')return null;
+        // A restricted event may freeze an unseen Prey forever. Retarget a readable word, or wait.
+        if(houndMarked&&context.restricted&&!readableWord(houndMarked,context.laneHeight)){releaseHoundMark();houndNeedSpawn=false;}
+        if(houndMarked)return null;
+        const target=houndTarget(words,!!context.restricted,context.laneHeight);
+        if(context.restricted&&!target)return null;
         if(target)return markHound(target,t);
         if(houndPhase==='chain'&&!houndNeedSpawn){
           houndNeedSpawn=true;

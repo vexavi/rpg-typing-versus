@@ -305,12 +305,13 @@ window.RPG_MECHANICS?.register({
  function frame(t,{words=[],height=0,paused=false,spawn,notify=()=>{},field=null,fallSpeed=50,lupaActive=false}={}){
   if(!active)return false;lastTime=t;lane=field||lane;
   if(event?.id==='duel'&&event.wordId!=null){if(!words.some(w=>w.id===event.wordId))finish(t);else return true;}
+  if(event?.id==='encirclement'&&event.entryUntil!=null&&t>=event.entryUntil){delete event.entryUntil;if(event.remaining<=0){finish(t);return false;}lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');}
   if(paused){if(event)event.next=Math.max(event.next,t+0.1);return !!event;}
   const stack=words.reduce((n,w)=>n+(w.state==='landed'?30*rows(w):0),0);
   const safe=height-stack>=120;
   if(!event){if(t<recovery||!safe)return false;const id=timed.find(k=>enabled(k)&&t>=due[k]&&(k!=='duel'||(!lupaActive&&!words.some(w=>w.ex1Highlighted||w.challengeComet)))); if(!id)return false;
    const s=settings[id];event={id,next:t+(id==='duel'?0.75:s.warningSec),remaining:s.count||1,wordId:null};lane?.setAttribute?.('data-valcrest-event',id);if(id==='encirclement')lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');notify(id.toUpperCase());return true;}
-  if(t<event.next)return true;
+  if(t<event.next||event.entryUntil!=null)return true;
   const {id}=event,s=settings[id];if(!safe){finish(t);return false;}
   let y=-30;
   if(id==='reinforcements')y=words.reduce((min,w)=>w.state==='falling'&&!w.foxfireHidden?Math.min(min,w.y-30):min,-30);
@@ -323,12 +324,15 @@ window.RPG_MECHANICS?.register({
   if(!w){event.next=t+0.25;return true;}
   mark(w,id);
   if(id==='duel'){w.ignoreCollision=true;w.fallMult=(w.fallMult||1)*s.speedPct/100;w.valcrestDuelDamage=s.damagePct/100;w.valcrestMiss=s.damage;event.wordId=w.id;return true;}
-  if(id==='encirclement'){w.valcrestEntryUntil=t+s.entrySec;w.el?.style?.setProperty('--valcrest-entry',`${s.entrySec}s`);w.el?.style?.setProperty('--valcrest-side',`${side*105}%`);side=-side;lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');w.el?.classList?.add('valcrest-entering');}
-  event.remaining--;event.retries=0;if(event.remaining<=0){finish(t);return true;}event.next=t+(id==='reinforcements'?s.gapSec:Math.max(0.5,s.entrySec));return true;
+  if(id==='encirclement'){w.valcrestEntryUntil=t+s.entrySec;w.el?.style?.setProperty('--valcrest-entry',`${s.entrySec}s`);w.el?.style?.setProperty('--valcrest-side',`${side*105}%`);lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');side=-side;event.entryUntil=t+s.entrySec;w.el?.classList?.add('valcrest-entering');}
+  event.remaining--;event.retries=0;if(event.remaining<=0&&id!=='encirclement'){finish(t);return true;}event.next=t+(id==='reinforcements'?s.gapSec:Math.max(0.5,s.entrySec));return true;
  }
  function motion(w,t){if(!active)return 1;if(event?.id==='duel'&&event.wordId!=null&&w.id!==event.wordId)return 0;if(w.valcrestEntryUntil){if(t<w.valcrestEntryUntil)return 0;delete w.valcrestEntryUntil;w.el?.classList?.remove('valcrest-entering');}return 1;}
  window.RPG_VALCREST=Object.freeze({start,reset,markSpawn,armorHit,frame,motion,removed,rows,active:()=>active,busy:()=>!!event,dueling:()=>event?.id==='duel',inspect:()=>({active,event:event?{...event}:null,recovery,due:{...due}})});
 })();
+
+/* Shared readable-region check: no per-word layout reads. Height is supplied by the battle loop. */
+window.RPG_WORD_READABLE=(w,height=Infinity)=>!!w&&Number.isFinite(w.y)&&w.y>=0&&w.y+30*Math.max(1,Number(w.valcrestRows)||1)<=height&&!w.foxfireHidden&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.el?.classList?.contains?.('rift-repressed')&&!w.el?.classList?.contains?.('valcrest-entering');
 
 /* Vesper: exclusive word modifiers and one execution event on the battle clock. */
 (function(){
@@ -377,17 +381,17 @@ window.RPG_MECHANICS?.register({
   else if(w.vesperKind==='infiltration'){lock={id:w.id,remaining:settings.infiltration.lockSec,clock:t};w.ignoreCollision=false;w.vesperBottom=true;refreshLocks();}
  }
  function removed(w,t=lastTime){if(!active||!w)return;if(poison?.id===w.id)poison=null;if(lock?.id===w.id){lock=null;refreshLocks();}if(execution?.ids.delete(w.id)&&!execution.ids.size)clearExecution(t);}
- function frame(t,{words=[],field=null,lupaActive=false,lupaTargets=[],paused=false,grace=false,damage=()=>{},notify=()=>{}}={}){
+ function frame(t,{words=[],field=null,height=Infinity,lupaActive=false,lupaTargets=[],paused=false,grace=false,damage=()=>{},notify=()=>{}}={}){
   if(!active)return false;fieldWords=words;lane=field||lane;const dt=Math.max(0,t-lastTime);lastTime=t;weakPoints=new Set(lupaTargets);let hits=0,executionHit=0;
   const wasExecution=!!execution;
-  if(execution){for(const id of execution.ids)if(!words.some(w=>w.id===id&&!w.foxfireHidden))execution.ids.delete(id);
+  if(execution){for(const id of execution.ids)if(!words.some(w=>w.id===id&&window.RPG_WORD_READABLE(w,height))){execution.ids.delete(id);const w=words.find(v=>v.id===id);if(w){delete w.vesperExecution;klass(w,'vesper-execution-target',false);}}
    if(!execution.ids.size)clearExecution(t);
    else {execution.remaining=Math.max(0,execution.remaining-(grace?0:dt));if(execution.remaining<=0){executionHit=Math.min(settings.moonlit_execution.maxDamage,execution.ids.size*settings.moonlit_execution.damage);clearExecution(t);}
     else display(lane,'data-vesper-execution',`MOONLIT EXECUTION · ${execution.remaining.toFixed(1)}s · ${execution.ids.size}`);}
   }
   // Resolve a due execution before ticking other threats; no concurrent deadline damage.
   if(!wasExecution&&!execution&&enabled('moonlit_execution')&&t>=due&&!lupaActive&&!lupaPending&&!paused){
-   const candidates=words.filter(w=>normal(w)&&(w.state==='landed'||(w.state==='falling'&&w.y>=0))&&!has(w,'operator-hound-prey')&&!has(w,'operator-phantom-mark')).sort((a,b)=>(b.state==='landed')-(a.state==='landed')||b.y-a.y).slice(0,settings.moonlit_execution.count);
+   const candidates=words.filter(w=>normal(w)&&(w.state==='landed'||w.state==='falling')&&window.RPG_WORD_READABLE(w,height)&&!has(w,'operator-hound-prey')&&!has(w,'operator-phantom-mark')).sort((a,b)=>(b.state==='landed')-(a.state==='landed')||b.y-a.y).slice(0,settings.moonlit_execution.count);
    if(candidates.length){execution={ids:new Set(candidates.map(w=>w.id)),remaining:settings.moonlit_execution.durationSec};for(const w of candidates){w.vesperExecution=true;klass(w,'vesper-execution-target',true);}display(lane,'data-vesper-execution',`MOONLIT EXECUTION · ${execution.remaining.toFixed(1)}s · ${execution.ids.size}`);notify('MOONLIT EXECUTION');}
   }
   const suspended=wasExecution||!!execution||grace;
@@ -395,7 +399,7 @@ window.RPG_MECHANICS?.register({
   if(poison){const w=words.find(v=>v.id===poison.id&&v.state==='landed');if(!w){if(words.some(v=>v.id===poison.id))klass(words.find(v=>v.id===poison.id),'vesper-poison-active',false);poison=null;}
    else if(!suspended){const d=Math.min(poison.remaining,Math.max(0,t-Math.max(t-dt,poison.clock)));poison.remaining-=d;poison.acc+=d;const ticks=Math.floor(poison.acc+1e-8);poison.acc-=ticks;hits+=ticks*settings.poison.damage;if(poison.remaining<=1e-8){klass(w,'vesper-poison-active',false);poison=null;}}
   }
-  for(const w of words){if(w.vesperKind!=='death_mark')continue;const d=Math.max(0,t-Math.max(t-dt,w.vesperClock??t));w.vesperClock=t;const unreadable=!!w.foxfireHidden||(w.state==='falling'&&w.y<0);if(!suspended&&!unreadable&&!w.vesperUnreadable)w.vesperRemaining-=d;w.vesperUnreadable=unreadable;
+  for(const w of words){if(w.vesperKind!=='death_mark')continue;const d=Math.max(0,t-Math.max(t-dt,w.vesperClock??t));w.vesperClock=t;const unreadable=!window.RPG_WORD_READABLE(w,height);if(!suspended&&!unreadable&&!w.vesperUnreadable)w.vesperRemaining-=d;w.vesperUnreadable=unreadable;
    if(w.vesperRemaining<=0){hits+=settings.death_mark.damage;delete w.vesperKind;klass(w,'vesper-death_mark',false);w.el?.removeAttribute?.('data-vesper-time');w.tagEl?.removeAttribute?.('data-vesper-time');w.fallMult=(w.fallMult||1)*100/settings.death_mark.speedPct;}
    else markTime(w,Math.max(0,w.vesperRemaining).toFixed(1));}
   refreshLocks();

@@ -4048,10 +4048,10 @@ async function debugJumpTo(mode, idx){
     operatorPassive=null;
     // Foxfire's hidden queue would otherwise remain untypeable forever: the
     // old Tavi controller (the only thing that releases it) is gone.
-    let queueY=wordsOnField.reduce((y,w)=>w.state==='falling'&&!w.foxfireHidden&&Number.isFinite(w.y)?Math.min(y,w.y-30):y,-30);
+    let queueY=wordsOnField.reduce((y,w)=>w.state==='falling'&&!w.foxfireHidden&&Number.isFinite(w.y)?Math.min(y,w.y):y,0);
     for(const word of wordsOnField){
       if(word.foxfireHidden){
-        word.state='falling';word.y=queueY;queueY-=32;
+        word.state='falling';queueY-=30*wordRows(word)+2;word.y=queueY;
         word.groupId=0;word.groupIndex=0;word.spawnBaseCount=undefined;
         word.el?.classList?.remove('landed');
         if(word.el)setWordY(word.el,word.y);
@@ -4141,7 +4141,7 @@ async function debugJumpTo(mode, idx){
   }
   function operatorClearLupaVisuals(){
     document.body.classList.remove('operator-lupa-focus');
-    wordLane?.classList?.remove('operator-lupa-focus');
+    wordLane?.classList?.remove('operator-lupa-focus','operator-overflow-readable');
     lupaTimerEl?.remove();
     lupaTimerEl=null;lupaTimerValueEl=null;lupaTimerLastText='';
     for(const word of wordsOnField){
@@ -4348,11 +4348,11 @@ async function debugJumpTo(mode, idx){
         word.foxfireOrigin=true;
         word.foxfireHidden=true;
         word.state='falling';
-        word.y=-30;
+        word.y=-30*wordRows(word);
         word.groupId=0;word.groupIndex=0;word.spawnBaseCount=undefined;
         word.el?.classList?.remove('landed','operator-foxfire-released');
         word.el?.classList?.add('operator-foxfire-hidden','operator-foxfire-rewinding');
-        word.el?.style?.setProperty('--tavi-rewind-distance',`${Math.max(0,fromY+30)}px`);
+        word.el?.style?.setProperty('--tavi-rewind-distance',`${Math.max(0,fromY+30*wordRows(word))}px`);
         if(wasLanded){
           // Landed-only special timers should not expire while rewound.
           word.ex1DamageArmed=false;word.ex1DeadlineMs=0;
@@ -4793,6 +4793,7 @@ function updateUI(){
   }
 
 function laneHeight(){ return wordLane.clientHeight; }
+  let lastBattleLaneHeight=-1;
   function wordRows(w){return Math.max(1,Number(w?.valcrestRows)||1);}
   function laneCapacity(){ return Math.floor(laneHeight() / 30); }
   function landedWords(){
@@ -6269,13 +6270,13 @@ if(state === "landed"){
     wordsOnField.push(obj);
     const nitrateSpawnMark=operatorPassive?.onWordSpawn?.(obj,playerHp);
     if(nitrateSpawnMark?.type==='nitrate-mark')applyOperatorFieldEffect(nitrateSpawnMark);
-    // Hex new timed spawns immediately, without modifying the spawn schedule.
-    if(!operatorHexSummoned&&opts.valcrestEvent!=='duel'&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
     // Panic consumes a normal spawn; never generate extra words or interfere with operator marks.
     if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&currentMode==='story'&&!obj.challengeComet&&!obj.ex1Highlighted)window.RPG_CH1_SPECIAL?.markSpawn(obj,stageElapsedSec(),wordsOnField);
     if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&!opts.forceOperatorSpawn)window.RPG_VALCREST?.markSpawn(obj,wordsOnField);
     if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&!opts.forceOperatorSpawn)window.RPG_VESPER?.markSpawn(obj,wordsOnField,stageElapsedSec());
+    // Assign faction effects before Nyx rewrites vocabulary.
+    if(!operatorHexSummoned&&opts.valcrestEvent!=='duel'&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
     setWordY(el,obj.y);
     fitAnswerToRight(el);
     return obj;
@@ -7874,7 +7875,10 @@ if(gameState === "paused"){
       ex4HandlePhaseTriggers(elapsed);
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
-      operatorPassive?.protectDeadlines?.(dt,{blackout:chapterBlackout,blackoutSeconds:window.RPG_CH1_SPECIAL?.blackoutSeconds?.()??(chapterBlackout?dt:0)});
+      const readableHeight=laneHeight();
+      if(readableHeight!==lastBattleLaneHeight||restackDirty){lastBattleLaneHeight=readableHeight;restackLanded();restackDirty=false;}
+      const isReadable=w=>window.RPG_WORD_READABLE(w,readableHeight);
+      operatorPassive?.protectDeadlines?.(dt,{words:wordsOnField,isReadable,blackout:chapterBlackout,blackoutSeconds:window.RPG_CH1_SPECIAL?.blackoutSeconds?.()??(chapterBlackout?dt:0)});
       operatorPassive?.tick(elapsed);
       syncChainCleaveHex(elapsed);
       operatorPassive?.syncAdrenaline?.(wordsOnField,playerHp);
@@ -7891,10 +7895,11 @@ if(gameState === "paused"){
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
       const vesperDebug=window.RPG_VESPER?.active()?operatorPassive?.debug?.():null;
-      const vesperEvent=window.RPG_VESPER?.frame(elapsed,{words:wordsOnField,field:wordLane,lupaActive:!!vesperDebug?.lupaActive,lupaTargets:vesperDebug?.lupaTargets||[],paused:elapsed<storySquadGraceUntil||!!operatorPassive?.isFieldFrozen(elapsed),grace:elapsed<storySquadGraceUntil,damage:damagePlayer,notify:text=>pushMsg(text,true)})??false;
+      const vesperEvent=window.RPG_VESPER?.frame(elapsed,{words:wordsOnField,field:wordLane,height:readableHeight,lupaActive:!!vesperDebug?.lupaActive,lupaTargets:vesperDebug?.lupaTargets||[],paused:elapsed<storySquadGraceUntil||!!operatorPassive?.isFieldFrozen(elapsed),grace:elapsed<storySquadGraceUntil,damage:damagePlayer,notify:text=>pushMsg(text,true)})??false;
       if(gameState!=='playing'){scheduleTick(true);return;}
       if(window.RPG_VESPER?.takeLupa()&&operatorPassive?.rule?.id==='lupa')operatorStartLupa();
-      const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec,paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed),lupaActive:!!operatorPassive?.debug?.().lupaActive,spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
+      const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:(window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec)*(operatorPassive?.getFallMultiplier(elapsed)||1),paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed),lupaActive:!!operatorPassive?.debug?.().lupaActive,spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
+      const duelFrame=!!window.RPG_VALCREST?.dueling();
       if(!overflowSpawnPaused && !operatorPause && !valcrestEvent && !vesperEvent){
         spawnAccMs += spawnDt * 1000;
       }else{
@@ -7952,7 +7957,7 @@ if(gameState === "paused"){
       // Operator effects advance after new spawns. Hidden Foxfire words cannot
       // be typed/moved until their turn, and Hound can force a chain target.
       const frameLaneHeight=laneHeight();
-      const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed,{hp:playerHp,laneHeight:frameLaneHeight});
+      const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed,{hp:playerHp,laneHeight:frameLaneHeight,isReadable,restricted:operatorEventRestricted()});
       // Lupa's focus/6-second countdown must advance with the live stage clock.
       // Do this AFTER updateField so a timeout removes the marks immediately.
       operatorRefreshLupaVisuals(elapsed);
@@ -8002,14 +8007,17 @@ if(gameState === "paused"){
         if(w.foxfireHidden) continue; // Hidden rewind queue is in stasis.
         if(w.state !== "falling") continue;
 
-        const v = (Number.isFinite(w.fallSpeedOverride)
+        let v = (Number.isFinite(w.fallSpeedOverride)
           ? w.fallSpeedOverride
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
+        // Preserve configured speed unless a floor-bypass hazard would be readable for under two seconds.
+        if(w.chapterPanic||w.valcrestKind==='duel'||w.vesperKind==='infiltration'&&w.ignoreCollision)v=Math.min(v,Math.max(1,h-30*wordRows(w))/2);
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
         const wordMotion=w.chapterPanic?panicMotion:riftMotion;
         const valcrestMotion=window.RPG_VALCREST?.motion(w,elapsed)??1;
         if(vesperEvent){setWordY(w.el,w.y);continue;}
         if(valcrestMotion===0){if(window.RPG_VALCREST?.active()&&!w.ignoreCollision)valcrestCeiling=Math.min(valcrestCeiling,w.y);setWordY(w.el,w.y);continue;}
+        if(frozenByOperator||wordMotion===0){if(window.RPG_VALCREST?.active()&&!w.ignoreCollision)valcrestCeiling=Math.min(valcrestCeiling,w.y);setWordY(w.el,w.y);continue;}
         if(!frozenByOperator&&wordMotion!==0)w.y += v * battleDt * wordMotion;
         if(window.RPG_VALCREST?.active()&&!w.ignoreCollision){w.y=Math.min(w.y,valcrestCeiling-30*wordRows(w));valcrestCeiling=w.y;}
         // Word-specific Shield Advance holds also suspend custom movement hooks.
@@ -8024,9 +8032,6 @@ if(gameState === "paused"){
           challengeUpdateCometGlow(w, (w.y || 0) / Math.max(1, h - 30));
         }
 
-        // A resize or other position adjustment must not force a frozen Panic impact.
-        if(w.chapterPanic&&(wordMotion===0||frozenByOperator)){setWordY(w.el,w.y);continue;}
-        if(w.valcrestKind==='duel'&&frozenByOperator){setWordY(w.el,w.y);continue;}
         if(w.y >= targetY){
           w.y = targetY;
           if(w.valcrestKind==='duel'){const hit=w.valcrestMiss||1;removeWord(w.id);damagePlayer(hit,'Duel');if(gameState!=='playing'){scheduleTick(true);return;}i--;continue;}
@@ -8093,10 +8098,11 @@ if(gameState === "paused"){
 
       const wasOverflowing = overflow;
       overflow = wordsOnField.reduce((count,w)=>count+(w.state==='landed'?wordRows(w):0),0) >= Math.floor(h / 30);
+      wordLane?.classList?.toggle('operator-overflow-readable',overflow);
       if(overflow){
         overflowSpawnGraceUntilMs = 0;
-        if(!vesperEvent)overflowAcc += battleDt;
-        if(overflowAcc >= 1){
+        if(!vesperEvent&&!duelFrame&&!window.RPG_VALCREST?.dueling())overflowAcc += battleDt;
+        if(!vesperEvent&&!duelFrame&&!window.RPG_VALCREST?.dueling()&&overflowAcc >= 1){
           const ticks = Math.floor(overflowAcc);
           overflowAcc -= ticks;
           damagePlayer(ticks*storyIncomingDamage("overflowDamage",1), "overflow");

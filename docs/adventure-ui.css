@@ -1185,3 +1185,7 @@ body.story-squad-layout .storySquadHero img.storySquadArtWide{
 body.adventure-client.operator-lupa-focus #wordLane .word:is(.chapter-panic-word,.valcrest-fortification,.valcrest-siege,.valcrest-reinforcements,.valcrest-encirclement,.valcrest-duel,.vesper-poison,.vesper-blood_pact,.vesper-infiltration,.vesper-death_mark,.vesper-execution-target,.challengeComet) {
   opacity:1!important; filter:none!important;
 }
+
+/* v143: show the stack and overflow warning whenever it is a damage source. */
+body.adventure-client.operator-lupa-focus #wordLane.operator-overflow-readable .word.landed{opacity:1!important;filter:none!important}
+body.operator-lupa-focus .overflowBadge.show{opacity:1!important;filter:none!important}
