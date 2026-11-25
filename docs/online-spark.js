@@ -4,6 +4,7 @@
  * Never trust this bridge for paid or scarce rewards. */
 import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js?v=86.30';
 import {combineProgress,validateDelta,planTerritorySave,progressResponse,validStageId,territoryOf,hasClear} from './conquest-progress.mjs?v=132.0';
+import {modeRevision,balanceScopes} from './dashboard-revisions.mjs?v=133.0';
 import {makePull,getJstDate} from './recruitment-core.mjs';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
@@ -64,7 +65,7 @@ async function openCard(b){
  }
  return {ok:true,public_id:c.publicId,name:c.username,grade:c.grade||null,card_code:code,online:true,cloud:true};
 }
-async function currentConfig(){const data=await read('systemConfig','current');if(!data)err('Firebase setup incomplete. Teacher: run SETUP SPARK first.');return Number(data.revision)||1;}
+async function currentConfig(mode){const data=await read('systemConfig','current');if(!data)err('Firebase setup incomplete. Teacher: run SETUP SPARK first.');return modeRevision(data,mode);}
 async function vocab(b){const p=await currentPlayer(b);const shared=b.mode==='shared';const g=shared?'all':p.player.grade;if(!g)err('Teacher must assign your class before playing.');
  const pool=shared?'all':poolOf(g),data=await read('vocabPools',pool);if(!data||!Array.isArray(data.words))err('Vocabulary pool not installed. Teacher: run Spark setup.');
  return {ok:true,pool,grade:shared?'all':g[0],rank_grade:g,revision:Number(data.revision)||1,group:pool==='b'?'b':'standard',words:data.words.filter(x=>x.active!==false),ruleset:shared?`v65-shared-r${data.revision}-fixed-120s`:null};
@@ -126,7 +127,7 @@ async function recruitmentBannersAdmin(body={}){
 async function cardsList(){await teacher();const snaps=await getDocsFromServer(collection(db,'cloudCards'));
  // Keep reads down: card documents carry grade for the teacher table and sync it during assignments.
  const cardDocs=snaps.docs.map(s=>({code:s.id,...s.data()})).filter(x=>!x.deleted);
- const cards=await Promise.all(cardDocs.map(async c=>{const player=await read('players',c.publicId);const grade=player?.grade||c.grade||null;
+ const cards=await Promise.all(cardDocs.map(async c=>{const player=c.grade===undefined?await read('players',c.publicId):null;const grade=c.grade===undefined?(player?.grade||null):c.grade;
  return {id:Number(c.publicId?.slice(1))||0,public_id:c.publicId,code:c.code,username:c.username,registered:!!c.username,disabled:!!c.disabled,class_year:grade?.[0]||null,class_section:grade?.endsWith('b')?'b':'a'};}));
  return {ok:true,cards:cards.sort((a,b)=>a.id-b.id)};
 }
@@ -145,6 +146,7 @@ async function setClass(b){
   getDocFromServer(pRef),
   getDocsFromServer(query(collection(db,'rankEntries'),where('public_id','==',publicId),limit(100)))
  ]);
+ if(cards.docs[0].data().grade===grade&&(!player.exists()||player.data().grade===grade))return {ok:true,grade,unchanged:true};
  // Atomically update both grade locations and remove outdated grade-specific rankings.
  const batch=writeBatch(db);
  batch.update(cardDoc,{grade});
@@ -161,7 +163,7 @@ async function rankIcon(b){const p=await currentPlayer(b);if(b.action==='set'){c
 let currentRun=null;
 async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','extra','challenge','shared'].includes(mode))err('Invalid ranking mode.');
  const grade=mode==='shared'?'all':p.player.grade;if(!grade)err('Assign class before playing.');
- const v=await read('vocabPools',mode==='shared'?'all':poolOf(grade)),configVersion=await currentConfig();if(!v)err('Vocabulary is missing.');
+ const v=await read('vocabPools',mode==='shared'?'all':poolOf(grade)),configVersion=await currentConfig(mode);if(!v)err('Vocabulary is missing.');
  const revision=Number(v.revision)||1,token=crypto.randomUUID();
  const record={uid:uid(),publicId:p.id,mode,grade,pool:mode==='shared'?'all':poolOf(grade),vocabRevision:revision,configRevision:configVersion,token,status:'active',startedAt:serverTimestamp()};
  await setDoc(ref('sparkRuns',uid()),record);currentRun={...record,startedMs:Date.now()};
@@ -170,7 +172,7 @@ async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['nor
 function rankQuery(mode,grade,revision,configRevision,n=20){return query(collection(db,'rankEntries'),where('mode','==',mode),where('grade','==',grade),where('vocabRevision','==',revision),where('configRevision','==',configRevision),orderBy('score','desc'),limit(n));}
 async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',grade=mode==='shared'?'all':b.grade||p.player.grade;
  if(!['normal','extra','challenge','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
- const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([read('vocabPools',pool),currentConfig()]);if(!v)err('Vocabulary pool missing.');
+ const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([read('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
  const revision=Number(v.revision)||1,rule=`spark-${mode}-${grade}-v${revision}-c${c}`;
  const d=await getDocsFromServer(rankQuery(mode,grade,revision,c,Math.min(20,Number(b.limit)||20)));
  const entries=d.docs.map((s,i)=>({...s.data(),rank:i+1}));const mine=entries.find(x=>x.public_id===p.id)||{public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',rank:null,score:0};
@@ -180,7 +182,7 @@ async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Nu
  const snap=await getDocFromServer(ref('sparkRuns',uid()));const run=snap.data();if(!run||run.status!=='active'||run.token!==b.run_token)err('Run missing or already completed.');
  if(b.mode!==run.mode||b.grade!==run.grade||b.vocab_pool!==run.pool||b.vocab_revision!==run.vocabRevision)err('Run config mismatch.');
  if(!run.startedAt||Date.now()-run.startedAt.toMillis()<(['shared','challenge'].includes(run.mode)?115000:15000))err('Run completed too quickly.');
- const [c,v]=await Promise.all([currentConfig(),read('vocabPools',run.pool)]);
+ const [c,v]=await Promise.all([currentConfig(run.mode),read('vocabPools',run.pool)]);
  if(c!==run.configRevision||v?.revision!==run.vocabRevision)err('Difficulty or vocabulary changed. Run not ranked.');
  const id=p.id+'_'+run.mode,scoreRef=ref('rankEntries',id),runRef=ref('sparkRuns',uid());
  await runTransaction(db,async tx=>{const [r,prior]=await Promise.all([tx.get(runRef),tx.get(scoreRef)]);
@@ -508,6 +510,7 @@ async function check(){
  }
 }
 const fetchNative=window.fetch.bind(window);
+window.RPG_LOCAL_CARD_FETCH=(path,init)=>{if(!['localhost','127.0.0.1','::1','[::1]'].includes(location.hostname)||!['/api/cards/list','/api/cards/import-cloud'].includes(path))throw Error('Local card endpoint unavailable.');return fetchNative(path,init);};
 window.fetch=async(input,init)=>{
  const raw=typeof input==='string'?input:input?.url||'',url=new URL(raw,location.href);
  if(url.origin!==location.origin||!url.pathname.startsWith('/api/'))return fetchNative(input,init);
@@ -526,7 +529,7 @@ window.RPG_V68_CONNECTION={get connected(){return bootReady&&!blocked&&navigator
 window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await teacher();return auth.currentUser.getIdToken();},
  async fetchSoloBalance(mode,stageIds=[],chapterId=null){
   if(blocked||!['practice','story'].includes(mode))return false;
-  const scopes=[`mode:${mode}`,...(chapterId?[`chapter:${chapterId}`]:[]),...stageIds.map(x=>`stage:${mode}:${x}`)];
+  const scopes=balanceScopes(mode,stageIds,chapterId);
   const key=scopes.join('|');
   if(Date.now()-(soloBalanceSyncs.get(key)||0)<15*60*1000)return true;
   // Failure is not fatal: the runtime uses locally cached/built-in values for unranked play.
@@ -534,11 +537,12 @@ window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await te
   for(let i=0;i<scopes.length;i++)window.RPG_BALANCE?.apply(scopes[i],configs[i]||{},'server');
   soloBalanceSyncs.set(key,Date.now());return true;
  },
- async prepareBalanceRun(mode,stageIds=[],chapterId=null){if(blocked)err('Connection required.');const before=await currentConfig();
- const scopes=[`mode:${mode}`,...(chapterId?[`chapter:${chapterId}`]:[]),...stageIds.map(x=>`stage:${mode}:${x}`)];
- for(const scope of scopes){const s=await read('gameBalance',scope);window.RPG_BALANCE?.apply(scope,s||{},'server');}
- const after=await currentConfig();if(before!==after)err('Difficulty settings changed during run setup.');window.RPG_V66_PREPARED_REVISION=after;return after;},
- watchRankings(mode,grade,update){let disposed=false;Promise.all([read('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig()]).then(([v,c])=>{
+ async prepareBalanceRun(mode,stageIds=[],chapterId=null){if(blocked)err('Connection required.');const before=await currentConfig(mode);
+ const scopes=balanceScopes(mode,stageIds,chapterId);
+ const settings=await Promise.all(scopes.map(scope=>read('gameBalance',scope)));
+ for(let i=0;i<scopes.length;i++)window.RPG_BALANCE?.apply(scopes[i],settings[i]||{},'server');
+ const after=await currentConfig(mode);if(before!==after)err('Difficulty settings changed during run setup.');window.RPG_V66_PREPARED_REVISION=after;return after;},
+ watchRankings(mode,grade,update){let disposed=false;Promise.all([read('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig(mode)]).then(([v,c])=>{
  if(disposed||!v)return;return onSnapshot(rankQuery(mode,grade,Number(v.revision)||1,c,20),{includeMetadataChanges:true},snap=>{
  if(disposed||snap.metadata.fromCache)return;const entries=snap.docs.map(s=>s.data());update({ruleset:`spark-${mode}-${grade}-v${v.revision}-c${c}`,entries});
  },e=>console.warn('Rankings live-update unavailable:',e?.message||e));}).then(unsub=>{if(disposed)unsub?.();else stop=unsub;}).catch(e=>console.warn('Rankings',e));let stop=null;

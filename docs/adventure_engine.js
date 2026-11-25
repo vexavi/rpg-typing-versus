@@ -1714,7 +1714,7 @@ const achOverlay = document.getElementById("achOverlay");
          stages:[],invalid:!!DEV_CHEATS_ENABLED||!vocabLastServerSuccess,
          submitted:false,lastAuditSec:-1,run_token:null,startPromise:null} : null;
     window.RPG_V66_COMPETITIVE_ACTIVE=!!rankedRun;
-    if(rankedRun){const target=rankedRun;target.startPromise=fetch('/api/rankings/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:target.mode})}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Run not registered.');target.run_token=d.token;if(d.revision!==target.vocabRevision||d.grade!==target.grade || (['normal','extra'].includes(currentMode)&&Number(d.configVersion)!==Number(window.RPG_V66_PREPARED_REVISION))){target.invalid=true;}return d;}).catch(e=>{target.invalid=true;console.error('Online ranked start failed:',e);});}
+    if(rankedRun){const target=rankedRun;target.startPromise=fetch('/api/rankings/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:ADVENTURE_CONTEXT.card_code,mode:target.mode})}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Run not registered.');target.run_token=d.token;if(d.revision!==target.vocabRevision||d.grade!==target.grade || (['normal','extra','challenge'].includes(target.mode)&&Number(d.configVersion)!==Number(window.RPG_V66_PREPARED_REVISION))){target.invalid=true;}return d;}).catch(e=>{target.invalid=true;console.error('Online ranked start failed:',e);});}
   }
   function recordRankedStage(){
     if(!rankedRun||rankedRun.mode!==currentMode)return;
@@ -2895,8 +2895,8 @@ function setBgm(src, loop=true, autoplay=true){
 async function launchStoryStage(stage){
   if(!stage)return;
   if(Array.isArray(stage.stages)){
-    if(!normalCleared){showModeSelectScreen();return;}
-    const chosen=await chooseStorySquad();
+    if(!normalCleared||stage.conquest?.enabled===false){showModeSelectScreen();return;}
+    const chosen=await chooseStorySquad(stage.conquest);
     if(!chosen){showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage);return;}
     const operation=window.RPG_CONQUEST.begin(stage,chosen);
     storySquad.ids=chosen;
@@ -3626,7 +3626,7 @@ async function debugJumpTo(mode, idx){
     clearStorySquadSwitch();storySquad.enabled=false;storySquad.ids=[];storySquad.index=0;storySquad.knockedOut=[];
     document.body.classList.remove('story-squad-layout');renderStorySquad();
   }
-  async function chooseStorySquad(){
+  async function chooseStorySquad(conquestConfig){
     // v117: cinematic party setup inspired by character-lineup RPGs.
     // Selection is restricted to genuinely owned operators plus the same three starter trials.
     const owned=ownedOperatorIds();
@@ -3733,7 +3733,7 @@ async function debugJumpTo(mode, idx){
           card.classList.toggle('inSquad',pos!==-1);
           card.classList.toggle('highlighted',selected[activeSlot]===op.id);
           card.setAttribute('aria-label',`${op.name}, ${op.rarity} stars${op.trial?', trial':''}${pos>=0?', deployed as '+(pos+1):''}`);
-          if(window.RPG_CONQUEST){const st=window.RPG_CONQUEST.stats(op.id,window.RPG_OPERATOR_PASSIVES?.RULES?.[op.id]?.maxHpBonus||0,{});card.title=`HP ${window.RPG_CONQUEST.displayed(st.hp)} · ATK ${Math.round(st.atk*100)}% · DEF ${Math.round(st.def*100)}%`;}
+          if(window.RPG_CONQUEST){const st=window.RPG_CONQUEST.stats(op.id,window.RPG_OPERATOR_PASSIVES?.RULES?.[op.id]?.maxHpBonus||0,{},conquestConfig);card.title=`HP ${window.RPG_CONQUEST.displayed(st.hp)} · ATK ${Math.round(st.atk*100)}% · DEF ${Math.round(st.def*100)}%`;}
 
           // Existing square headshot assets have consistent focal framing.
           // Do not squeeze the tall full-body deployment crops into square roster cards.
@@ -4640,7 +4640,7 @@ function updateUI(){
     if(maraHpActive!==uiCache.maraHpActive){
       uiCache.maraHpActive=maraHpActive;
       playerMeter.classList.toggle('operator-mara-hp',maraHpActive);
-      playerMeter.title=maraHpActive?(conquest?'Mara: 100 base HP + 30 passive HP; Vitality adds extra HP':'Mara: 10 base HP + 3 bonus HP'):'';
+      playerMeter.title=maraHpActive?(conquest?`Mara: ${showHp(playerMaxHp)} maximum HP including enhancements`:'Mara: 10 base HP + 3 bonus HP'):'';
     }
     if(hpVisual.baseWidth!==uiCache.playerFillW){
       uiCache.playerFillW=hpVisual.baseWidth;
@@ -7364,8 +7364,8 @@ function storyIncomingDamage(key,fallback){
       return;
     }
     // Do not pretend a cached/unverified snapshot is an official ranked game.
-    if(['normal','extra'].includes(currentMode)&&!runLocalOnly){
-      try{await window.RPG_V66.prepareBalanceRun(currentMode,['1','2','3','4','5']);if(!stillStarting())return;}
+    if(['normal','extra','challenge'].includes(currentMode)&&!runLocalOnly){
+      try{await window.RPG_V66.prepareBalanceRun(currentMode,currentMode==='challenge'?['1']:['1','2','3','4','5']);if(!stillStarting())return;}
       catch(e){
         if(supportsCache&&restoreVerifiedVocab())setLocalOnlyRun(true);
         else{resetGame(false);alert('Cannot load game settings. '+String(e.message||e));return;}
@@ -7373,7 +7373,7 @@ function storyIncomingDamage(key,fallback){
     }
     if(['practice','story'].includes(currentMode)&&!runLocalOnly){
       const storyId=storySelectedStage?.id||'1-1';
-      const stageIds=currentMode==='story'?[storyId]:['1','2','3','4','5'];
+      const stageIds=currentMode==='story'?[storyId]:['1'];
       const chapterId=currentMode==='story'?storyId.split('-')[0]:null;
       try{await window.RPG_V66?.fetchSoloBalance?.(currentMode,stageIds,chapterId);if(!stillStarting())return;}catch(e){
         console.info('Using saved teacher difficulty settings:',e?.message||e);

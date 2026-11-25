@@ -18,7 +18,7 @@ const CQ=window.RPG_CONQUEST;
 const damageScale=key=>['bossHp','missDamage','overflowDamage','cometDamage','shootingStarDamage'].includes(key)?10:1;
 const showDamage=(key,value)=>value*damageScale(key);
 const DAMAGE_DEFAULTS={hitDamage:1,missDamage:1,overflowDamage:1,cometDamage:2,shootingStarDamage:2};
-const stagedPhotos=new Map(),stagedAudio=new Map();let liveBalance={},liveRequestId=0;
+const stagedPhotos=new Map(),stagedAudio=new Map();let liveBalance={},liveRequestId=0;const balanceCache=new Map();let draftTimer=null,activeTab="encounters";
 const REPO_KEY='rpg_story_github_repo_v90';
 let onlineImageNames=[],selectedLocalFiles=new Map(),onlineAudioNames=[];
 let repairChoices=[];
@@ -65,11 +65,13 @@ function updateAuth(){
  $('google').hidden=!!teacher;$('signout').hidden=!teacher;
  $('publish').disabled=busy||!checkAuth()||!chapters.length||!cloudAvailable;
  $('saveDraft').disabled=busy||!chapters.length;
- $('reload').disabled=busy;$('import').disabled=busy;
+ $('reload').disabled=busy;$('import').disabled=busy;document.querySelector('.layout').inert=busy;$('operatorFields').inert=busy;
  $('downloadPhotos').disabled=busy||stagedPhotos.size===0;$('downloadPhotos').textContent=`Download Photo Pack (${stagedPhotos.size})`;
  $('downloadAudio').disabled=busy||stagedAudio.size===0;$('downloadAudio').textContent=`Download Music Pack (${stagedAudio.size})`;
 }
-function markDirty(){dirty=true;status('Changes are not published. Save Draft or Publish when ready.');}
+function markDirty(){dirty=true;status('Unpublished changes.');clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(!dirty)return;try{writeDraft(true);}catch(e){status('Draft not saved: '+e.message,true);}},650);}
+window.addEventListener('beforeunload',event=>{if(dirty){try{writeDraft(true);}catch{}}if(dirty||busy||stagedPhotos.size||stagedAudio.size){event.preventDefault();event.returnValue='';}});
+
 function currentChapter(){return chapters[chapterIndex]||null;}
 function currentStage(){return currentChapter()?.stages[stageIndex]||null;}
 function generateNumber(numbers){const set=new Set(numbers.map(String));for(let i=1;i<=9999;i++)if(!set.has(String(i)))return String(i);throw Error('No available IDs.');}
@@ -77,9 +79,10 @@ function nextChapterId(){return generateNumber([...chapters.map(c=>c.id),...reti
 function nextStageId(ch){const prefix=ch.id+'-';const used=[...ch.stages.map(s=>s.id),...retiredStages].filter(s=>s.startsWith(prefix)).map(s=>s.slice(prefix.length));return prefix+generateNumber(used);}
 function newStage(ch){const id=nextStageId(ch);return {id,title:`Encounter ${id}`,description:'',type:'battle-only',battle:{template:1,bossName:'Enemy',bossHp:20},stars:{damageMax:[0,1,2,3]},unlock:{stageId:'',minStars:0},intro:[],outro:[]};}
 function currentOrder(){return chapters.flatMap(ch=>ch.stages.map(st=>st.id));}
-function writeDraft(){
+function writeDraft(automatic=false){
+ clearTimeout(draftTimer);
  const payload={...cleanStory({chapters}),revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};
- localStorage.setItem(DRAFT_KEY,JSON.stringify(payload));dirty=false;status('Draft saved in this browser. Students have not received these changes.',false,true);
+ localStorage.setItem(DRAFT_KEY,JSON.stringify(payload));dirty=false;status(automatic?'Draft autosaved · unpublished':'Draft saved · unpublished',false,true);
 }
 function swap(arr,i,j){if(j<0||j>=arr.length)return false;[arr[i],arr[j]]=[arr[j],arr[i]];return true;}
 function scenePreview(scene){return stagedPhotos.get(scene.image)?.url||(safeStoryImage(scene.image)?scene.image:'story/images/placeholder-01.svg');}
@@ -116,7 +119,7 @@ function fillLiveValues(){
  }
  const panicInput=$('stageFields').querySelector('[data-damage-panic]');
  if(panicInput&&document.activeElement!==panicInput)panicInput.value=String(panicDamageValue(st)*10);
- const info=$('current-status');if(info)info.textContent=checkAuth()?'Current values loaded from Game Settings when this stage opened.':'Built-in defaults; sign in for live Game Settings overrides.';
+ const info=$('current-status');if(info)info.textContent=checkAuth()?'Encounter values override legacy inherited settings.':'Sign in to read legacy inherited settings.';
 }
 async function loadLiveValues(){
  const st=currentStage();if(!st)return;
@@ -125,10 +128,11 @@ async function loadLiveValues(){
  if(!checkAuth())return;
  try{
   const scopes=[`mode:story`,`chapter:${chapter}`,`stage:story:${stage}`];
-  const snaps=await Promise.all(scopes.map(id=>getDocFromServer(doc(db,'gameBalance',id))));
+  const snaps=await Promise.all(scopes.map(id=>{if(!balanceCache.has(id)){const pending=getDocFromServer(doc(db,'gameBalance',id)).catch(e=>{balanceCache.delete(id);throw e;});balanceCache.set(id,pending);}return balanceCache.get(id);}));
   if(token!==liveRequestId||currentStage()?.id!==stage)return;
   liveBalance=Object.fromEntries(scopes.map((id,i)=>[id,snaps[i].exists()?snaps[i].data():{}]));
   fillLiveValues();
+  for(const input of $('stageFields').querySelectorAll('[data-mechanic-id]')){const m=input.dataset.mechanicId,k=input.dataset.mechanicKey;if(st.battle?.mechanics?.[m]?.[k]!==undefined||document.activeElement===input)continue;let value;for(const scope of scopes)if(liveBalance[scope]?.mechanics?.[m]?.[k]!==undefined)value=liveBalance[scope].mechanics[m][k];if(value===undefined){const field=catalog().find(x=>x.id===m)?.fields.find(x=>x.key===k);value=field?.default??(field?.type==='boolean'?false:field?.min);}if(value!==undefined)input.value=String(value);}
  }catch(error){if(token===liveRequestId)status('Could not read existing Game Settings: '+errorMessage(error),true)}
 }
 function panicDamageValue(st){
@@ -144,14 +148,14 @@ function damageSettings(st){
   return `<div class="field"><label for="battle-${key}">${esc(label)}</label><input id="battle-${key}" data-battle-field="${key}" type="number" min="${showDamage(key,min)}" max="${showDamage(key,max)}" step="${showDamage(key,step)}" value="${esc(showDamage(key,actual))}"><span class="muted" data-current-field="${key}">Current: ${esc(showDamage(key,actual))}</span></div>`;
  }).join('');
  const panic=String(currentChapter()?.id)==='1'?`<div class="field"><label for="battle-panicDamage">Panic word damage</label><input id="battle-panicDamage" data-damage-panic="true" type="number" min="10" max="100" step="10" value="${esc(panicDamageValue(st)*10)}"><span class="muted">When Panic is enabled in The Rift.</span></div>`:'';
- return `<section class="section damage-settings"><div class="editheading"><h3>Damage Settings</h3></div><div class="grid">${fields}${panic}</div><div class="grid"><label><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Enable Comet (every 4th spawn, starting with the first)</label><label><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Enable Shooting Star (every 3rd spawn, 4-second countdown after landing)</label></div><div class="boss-sprite-actions"><button type="button" data-action="copy-damage">Copy damage to territory</button><button type="button" data-action="reset-damage">Reset damage defaults</button></div><p class="muted">Damage only; copy/reset does not change HP, hazard toggles or other mechanics.</p></section>`;
+ return `<section class="section damage-settings"><div class="editheading"><h3>Damage Settings</h3></div><div class="grid">${fields}${panic}</div><div class="grid"><label><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Enable Comet (every 4th spawn, starting with the first)</label><label><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Enable Shooting Star (every 3rd spawn, 4-second countdown after landing)</label></div><div class="boss-sprite-actions"><button type="button" data-action="copy-damage">Copy damage to territory</button><button type="button" data-action="reset-damage">Reset damage defaults</button></div><p class="muted">HP and mechanics are unchanged.</p></section>`;
 }
 function mechanicMarkup(st,onlyChapter1=false){
- const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic'].includes(m.id):!['sleepy','delirium','panic'].includes(m.id));if(!plugins.length)return '<p class="muted">No additional mechanics installed. New behaviors require a static code module; they appear here automatically once installed.</p>';
+ const plugins=catalog().filter(m=>onlyChapter1?['sleepy','delirium','panic'].includes(m.id):!['sleepy','delirium','panic'].includes(m.id));if(!plugins.length)return '<p class="muted">No additional mechanics.</p>';
  return plugins.map(m=>{
   const settings=st.battle?.mechanics?.[m.id]||{};
   const controls=m.fields.filter(field=>!(m.id==='panic'&&field.key==='damage')).map(field=>{
-   const current=settings[field.key]??field.default??(field.type==='boolean'?false:field.min);
+   let inheritedValue=field.default??(field.type==='boolean'?false:field.min);for(const scope of ['mode:story',`chapter:${currentChapter()?.id}`,`stage:story:${st.id}`])if(liveBalance[scope]?.mechanics?.[m.id]?.[field.key]!==undefined)inheritedValue=liveBalance[scope].mechanics[m.id][field.key];const current=settings[field.key]??inheritedValue;
    const attr=`data-mechanic-id="${esc(m.id)}" data-mechanic-key="${esc(field.key)}"`;
    const input=field.type==='boolean'?`<select ${attr}><option value="true" ${current===true?'selected':''}>Enabled</option><option value="false" ${current!==true?'selected':''}>Disabled</option></select>`:`<input type="number" ${attr} min="${field.min}" max="${field.max}" step="${field.step||1}" value="${esc(current)}">`;
    return `<div class="field"><label>${esc(field.label)}</label>${input}</div>`;
@@ -240,6 +244,7 @@ async function checkMusicOnline(path){
 }
 function showMusicReport(rows){const report=$('musicReport');report.innerHTML=rows.map(r=>`<li class="${r.ok?'photo-ok':'photo-bad'}">${esc(r.path.split('/').at(-1))} — ${esc(r.text)}</li>`).join('');$('musicReportPanel').hidden=!rows.length;}
 async function checkMusic(){
+ verifiedAssets.clear();
  if(busy)return;busy=true;updateAuth();status('Checking music on the published website…');
  try{const paths=audioPaths(),rows=[];
   for(let i=0;i<paths.length;i+=6){const result=await Promise.all(paths.slice(i,i+6).map(async path=>({path,ok:await checkMusicOnline(path)})));for(const r of result)rows.push({...r,text:r.ok?'Online ✓':stagedAudio.has(r.path)?'Only selected in browser — upload the Music Pack first':'Not found on GitHub Pages'});}
@@ -287,6 +292,7 @@ function photoReport(rows){
  $('photoReportPanel').hidden=rows.length===0;
 }
 async function checkPhotos(){
+ verifiedAssets.clear();
  if(busy)return;busy=true;updateAuth();status('Checking chapter images on the published website…');
  try{
   const paths=photoPaths();let present=0,local=0;const rows=[];
@@ -396,13 +402,14 @@ async function shortenExistingImages(){
  }catch(error){status('Short-name export stopped without changing your draft: '+error.message,true)}
  finally{busy=false;updateAuth()}
 }
+const verifiedAssets=new Set();
 async function verifyImageFiles(payload){
- const paths=referencedImages(battleAssetChapters(payload.chapters));
+ const paths=referencedImages(battleAssetChapters(payload.chapters)).filter(path=>!verifiedAssets.has(path)||stagedPhotos.has(path));
  if(!paths.length)return;
  const missing=[];
  for(let i=0;i<paths.length;i+=6){
   const group=await Promise.all(paths.slice(i,i+6).map(async img=>({img,ok:await photoOnline(img)})));
-  missing.push(...group.filter(x=>!x.ok).map(x=>x.img));
+  missing.push(...group.filter(x=>!x.ok).map(x=>x.img));for(const x of group)if(x.ok&&!stagedPhotos.has(x.img))verifiedAssets.add(x.img);
  }
  if(missing.length){
   photoReport(missing.map(path=>({ok:false,label:path.split('/').at(-1),text:stagedPhotos.has(path)?'Only stored in browser — upload photo pack':'Not on published website; use Find Existing Images'})));
@@ -423,7 +430,7 @@ function renderNav(){
 }
 function selectFirstEncounter(){const ch=currentChapter();stageIndex=ch?.stages.findIndex(st=>st.type!=='story-only')??-1;}
 function createTerritory(id){if(busy||chapters.some(c=>c.id===id)||retiredChapters.has(id)||chapters.length>=40)return;const ch={id,title:territoryName(id),subtitle:'',stages:[],conquest:CQ.normalizeConfig({operators:globalOperators()})};ch.stages.push(newStage(ch));chapters.push(ch);chapterIndex=chapters.length-1;stageIndex=0;markDirty();render();}
-function renderEnhancements(ch){const cfg=ensureConfig(ch),r=cfg.rewards;return `<details class="cq-settings"><summary>Enhancement rewards <span>${r.max} max · ${r.types.length} types</span></summary><div class="cq-config-body"><div class="grid cq-rewards-grid"><div class="field"><label>Maximum rewards per operation</label><input type="number" data-reward-max min="0" max="6" step="1" value="${r.max}"></div>${r.weights.map((n,i)=>`<div class="field"><label>${i+4}★ chance (%)</label><input type="number" min="0" max="100" step="1" data-weight="${i}" value="${n}"></div>`).join('')}</div><p class="muted" id="rarity-total">Total: ${r.weights.reduce((a,b)=>a+b,0)}% (must equal 100%)</p><div class="cq-reward-pool">${CQ.pool.map(e=>`<label><input type="checkbox" data-reward-type="${e.id}" ${r.types.includes(e.id)?'checked':''}> <span>${esc(e.name)}<small>${e.label}</small></span></label>`).join('')}</div><div class="cq-reward-amounts"><div class="cq-reward-amount-row"><strong>Reward amount</strong><b>4★</b><b>5★</b><b>6★</b></div>${CQ.pool.map(e=>`<div class="cq-reward-amount-row"><span>${esc(e.label)}${e.id==='hp'||e.id==='recovery'?'':' (%)'}</span>${(r.values[e.id]||CQ.defaultRewardValues(e.id)).map((n,i)=>`<input aria-label="${esc(e.name)} ${i+4} star amount" type="number" min="1" max="${CQ.rewardMax(e.id)}" step="1" data-amount-id="${e.id}" data-amount-tier="${i}" value="${n??''}">`).join('')}</div>`).join('')}</div><button data-action="reset-rewards" type="button">Reset enhancements</button></div></details>`;}
+function renderEnhancements(ch){const cfg=ensureConfig(ch),r=cfg.rewards;return `<details class="cq-settings cq-enhancements" ${activeTab==='enhancements'?'open':''}><summary>Enhancement rewards <span>${r.max} max · ${r.types.length} types</span></summary><div class="cq-config-body"><div class="grid cq-rewards-grid"><div class="field"><label>Maximum rewards per operation</label><input type="number" data-reward-max min="0" max="6" step="1" value="${r.max}"></div>${r.weights.map((n,i)=>`<div class="field"><label>${i+4}★ chance (%)</label><input type="number" min="0" max="100" step="1" data-weight="${i}" value="${n}"></div>`).join('')}</div><p class="muted" id="rarity-total">Total: ${r.weights.reduce((a,b)=>a+b,0)}% (must equal 100%)</p><div class="cq-reward-pool">${CQ.pool.map(e=>`<label><input type="checkbox" data-reward-type="${e.id}" ${r.types.includes(e.id)?'checked':''}> <span>${esc(e.name)}<small>${e.label}</small></span></label>`).join('')}</div><div class="cq-reward-amounts"><div class="cq-reward-amount-row"><strong>Reward amount</strong><b>4★</b><b>5★</b><b>6★</b></div>${CQ.pool.map(e=>`<div class="cq-reward-amount-row"><span>${esc(e.label)}${e.id==='hp'||e.id==='recovery'?'':' (%)'}</span>${(r.values[e.id]||CQ.defaultRewardValues(e.id)).map((n,i)=>`<input aria-label="${esc(e.name)} ${i+4} star amount" type="number" min="1" max="${CQ.rewardMax(e.id)}" step="1" data-amount-id="${e.id}" data-amount-tier="${i}" value="${n??''}">`).join('')}</div>`).join('')}</div><button data-action="reset-rewards" type="button">Reset enhancements</button></div></details>`;}
 function renderOperatorSettings(){const overrides=globalOperators();$('operatorFields').innerHTML=`<div class="editheading"><h2>Operator Stats · All Territories</h2><button type="button" data-action="reset-all-operators">Reset all</button></div><p class="muted">Conquest only. Starting HP includes existing HP passives (Mara and Vern). Other passive mechanics stay unchanged.</p><div class="cq-operator-grid">${Object.entries(CQ.names).map(([id,name])=>{const values={...CQ.defaultOperator(id),...overrides[id]};return `<section class="cq-operator"><div class="cq-operator-head"><img src="assets/profile-icons/${id}.webp" alt=""><strong>${esc(name)}</strong><button type="button" class="small" data-action="reset-operator" data-id="${id}">Reset</button></div><div class="cq-stat-grid">${Object.entries({hp:'HP',atk:'ATK %',def:'DEF %',crit:'CRIT %',critDmg:'CRIT DMG %'}).map(([k,label])=>`<label>${label}<input type="number" data-op="${id}" data-stat="${k}" min="${CQ.operatorRanges[k][0]}" max="${CQ.operatorRanges[k][1]}" step="1" value="${values[k]}" aria-label="${esc(name)} ${label}"></label>`).join('')}</div></section>`;}).join('')}</div>`;}
 function updateOperators(id,key,value,reset=false){const operators=clone(globalOperators());if(reset){if(id)delete operators[id];else for(const k of Object.keys(operators))delete operators[k];}else{operators[id] ||= {};operators[id][key]=value;}for(const ch of chapters)ensureConfig(ch).operators=clone(operators);markDirty();}
 function slideMarkup(st,phase){const items=st[phase];return `<section class="section"><div class="editheading"><h3>${phase==='intro'?'Before Battle / Intro':'After Battle / Outro'} · ${items.length} slides</h3><button data-action="add-slide" data-phase="${phase}" ${items.length>=50?'disabled':''}>+ Slide</button></div><div class="slides">${items.map((scene,i)=>`<div class="slide"><div><img data-scene-preview="${phase}:${i}" alt="Slide preview" src="${esc(scenePreview(scene))}"><div class="tag">Slide ${i+1}</div></div><div class="fields"><div class="field"><label>Image file</label><details class="advanced-image-path"><summary>${esc(scene.image?.split('/').at(-1)||'No image selected')}</summary><input data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="image" value="${esc(scene.image)}" placeholder="story/images/scene.webp" maxlength="180"></details></div><div class="field"><label>Caption / dialogue</label><textarea data-scene-phase="${phase}" data-scene-index="${i}" data-scene-key="caption" maxlength="300" rows="2">${esc(scene.caption)}</textarea></div><div class="slide-actions"><label class="filebutton small">Select Photo<input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-photo-phase="${phase}" data-photo-index="${i}" hidden></label><button class="small" data-action="slide-up" data-phase="${phase}" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button class="small" data-action="slide-down" data-phase="${phase}" data-i="${i}" ${i===items.length-1?'disabled':''}>Move down</button><button class="small danger" data-action="delete-slide" data-phase="${phase}" data-i="${i}">Delete</button></div></div></div>`).join('')}</div></section>`;}
@@ -455,13 +462,14 @@ function bannerPreview(ch){
 }
 function renderBannerSettings(ch){
  const cfg=ensureConfig(ch);const b=cfg.banner ||= {color:'',icon:'',art:'',animate:true};const region=window.RPG_CONQUEST_MAP.byId(ch.id);
- return `<details class="cq-settings" id="cq-banner-settings"><summary>Banner Settings</summary><div class="cq-banner-editor"><div class="cq-banner-preview" id="cq-banner-preview">${bannerPreview(ch)}</div><div class="cq-config-body"><div class="field"><label>Faction color</label><input type="color" data-banner="color" value="${b.color||region?.color||'#9ba9be'}"></div><div class="field"><label>Emblem</label><select data-banner="icon"><option value="">Faction default</option>${Object.keys(window.RPG_CONQUEST_MAP.icons).map(k=>`<option ${b.icon===k?'selected':''} value="${k}">${k}</option>`).join('')}</select></div><div class="field"><label>Banner artwork (optional)</label><select data-banner="art"><option value="">Default cloth</option>${assetOptions(b.art).map(path=>`<option value="${esc(path)}" ${b.art===path?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('')}</select><label class="filebutton">Upload artwork<input type="file" accept="image/png,image/jpeg,image/webp" data-banner-upload hidden></label></div><label><input type="checkbox" data-banner="animate" ${b.animate!==false?'checked':''}> Destruction animation</label><p class="muted">One cloth section per encounter. Gold is the captured state. Upload new artwork via the Photo Pack.</p></div></div></details>`;
+ return `<details class="cq-settings" id="cq-banner-settings" ${activeTab==='banners'?'open':''}><summary>Banner Settings</summary><div class="cq-banner-editor"><div class="cq-banner-preview" id="cq-banner-preview">${bannerPreview(ch)}</div><div class="cq-config-body"><div class="field"><label>Faction color</label><input type="color" data-banner="color" value="${b.color||region?.color||'#9ba9be'}"></div><div class="field"><label>Emblem</label><select data-banner="icon"><option value="">Faction default</option>${Object.keys(window.RPG_CONQUEST_MAP.icons).map(k=>`<option ${b.icon===k?'selected':''} value="${k}">${k}</option>`).join('')}</select></div><div class="field"><label>Banner artwork (optional)</label><select data-banner="art"><option value="">Default cloth</option>${assetOptions(b.art).map(path=>`<option value="${esc(path)}" ${b.art===path?'selected':''}>${esc(path.split('/').at(-1))}</option>`).join('')}</select><label class="filebutton">Upload artwork<input type="file" accept="image/png,image/jpeg,image/webp" data-banner-upload hidden></label></div><label><input type="checkbox" data-banner="animate" ${b.animate!==false?'checked':''}> Destruction animation</label><p class="muted">Upload custom art via Photo Pack.</p></div></div></details>`;
 }
 async function addBannerArt(event){
  const file=event.target.files?.[0];event.target.value='';const ch=currentChapter();if(!file||!ch||busy)return;
  try{const blob=await optimizePhoto(file);if(currentChapter()!==ch)throw Error('Territory changed. Select artwork again.');if(stagedPhotos.size>=250)throw Error('Photo pack limit reached.');const ext=imageExt(blob);if(!ext)throw Error('Unsupported image format.');const path=storyPath(nextSharedName('banner',assetOptions().concat(onlineImageNames),ext));ensureConfig(ch).banner.art=path;updateStaged(path,blob);dropUnusedPhotos();markDirty();renderFields();$('cq-banner-settings').open=true;status('Banner artwork added. Download Photo Pack before publishing.',false,true);}catch(error){status(error.message,true);}
 }
 function renderFields(){
+ const previousScope=liveBalance[`stage:story:${currentStage()?.id}`];if(!previousScope)liveBalance={};
  // A preview must stop when changing stages; detached audio elements can keep playing.
  const previousAudio=$('stage-bgm-preview');if(previousAudio){previousAudio.pause();previousAudio.removeAttribute('src');previousAudio.load();}
  const ch=currentChapter(),st=currentStage();
@@ -478,11 +486,11 @@ function renderFields(){
  <div class="section"><h3>Battle Settings</h3><p class="muted" id="current-status"></p>
  <div class="grid"><div class="field"><label for="st-bossname">Enemy name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"></div><div class="field"><label for="st-hp">Enemy HP</label><input id="st-hp" type="number" min="10" max="9990" step="10" data-battle-field="bossHp" value="${esc((st.battle?.bossHp??20)*10)}"><span class="muted">In-game HP · increments of 10</span></div>${numericFields}</div>
  ${damageSettings(st)}
- ${artEditor(st,'bossSprite','Boss Sprite','boss','Boss art for this stage. Select the same existing image in any other stage to reuse it.')} 
- ${artEditor(st,'battleBackground','Battle Background','bg','Background shown behind the fight in this stage. Backgrounds can also be reused.')}
+ ${artEditor(st,'bossSprite','Boss Sprite','boss','Reusable boss art.')} 
+ ${artEditor(st,'battleBackground','Battle Background','bg','Reusable background.')}
  ${musicEditor(st)} </div>
- ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>The Rift · Special Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy to all Rift encounters</button></div><p class="muted">Enable and tune each effect for this stage (${esc(st.id)}). All three start OFF. Delirium only works while Sleepy is enabled. During complete darkness, existing words continue falling but new spawns pause.</p>${mechanicMarkup(st,true)}</div>`:''}
- <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted">Registered game modules only</span></div>${mechanicMarkup(st)}<p class="muted">To add a totally new effect, a mechanic must first be coded into custom-mechanics.js. After that, its controls appear here automatically. Settings are saved with the encounter.</p></div>
+ ${String(ch.id)==='1'?`<div class="section chapter-special-editor"><div class="editheading"><h3>The Rift · Special Mechanics</h3><button type="button" data-action="copy-ch1-mechanics">Copy to all Rift encounters</button></div><p class="muted">Delirium requires Sleepy. Darkness pauses new spawns.</p>${mechanicMarkup(st,true)}</div>`:''}
+ <div class="section"><div class="editheading"><h3>Word Mechanics</h3><span class="muted"></span></div>${mechanicMarkup(st)}<p class="muted">New mechanics require a code module.</p></div>
  <p class="muted">Encounter ID ${esc(st.id)} is permanent. Changes apply on the next Conquest map opening.</p></section>`;
  fillLiveValues()
  const limits=st.stars?.damageMax||[0,1,2,3];
@@ -491,7 +499,7 @@ function renderFields(){
  for(const [id,title] of [['boss-preview','Boss sprite'],['bg-preview','Battle background']]){const img=$(id);if(img)img.addEventListener('error',()=>{img.removeAttribute('src');img.alt=title+' not found on website.';});}
  for(const img of $('slidesEditor').querySelectorAll('img[data-scene-preview]'))img.addEventListener('error',()=>{img.removeAttribute('src');img.alt='Image not found. Add it to docs/story/images/ first.';});
 }
-function render(){if(currentStage()?.type==='story-only')selectFirstEncounter();renderNav();renderFields();renderOperatorSettings();updateAuth();void loadLiveValues();}
+function render(){if(currentStage()?.type==='story-only')selectFirstEncounter();renderNav();renderFields();if(activeTab==='operators')renderOperatorSettings();updateAuth();if(activeTab==='encounters')void loadLiveValues();}
 function moveSelection(kind,index,d){const arr=kind==='chapter'?chapters:currentChapter()?.stages;if(!arr||!swap(arr,index,index+d))return;if(kind==='chapter')chapterIndex=index+d;else stageIndex=index+d;markDirty();render();}
 function handleNavClick(event){const btn=event.target.closest('button[data-action]');if(!btn||busy)return;const a=btn.dataset.action,i=Number(btn.dataset.i);
  if(a==='create-territory'){createTerritory(btn.dataset.id);return;}
@@ -612,6 +620,7 @@ async function loadLocalChapters(){
   setLoaded(chosen,Number(draft?.revision)||0);
   restoreRetired(chosen);
   publishedOrder=currentOrder();
+  const requested=new URLSearchParams(location.search).get('stage');const ci=chapters.findIndex(c=>c.stages.some(st=>st.id===requested));if(ci>=0){chapterIndex=ci;stageIndex=chapters[ci].stages.findIndex(st=>st.id===requested);}
   initialDraftRecovered=Boolean(draft);
   render();
   if(window.RPG_STORY_EDITOR_BOOT)window.RPG_STORY_EDITOR_BOOT.loaded=true;
@@ -625,7 +634,7 @@ async function syncInitialCloud(){
   cloudAvailable=true;
   if(remote){
    // Do not replace a saved draft or edits made while connecting.
-   if(!initialDraftRecovered&&!dirty){
+   if(!initialDraftRecovered&&!dirty&&!localStorage.getItem(DRAFT_KEY)){
     const chosenStage=currentStage()?.id;
     const cleaned=cleanStory(remote);
     setLoaded(cleaned,Number(remote.revision)||0);
@@ -639,7 +648,7 @@ async function syncInitialCloud(){
     publishedOrder=remote.chapters.flatMap(ch=>ch.stages.map(st=>st.id));
    }
   }
-  if(initialDraftRecovered||dirty){
+  if(initialDraftRecovered||dirty||localStorage.getItem(DRAFT_KEY)){
    status('Firebase connected. Your local draft was kept. Review changes before publishing.',false,true);
   }else{
    status(remote?'Published Conquest loaded (revision '+loadedRevision+').':'Territories ready. No published Conquest exists yet.',false,true);
@@ -725,8 +734,8 @@ async function publish(){
  busy=true;updateAuth();status('Checking chapter photos and music…');
  try{
   await verifyImageFiles(payload);
-  const missingMusic=[];const paths=referencedMusic(battleAssetChapters(payload.chapters));
-  for(let i=0;i<paths.length;i+=6){const group=await Promise.all(paths.slice(i,i+6).map(async path=>({path,ok:await checkMusicOnline(path)})));missingMusic.push(...group.filter(item=>!item.ok).map(item=>item.path));}
+  const missingMusic=[];const paths=referencedMusic(battleAssetChapters(payload.chapters)).filter(path=>!verifiedAssets.has(path)||stagedAudio.has(path));
+  for(let i=0;i<paths.length;i+=6){const group=await Promise.all(paths.slice(i,i+6).map(async path=>({path,ok:await checkMusicOnline(path)})));missingMusic.push(...group.filter(item=>!item.ok).map(item=>item.path));for(const item of group)if(item.ok&&!stagedAudio.has(item.path))verifiedAssets.add(item.path);}
   if(missingMusic.length){showMusicReport(missingMusic.map(path=>({path,ok:false,text:stagedAudio.has(path)?'Only in browser — download and upload Music Pack':'Not found on GitHub Pages'})));throw Error(`${missingMusic.length} music file(s) are not yet online. Download Music Pack and push to GitHub first.`);}
   status('Publishing to Firebase…');
   const reference=doc(db,'storyContent','published');let next;
@@ -737,11 +746,11 @@ async function publish(){
   if(stageIds.length>2000||chapterIds.length>1000)throw Error('Too many retired IDs.');
   await runTransaction(db,async tx=>{
    const snapshot=await tx.get(reference);const rev=snapshot.exists()?Number(snapshot.data().revision)||0:0;
-   if(rev!==loadedRevision)throw Error('Published Story changed in another tab. Export your draft, reload published content, and review before trying again.');
+   if(rev!==loadedRevision)throw Error('Published Conquest changed in another tab. Export your draft, reload published content, and review before trying again.');
    next=rev+1;
    tx.set(reference,{...payload,revision:next,retiredStageIds:stageIds,retiredChapterIds:chapterIds,updatedAt:serverTimestamp()});
   });
-  loadedRevision=next;publishedOrder=currentOrder();dirty=false;localStorage.removeItem(DRAFT_KEY);
+  loadedRevision=next;publishedOrder=currentOrder();dirty=false;clearTimeout(draftTimer);try{localStorage.removeItem(DRAFT_KEY);}catch{}
   status(`Published revision ${next}. Students receive it when they next open Conquest.`,false,true);
  }catch(e){status('Publish failed: '+errorMessage(e),true)}finally{busy=false;updateAuth();}
 }
@@ -752,8 +761,9 @@ async function importFile(event){const file=event.target.files?.[0];event.target
   clearPhotoSelection();clearAudioSelection();chapters=normalized.chapters;restoreRetired(incoming);chapterIndex=0;stageIndex=0;markDirty();render();
  }catch(e){status('Import failed: '+e.message,true);}}
 async function boot(){
- const tab=operators=>{document.querySelector('.layout').hidden=operators;$('operatorFields').hidden=!operators;$('cq-encounters-tab').setAttribute('aria-pressed',String(!operators));$('cq-operators-tab').setAttribute('aria-pressed',String(operators));};
- $('cq-encounters-tab').onclick=()=>tab(false);$('cq-operators-tab').onclick=()=>tab(true);
+ const tab=name=>{activeTab=name;document.body.dataset.editorTab=name;document.querySelector('.layout').hidden=['operators','assets'].includes(name);$('operatorFields').hidden=name!=='operators';document.querySelector('.photo-manager').hidden=name!=='assets';if(name==='operators')renderOperatorSettings();if(name==='encounters'&&chapters.length)void loadLiveValues();if(['enhancements','banners'].includes(name))for(const details of $('chapterFields').querySelectorAll('details'))details.open=true;if(name==='assets')document.querySelector('.photo-manager details').open=true;for(const btn of document.querySelectorAll('[data-editor-tab]'))btn.setAttribute('aria-pressed',String(btn.dataset.editorTab===name));};
+ for(const btn of document.querySelectorAll('[data-editor-tab]'))btn.onclick=()=>tab(btn.dataset.editorTab);
+ const initial=new URLSearchParams(location.search).get('tab');tab(['operators','assets','enhancements','banners'].includes(initial)?initial:'encounters');
  $('chapterList').addEventListener('click',handleNavClick);$('stageList').addEventListener('click',handleNavClick);
  $('chapterFields').addEventListener('input',handleEditorInput);$('chapterFields').addEventListener('change',e=>{if(e.target.matches('[data-banner-upload]'))void addBannerArt(e);});$('operatorFields').addEventListener('input',handleEditorInput);$('operatorFields').addEventListener('click',editorAction);$('stageFields').addEventListener('input',handleEditorInput);$('slidesEditor').addEventListener('input',handleEditorInput);
  $('stageFields').addEventListener('change',event=>{if(event.target.matches('input[type=file][data-art-photo]'))void addSharedArt(event,event.target.dataset.artPhoto);else if(event.target.matches('input[type=file][data-audio-file]'))void addMusic(event);else if(event.target.matches('select[data-asset-select],select[data-music-select],input[data-battle-field=bgmLoop],input[data-battle-field=cometEnabled],input[data-battle-field=shootingStarEnabled],select[data-battle-field=template]'))handleEditorInput(event);});
@@ -787,8 +797,8 @@ async function boot(){
  $('repoName').value=localStorage.getItem(REPO_KEY)||githubRepoGuess(location);
  $('repoName').addEventListener('change',()=>{if(validGithubRepo($('repoName').value))localStorage.setItem(REPO_KEY,$('repoName').value.trim());});
  $('export').onclick=exportFile;$('import').onchange=importFile;$('publish').onclick=publish;
- $('google').onclick=signIn;$('signout').onclick=async()=>{++authReadId;try{await teacherSignOut();teacher=null;liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
- $('reload').onclick=async()=>{if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Reload published chapters? This discards local edits and the saved draft ONLY if the cloud reload succeeds. Export JSON first if you want a backup.'))return;}if(await loadRemote(false,{requireCloud:true})){localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();clearAudioSelection();}};
+ $('google').onclick=signIn;$('signout').onclick=async()=>{++authReadId;try{await teacherSignOut();teacher=null;++liveRequestId;balanceCache.clear();liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
+ $('reload').onclick=async()=>{balanceCache.clear();verifiedAssets.clear();if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard draft and reload published territories?'))return;}if(await loadRemote(false,{requireCloud:true})){clearTimeout(draftTimer);localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();clearAudioSelection();}};
  updateAuth();
  if(!await loadLocalChapters())return;
  // Both tasks are independent of local editing; failure of either is non-fatal.
@@ -796,7 +806,7 @@ async function boot(){
  const authToken=++authReadId;
  void currentTeacher().then(account=>{
   if(authToken!==authReadId)return;
-  teacher=account;updateAuth();if(teacher)void loadLiveValues();
+  teacher=account;updateAuth();if(teacher&&activeTab==='encounters')void loadLiveValues();
   if(teacher&&!checkAuth())status('The current Google account is not authorized to publish. Sign out, then use the teacher account.',true);
  }).catch(error=>{if(authToken===authReadId)console.warn('Teacher login status unavailable:',error);});
 }

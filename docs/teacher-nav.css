@@ -27,3 +27,5 @@ body.teacher-nav-ready.teacher-nav-aura main {margin:30px auto 50px;}
   .teacher-hub-nav,
   body.teacher-nav-ready > .teacher-hub-nav { display:none !important; }
 }
+
+.teacher-player-nav{display:flex;gap:4px;padding:8px 16px;background:#e7edf5;border-bottom:1px solid #c8d4e4;font:600 13px system-ui;flex-wrap:wrap}.teacher-player-nav a{color:#263c57;padding:7px 14px;text-decoration:none;border-radius:5px}.teacher-player-nav a[aria-current=page]{background:#fff;box-shadow:0 1px 4px #22334420}.teacher-player-nav a:focus-visible{outline:2px solid #235cd1}@media print{.teacher-player-nav{display:none!important}}

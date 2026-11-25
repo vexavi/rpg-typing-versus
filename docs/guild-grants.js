@@ -71,7 +71,7 @@ async function refresh(){
    valid.push({id:s.id,username:String(p.username||''),grade:p.grade||null,disabled:!!p.disabled,coins:p.recruitment.coins});
   }
   players=valid.sort((a,b)=>(a.username||'').localeCompare(b.username||'')||a.id.localeCompare(b.id));
-  loaded=true;drawPlayers();
+  loaded=true;drawPlayers();const requested=new URLSearchParams(location.search).get('player');if(!selected&&requested&&players.some(p=>p.id===requested)){selected=players.find(p=>p.id===requested);$('player').value=requested;}
   if(selected){const p=players.find(p=>p.id===selected.id);selected=p||null;}
   if(selected)$('player').value=selected.id;
   renderPreview();

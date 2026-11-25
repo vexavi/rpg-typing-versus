@@ -1,8 +1,9 @@
 import {currentTeacher,googleTeacher,teacherSignOut,errorMessage} from './cloud-api.js';
-import {getFirestore,doc,getDoc,setDoc,deleteDoc,serverTimestamp,runTransaction} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
+import {getFirestore,doc,getDocFromServer,serverTimestamp,runTransaction} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
-import {loadEffectiveStory} from './story-content-cloud.js';
-const el=id=>document.getElementById(id);let teacher=null,db=null,chapters=[],ready=false,reading=0;
+import {nextModeConfig} from './dashboard-revisions.mjs?v=133.0';
+const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
+const el=id=>document.getElementById(id);let teacher=null,db=null,chapters=[],ready=false,reading=0,loading=false,saving=false,dirty=false,loadedScope=null,loadedData=null,selected=null;
 const fields={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,20],bossMaxHp:['Boss HP',1,2000,1],hitDamage:['Damage / word',1,100,1]};
 const options=list=>list.map(([id,label])=>{const o=document.createElement('option');o.value=id;o.textContent=label;return o});
 function message(s,bad=false){el('status').textContent=s;el('status').className=bad?'bad':'good'}
@@ -12,6 +13,7 @@ function selectedScope(){const mode=el('mode').value,level=el('scope').value;
 function setOptions(select,entries){select.replaceChildren(...options(entries));}
 function refreshChoices(){
  const mode=el('mode').value;
+ for(const key of ['bossMaxHp','hitDamage']){const input=el('fld-'+key);if(input)input.closest('.field').classList.toggle('hidden',['practice','challenge'].includes(mode));}
  const isStory=mode==='story';
  el('scope').querySelector('[value=chapter]').hidden=!isStory;
  if(!isStory&&el('scope').value==='chapter')el('scope').value='mode';
@@ -35,7 +37,7 @@ function refreshChoices(){
    input.dataset.mechanic=m.id;input.dataset.field=f.key;input.id=`mech-${m.id}-${f.key}`;l.htmlFor=input.id;
    if(f.type==='boolean')setOptions(input,[['','Inherit'],['true','Enabled'],['false','Disabled']]);
    else {input.type='number';input.min=String(f.min);input.max=String(f.max);input.step=String(f.step||1);input.placeholder='Inherit';}
-   w.append(l,input);if(f.help){const p=document.createElement('p');p.className='tip';p.textContent=f.help;w.append(p)}grid.appendChild(w);
+   w.append(l,input);if(f.help)input.title=f.help;grid.appendChild(w);
   }box.appendChild(grid);el('mechanics').appendChild(box);
  }
 }
@@ -47,30 +49,44 @@ function initInputs(){
   n.dataset.balance=key;w.append(l,n);dest.appendChild(w);
  }
 }
-async function bumpVersion(){
- const ref=doc(db,'systemConfig','current');
- await runTransaction(db,async tx=>{const doc=await tx.get(ref);tx.set(ref,{revision:(Number(doc.data()?.revision)||0)+1,updatedAt:serverTimestamp()});});
+function lock(){const blocked=loading||saving;for(const id of ['mode','scope','stage','google','signout','reload-settings'])el(id).disabled=blocked;for(const input of document.querySelectorAll('[data-balance],[data-mechanic]'))input.disabled=blocked||!teacher||!loadedScope;el('save').disabled=blocked||!teacher||!loadedScope;el('reset').disabled=el('save').disabled;}
+function selection(){return Object.fromEntries(['mode','scope','stage'].map(k=>[k,el(k).value]));}
+function restoreSelection(){if(!selected)return;for(const k of ['mode','scope','stage'])el(k).value=selected[k];}
+function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])]));return value;}
+function stamp(data){return JSON.stringify(stable({values:data?.values||{},mechanics:data?.mechanics||{},updatedAt:data?.updatedAt?.toMillis?.()??null}));}
+async function commit(scope,data,remove=false){
+ const mode=scope.split(':')[1],target=doc(db,'gameBalance',scope),config=doc(db,'systemConfig','current');
+ const ranked=['normal','extra','challenge'].includes(mode);
+ await runTransaction(db,async tx=>{const old=await tx.get(target);const cfg=ranked?await tx.get(config):null;
+ if(stamp(old.data())!==stamp(loadedData))throw Error('Settings changed in another tab. Reload before publishing.');
+ if(!old.exists()&&remove)return;
+ if(!remove&&JSON.stringify(stable(old.data()?.values||{}))===JSON.stringify(stable(data.values))&&JSON.stringify(stable(old.data()?.mechanics||{}))===JSON.stringify(stable(data.mechanics)))return;
+ if(ranked&&!cfg.exists())throw Error('Run Firebase Setup first.');
+ if(remove)tx.delete(target);else tx.set(target,{...data,updatedAt:serverTimestamp()});
+ if(ranked)tx.set(config,{...nextModeConfig(cfg.data(),mode),updatedAt:serverTimestamp()});
+ });
 }
 async function load(){
- const seq=++reading;refreshChoices();
+ const seq=++reading;refreshChoices();selected=selection();loadedScope=null;loadedData=null;dirty=false;loading=true;lock();
  for(const input of document.querySelectorAll('[data-balance],[data-mechanic]'))input.value='';
- if(!teacher){message('Sign in to edit live settings.',true);return;}
- const scope=selectedScope();if(!scope||scope.endsWith(':')){message('Select a stage.',true);return;}
+ if(!teacher){loading=false;lock();message('Sign in to edit settings.',true);return;}
+ const scope=selectedScope();if(!scope||scope.endsWith(':')){loading=false;lock();message('Select a stage.',true);return;}
  try{
-  const snap=await getDoc(doc(db,'gameBalance',scope));if(seq!==reading)return;
-  const data=snap.exists()?snap.data():{};
+  const snap=await getDocFromServer(doc(db,'gameBalance',scope));if(seq!==reading)return;
+  const data=snap.exists()?snap.data():{};loadedData=data;loadedScope=scope;
   for(const input of document.querySelectorAll('[data-balance]'))input.value=data.values?.[input.dataset.balance]??'';
   for(const input of document.querySelectorAll('[data-mechanic]')){
    const value=data.mechanics?.[input.dataset.mechanic]?.[input.dataset.field];
    input.value=value===true?'true':value===false?'false':value??'';
   }
   message(snap.exists()?`Loaded ${scope}`:`No override for ${scope}`);
- }catch(e){message(errorMessage(e),true)}
+ }catch(e){if(seq===reading)message(errorMessage(e),true)}finally{if(seq===reading){loading=false;lock();}}
 }
 function collect(){
  const values={},mechanics={};
+ if(['practice','challenge'].includes(el('mode').value))for(const key of ['bossMaxHp','hitDamage'])if(loadedData?.values?.[key]!==undefined)values[key]=loadedData.values[key];
  for(const input of document.querySelectorAll('[data-balance]')){
-  if(input.value.trim()==='')continue;
+  if(input.closest('.field')?.classList.contains('hidden')||input.value.trim()==='')continue;
   const key=input.dataset.balance,[,min,max]=fields[key],number=Number(input.value);
   if(!Number.isFinite(number)||number<min||number>max)throw Error(`${key} must be between ${min} and ${max}`);
   values[key]=number;
@@ -87,33 +103,27 @@ function collect(){
  }
  return {values,mechanics};
 }
-async function save(){if(!teacher||!ready){message('Sign in with the authorized teacher Google account.',true);return;}
- try{const scope=selectedScope();if(!scope||scope.endsWith(':'))throw Error('Select a stage.');const data=collect();el('save').disabled=true;
- await setDoc(doc(db,'gameBalance',scope),{...data,updatedAt:serverTimestamp()});await bumpVersion();message('Published live: '+scope);
- }catch(e){message(errorMessage(e),true)}finally{el('save').disabled=false}}
-async function clear(){if(!teacher)return;
- if(!selectedScope()||selectedScope().endsWith(':')){message('Select a stage.',true);return;}
- if(!confirm(`Clear ALL overrides in ${selectedScope()}?`))return;
- try{await deleteDoc(doc(db,'gameBalance',selectedScope()));await bumpVersion();await load();message('Overrides cleared. Inherited settings restored.');}
- catch(e){message(errorMessage(e),true)}}
-async function signIn(){try{teacher=await googleTeacher();db=getFirestore(getApp());ready=true;syncAuth();await load()}catch(e){message(errorMessage(e),true)}}
+async function save(){if(!teacher||!ready||loading||saving||loadedScope!==selectedScope())return;
+ try{const data=collect();saving=true;lock();await commit(loadedScope,data);await load();message('Published.');}
+ catch(e){message(errorMessage(e),true)}finally{saving=false;lock();}}
+async function clear(){if(!teacher||loading||saving||loadedScope!==selectedScope())return;
+ if(!confirm('Clear overrides for this scope?'))return;
+ try{saving=true;lock();await commit(loadedScope,null,true);await load();message('Overrides cleared.');}
+ catch(e){message(errorMessage(e),true)}finally{saving=false;lock();}}
+async function signIn(){try{teacher=await googleTeacher();if(teacher?.uid!==TEACHER_UID){await teacherSignOut();teacher=null;throw Error('Use the authorized teacher account.');}db=getFirestore(getApp());ready=true;syncAuth();await load()}catch(e){message(errorMessage(e),true)}}
 function syncAuth(){el('google').classList.toggle('hidden',!!teacher);el('signout').classList.toggle('hidden',!teacher)}
-async function boot(){initInputs();
- try{const {manifest}=await loadEffectiveStory();chapters=manifest.chapters||[];}
- catch(e){message('Could not load published chapters: '+errorMessage(e),true);chapters=[];}
- for(const name of ['mode','scope','chapter','stage'])el(name).addEventListener('change',()=>{
-  if(name==='mode'||name==='chapter')refreshChoices();void load();
- });
+async function boot(){initInputs();loading=true;lock();
  const direct=new URLSearchParams(location.search);
- if(direct.get('mode')==='story'){
-  el('mode').value='story';el('scope').value='stage';refreshChoices();
-  const target=String(direct.get('stage')||'');
-  const owner=chapters.find(ch=>ch.stages.some(st=>String(st.id)===target));
-  if(owner){el('chapter').value=String(owner.id);refreshChoices();el('stage').value=target;}
- }
- el('google').onclick=signIn;el('signout').onclick=async()=>{await teacherSignOut();teacher=null;syncAuth();await load()};
- el('save').onclick=save;el('reset').onclick=clear;
- try{teacher=await currentTeacher();db=getFirestore(getApp());ready=true;}catch(e){message(errorMessage(e),true)}
+ if(direct.get('mode')==='story'){location.replace('story-editor.html'+(direct.get('stage')?'?stage='+encodeURIComponent(direct.get('stage')):''));return;}
+ for(const name of ['mode','scope','stage'])el(name).addEventListener('change',()=>{
+  if(dirty&&!confirm('Discard unsaved settings?')){restoreSelection();return;}
+  void load();
+ });
+ document.addEventListener('input',e=>{if(e.target.matches('[data-balance],[data-mechanic]'))dirty=true;});
+ window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
+ el('google').onclick=signIn;el('signout').onclick=async()=>{if(dirty&&!confirm('Discard unsaved settings?'))return;await teacherSignOut();teacher=null;syncAuth();await load()};
+ el('save').onclick=save;el('reset').onclick=clear;el('reload-settings').onclick=()=>{if(!dirty||confirm('Discard unsaved settings?'))void load();};
+ try{teacher=await currentTeacher();if(teacher&&teacher.uid!==TEACHER_UID){teacher=null;throw Error('Use the authorized teacher account.');}db=getFirestore(getApp());ready=true;}catch(e){message(errorMessage(e),true)}
  syncAuth();await load();
 }
 void boot();
