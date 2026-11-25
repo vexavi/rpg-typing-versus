@@ -88,7 +88,7 @@ let teacherAssignedGrade=null;
 let readyPromise=null;
 // Keep the app shell available when the browser has previously visited this site.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./offline-sw.js?v=133',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
+  navigator.serviceWorker.register('./offline-sw.js?v=134',{scope:'./'}).catch(e=>console.info('Offline shell unavailable:',e));
 }
 function installOfflineBridge(){
  window.RPG_V66_DISCONNECTED=true;

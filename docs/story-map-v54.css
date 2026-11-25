@@ -156,3 +156,144 @@ body.adventure-client #storyRoot .cq-banner-result button{margin-top:15px;backgr
 body.adventure-client #storyRoot:has(.cq-banner-result){background:radial-gradient(ellipse at 50% 30%,#3b4654,#101419 75%)}
 @media(max-width:700px){#storyRoot .cq-banner .cq-banner-art{max-height:180px}}
 @media(max-height:480px) and (min-width:701px){#storyRoot .cq-banner .cq-banner-art{max-height:calc(100% - 36px)}}
+
+/* v134 — Conquest uses the Adventure student's charcoal / paper / signal theme.
+   Faction colors remain confined to the banner artwork and its small accent. */
+body.adventure-client #storyRoot:has(.cq-hall),
+body.adventure-client #storyRoot:has(.cq-banner-result){
+  background:#222426;color:var(--ui-ink,#202226);overflow-y:auto;
+  font-family:system-ui,"Segoe UI","Noto Sans JP",sans-serif;
+}
+body.adventure-client #storyRoot .cq-hall{
+  background:#222426;color:#f3f3f0;
+}
+body.adventure-client #storyRoot .cq-hall .story-world-top{
+  background:linear-gradient(108deg,#454749,#e8e8e7 35%,#d2d3d1);
+  border:1px solid #9b9d9e;border-bottom:3px solid var(--signal,#f0f500);
+  color:#202226;gap:14px;
+}
+body.adventure-client #storyRoot .cq-hall button.story-map-back{
+  color:#fff;border-right:1px solid #929597;background:#37393b;
+  min-height:40px;flex:none;
+}
+body.adventure-client #storyRoot .cq-hall button.story-map-back:hover:not(:disabled){
+  background:#343638;color:#fff;
+}
+body.adventure-client #storyRoot .cq-hall .story-map-title{
+  font:900 clamp(17px,2vw,23px) ui-monospace,Consolas,monospace;
+  letter-spacing:-.03em;color:#202226;
+  background:#f3f3f0;padding:4px 9px;
+}
+body.adventure-client #storyRoot .cq-hall .cq-progress{color:#343638;font:800 12px ui-monospace,Consolas,monospace}
+body.adventure-client #storyRoot .cq-hall .cq-progress strong{color:#202226;font-size:18px}
+body.adventure-client #storyRoot .cq-hall .cq-main{grid-template-columns:minmax(0,1fr) minmax(260px,30%);gap:12px;padding:12px}
+body.adventure-client #storyRoot .cq-hall .cq-banner-panel{
+  background:linear-gradient(135deg,#303336,#24262a 64%,#1c2023);
+  border:1px solid #686c6f;box-shadow:none;
+}
+body.adventure-client #storyRoot .cq-hall .cq-hall-heading{
+  font:900 clamp(14px,1.8vw,21px) ui-monospace,Consolas,monospace;
+  letter-spacing:.02em;color:#f3f3f0;padding:13px 14px;
+  border-bottom:1px solid #55595b;
+}
+body.adventure-client #storyRoot .cq-hall .cq-banner-grid{gap:8px}
+body.adventure-client #storyRoot .cq-hall button.cq-banner{
+  border:1px solid #565a5d;border-bottom:4px solid #565a5d;
+  background:#252729;color:#f3f3f0;gap:7px;padding:10px 5px;
+  justify-content:center;box-shadow:none;
+}
+body.adventure-client #storyRoot .cq-hall button.cq-banner:hover:not(:disabled){background:#343638;border-color:#b9bcba}
+body.adventure-client #storyRoot .cq-hall button.cq-banner.selected{
+  border-color:var(--signal,#f0f500);background:#36393b;
+}
+body.adventure-client #storyRoot .cq-hall button.cq-banner:focus-visible{outline:2px solid var(--signal,#f0f500);outline-offset:2px}
+body.adventure-client #storyRoot .cq-hall button.cq-banner.selected .cq-banner-art{filter:none}
+body.adventure-client #storyRoot .cq-hall button.cq-banner:is(.locked,.disabled,.unpublished) .cq-banner-art{opacity:.48;filter:saturate(.5)}
+body.adventure-client #storyRoot .cq-hall button.cq-banner.unpublished .cq-banner-art{filter:grayscale(1)}
+body.adventure-client #storyRoot .cq-hall .cq-banner-name{font:900 clamp(11px,1.3vw,18px)/1.15 ui-monospace,Consolas,monospace;letter-spacing:-.02em}
+body.adventure-client #storyRoot .cq-hall .cq-banner-state{color:#b4b7b7;letter-spacing:.03em}
+body.adventure-client #storyRoot .cq-hall .cq-banner.available .cq-banner-state{color:var(--signal,#f0f500)}
+body.adventure-client #storyRoot .cq-hall .cq-banner.captured .cq-banner-state{color:#e9c675}
+body.adventure-client #storyRoot .cq-hall .cq-banner-row>button{
+  background:#37393b;color:#f3f3f0;border:1px solid #898d90;
+  font:900 28px/1 ui-monospace,Consolas,monospace;min-height:44px;padding:5px 0;
+}
+body.adventure-client #storyRoot .cq-hall .cq-banner-row>button:hover:not(:disabled){background:#54585b;color:#fff}
+body.adventure-client #storyRoot .cq-hall .cq-map-footer{background:#f3f3f0;border-top:1px solid #bcbfbe;padding:8px 10px}
+body.adventure-client #storyRoot .cq-hall .cq-page,
+body.adventure-client #storyRoot .cq-hall .cq-jump{color:#343638;font-family:ui-monospace,Consolas,monospace}
+body.adventure-client #storyRoot .cq-hall .cq-jump select{background:#fff;color:#252728;border:1px solid #b9bcba;min-height:36px;min-width:0;font-family:inherit}
+body.adventure-client #storyRoot .cq-hall .cq-side{
+  background:var(--paper,#f3f3f0);color:var(--ui-ink,#202226);border:1px solid #bcbfbe;
+  border-top:6px solid var(--signal,#f0f500);padding:14px;gap:12px;box-shadow:none;
+}
+body.adventure-client #storyRoot .cq-hall .cq-side-head{background:#fff;border:1px solid #bcbfbe;border-left:5px solid var(--territory,#bcbfbe);padding:12px}
+body.adventure-client #storyRoot .cq-hall .cq-side-status{color:#55595b;font-weight:850;letter-spacing:.04em}
+body.adventure-client #storyRoot .cq-hall .cq-side h2{color:#202226;font:900 clamp(19px,2.2vw,29px)/1.12 ui-monospace,Consolas,monospace;letter-spacing:-.035em}
+body.adventure-client #storyRoot .cq-hall .cq-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+body.adventure-client #storyRoot .cq-hall .cq-summary span{background:#e5e6e3;border:1px solid #c9cbc8;color:#4d5052;flex-direction:column;text-align:center;gap:2px;padding:7px 2px;font:800 10px/1.15 ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+body.adventure-client #storyRoot .cq-hall .cq-summary b{color:#252728;font-size:20px}
+body.adventure-client #storyRoot .cq-hall .cq-encounters{scrollbar-color:#929698 #e5e6e3}
+body.adventure-client #storyRoot .cq-hall .cq-encounters h3{color:#55595b;font:900 11px ui-monospace,Consolas,monospace;letter-spacing:.04em;border-bottom:1px solid #c9cbc8;padding-bottom:7px}
+body.adventure-client #storyRoot .cq-hall .conquest-encounter{background:#fff;color:#252728;border:1px solid #c4c7c6;border-left:4px solid #b6b8b8;padding:8px;gap:6px}
+body.adventure-client #storyRoot .cq-hall .conquest-encounter b{color:#676b6e}
+body.adventure-client #storyRoot .cq-hall .conquest-encounter strong{color:#343638}
+body.adventure-client #storyRoot .cq-hall .conquest-encounter:has(small){border-left-color:#777b7e;background:#e7e8e4}
+body.adventure-client #storyRoot .cq-hall .conquest-encounter small{color:#55595b}
+body.adventure-client #storyRoot .cq-hall .cq-empty{color:#55595b}
+body.adventure-client #storyRoot .cq-hall .cq-actions button.story-start,
+body.adventure-client #storyRoot .cq-banner-result button{
+  background:var(--signal,#f0f500);color:#202226;border:1px solid #292b2d;
+  border-radius:0;box-shadow:none;font:900 18px ui-monospace,Consolas,monospace;letter-spacing:0;
+}
+body.adventure-client #storyRoot .cq-hall .cq-actions button.story-start:hover:not(:disabled),
+body.adventure-client #storyRoot .cq-banner-result button:hover:not(:disabled){background:#e0e500;color:#202226}
+body.adventure-client #storyRoot .cq-hall .cq-actions button.story-start:disabled{background:#d9dbd8;color:#666a6c;border-color:#bcbfbe;opacity:1;font-size:14px}
+/* Encounter rewards and territory capture match the existing paper overlay. */
+body.adventure-client #storyRoot .story-screen:has(.cq-banner-result){display:grid;place-items:center;height:auto;min-height:100%;padding:12px}
+body.adventure-client #storyRoot .cq-banner-result{
+  position:relative;inset:auto;transform:none;min-width:0;max-height:none;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;
+  background:var(--paper,#f3f3f0);color:var(--ui-ink,#202226);
+  border:1px solid #bcbfbe;border-top:6px solid var(--signal,#f0f500);
+  padding:0;width:min(100%,880px);overflow:hidden;box-shadow:0 18px 65px #0008;
+}
+body.adventure-client #storyRoot .cq-result-banner{background:#292c2e;padding:16px;align-self:stretch;min-height:0}
+body.adventure-client #storyRoot .cq-result-banner .cq-banner-art{width:min(100%,300px);max-height: min(65dvh,420px)}
+body.adventure-client #storyRoot .cq-gold-reveal{align-self:stretch;display:grid}
+body.adventure-client #storyRoot .cq-gold-reveal .cq-result-banner{background:transparent}
+body.adventure-client #storyRoot .cq-result-info{padding:clamp(15px,3vw,28px)}
+body.adventure-client #storyRoot .cq-banner-result .story-result-label{color:#55595b;font:900 12px ui-monospace,Consolas,monospace;letter-spacing:.04em}
+body.adventure-client #storyRoot .cq-result-info h2{color:#202226;font:900 clamp(20px,2.8vw,30px)/1.1 ui-monospace,Consolas,monospace;letter-spacing:-.03em}
+body.adventure-client #storyRoot .cq-result-count{color:#202226;font:900 clamp(32px,5vw,58px)/1 ui-monospace,Consolas,monospace;letter-spacing:-.04em}
+body.adventure-client #storyRoot .cq-result-meter{background:#d1d3d1;border:1px solid #a8aba9;height:9px}
+body.adventure-client #storyRoot .cq-result-meter i{background:var(--signal,#f0f500)}
+body.adventure-client #storyRoot .cq-reward-box{background:#fff;border:1px solid #bcbfbe;border-left:4px solid #b6b8b8;margin:12px 0;padding:10px 12px}
+body.adventure-client #storyRoot .cq-reward-box h2{font-size:18px;margin:5px 0;color:#202226}
+body.adventure-client #storyRoot .cq-banner-result .conquest-rarity{color:#946700;font-size:18px}
+body.adventure-client #storyRoot .cq-banner-result .conquest-reward-stat{color:#252728;font:900 clamp(19px,2.5vw,28px)/1.2 ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+body.adventure-client #storyRoot .cq-banner-result p{color:#55595b;font-size:13px;margin:10px 0;overflow-wrap:anywhere}
+@media(max-width:700px){
+  body.adventure-client #storyRoot .cq-hall .story-world-top{gap:6px;padding:0 8px;background:linear-gradient(108deg,#454749 0 45px,#e8e8e7 75px,#d2d3d1)}
+  body.adventure-client #storyRoot .cq-hall .story-map-title{font-size:15px;padding:4px}
+  body.adventure-client #storyRoot .cq-hall .cq-progress{font-size:9px}
+  body.adventure-client #storyRoot .cq-hall .cq-progress strong{font-size:14px;margin-left:4px}
+  body.adventure-client #storyRoot .cq-hall .cq-main{grid-template-columns:minmax(0,1fr);padding:8px;gap:8px}
+  body.adventure-client #storyRoot .cq-hall .cq-side{padding:10px;gap:8px}
+  body.adventure-client #storyRoot .cq-hall .cq-banner-name{font-size:13px}
+  body.adventure-client #storyRoot .cq-hall .cq-encounters{max-height:240px}
+  body.adventure-client #storyRoot:has(.cq-banner-result){overflow-y:auto}
+  body.adventure-client #storyRoot .cq-banner-result{grid-template-columns:minmax(0,1fr)}
+  body.adventure-client #storyRoot .cq-result-banner{padding:8px}
+  body.adventure-client #storyRoot .cq-result-banner .cq-banner-art{max-height:30dvh}
+  body.adventure-client #storyRoot .cq-result-info{grid-column:1;grid-row:2;padding:15px}
+}
+@media(min-width:701px) and (max-height:550px){
+  body.adventure-client #storyRoot .cq-hall .cq-main{padding:6px;gap:6px}
+  body.adventure-client #storyRoot .cq-hall .cq-side{padding:8px;gap:6px}
+  body.adventure-client #storyRoot .cq-hall .cq-side-head{padding:6px}
+  body.adventure-client #storyRoot .cq-hall .cq-hall-heading{padding:6px}
+  body.adventure-client #storyRoot .cq-hall .cq-summary span{padding:3px 2px}
+  body.adventure-client #storyRoot .cq-hall .cq-summary b{font-size:16px}
+  body.adventure-client #storyRoot .cq-hall .cq-actions button.story-start{min-height:42px}
+}
