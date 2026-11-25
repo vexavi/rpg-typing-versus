@@ -3864,6 +3864,12 @@ async function debugJumpTo(mode, idx){
   let selectedOperatorId=null;
   let activeOperatorId='mc';
   let operatorPassive=null;
+  let operatorPendingLupa=false,operatorPendingHound=false,operatorPendingCrossbow=null;
+  function operatorEventRestricted(){
+    return !!(window.RPG_CH1_SPECIAL?.isFullyClosed()||window.RPG_VALCREST?.busy?.()||window.RPG_VESPER?.executing?.());
+  }
+  function resetOperatorPending(){operatorPendingLupa=false;operatorPendingHound=false;operatorPendingCrossbow=null;}
+
   let lastFletcherPhase='off';
   const nitrateShieldEl=document.getElementById('nitrateShield');
   const nitrateShieldSegments=Array.from(nitrateShieldEl?.querySelectorAll('.nitrate-shield-segment')||[]);
@@ -3873,12 +3879,13 @@ async function debugJumpTo(mode, idx){
   // Its activation clock is in operator-passives and is pause-aware.
   let chainHexEntry=null,chainHexStatusEl=null,chainHexStatusText='';
   function hexWord(word, summoned=false){
-    if(!chainHexEntry||!word||word.chainHexed||word.foxfireHidden||word.ex2Hacked||word.ex3ExpiredGhost||word.s5Permafrost)return false;
+    if(!chainHexEntry||!word||word.valcrestKind==='duel'||word.vesperExecution||word.chainHexed||word.foxfireHidden||word.ex2Hacked||word.ex3ExpiredGhost||word.s5Permafrost)return false;
     if(word.state!=='falling'&&word.state!=='landed')return false;
     word.chainHexOrigin={prompt:word.prompt,answer:word.answer,answerNorm:word.answerNorm,
       shownPrompt:word.promptEl?.textContent??word.prompt,
       shownAnswer:word.answerEl?.textContent??word.answer,
       shownTag:word.tagEl?.textContent??''};
+    window.RPG_CH1_SPECIAL?.clearRepression?.(word);
     word.chainHexed=true;word.chainHexSummoned=!!summoned;
     word.prompt=chainHexEntry.prompt;word.answer=chainHexEntry.answer;
     word.answerNorm=normalizeAnswer(word.answer);
@@ -3933,7 +3940,7 @@ async function debugJumpTo(mode, idx){
     const currentlyTypeable=wordsOnField.filter(w=>
       (w.state==='falling'||w.state==='landed')&&!w.foxfireHidden&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost);
     for(const word of currentlyTypeable)hexWord(word);
-    if(currentlyTypeable.length<=effect.maxExisting){
+    if(currentlyTypeable.length<=effect.maxExisting&&!operatorEventRestricted()){
       // Four extra words are deliberately NOT normal timed spawns. They
       // have no stage-mechanic spawn hooks and are removed when the hex ends.
       for(let i=0;i<effect.extraWords;i++){
@@ -4023,6 +4030,7 @@ async function debugJumpTo(mode, idx){
     clearChainCleaveHex();
     cancelFoxfireRewind();
     operatorPassive?.reset();
+    resetOperatorPending();
     lastFletcherPhase='off';
     fletcherStatusEl?.remove();fletcherStatusEl=null;fletcherStatusLastText='';
     for(const word of wordsOnField){
@@ -4036,6 +4044,7 @@ async function debugJumpTo(mode, idx){
   // The squad knockout is not a stage reset: the field survives. Retire
   // every operator-owned word flag and visual that could outlive its rules.
   function clearOutgoingSquadEffects(){
+    resetOperatorPending();
     operatorPassive=null;
     // Foxfire's hidden queue would otherwise remain untypeable forever: the
     // old Tavi controller (the only thing that releases it) is gone.
@@ -4172,8 +4181,10 @@ async function debugJumpTo(mode, idx){
     }
   }
   function operatorPrepareLupaTargets(){
-    const chosen=landedWords().filter(w=>!window.RPG_VESPER?.active()||(!w.vesperKind&&!w.vesperExecution&&!w.foxfireHidden)).sort((a,b)=>b.y-a.y).slice(0,3);
-    const need=Math.max(0,3-chosen.length);
+    const chosen=landedWords().filter(w=>!w.vesperKind&&!w.vesperExecution&&!w.foxfireHidden&&!w.valcrestArmor&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&!w.el?.classList?.contains('rift-repressed')&&w.y>=0).sort((a,b)=>b.y-a.y).slice(0,3);
+    // Reserve a free row and space for all already-falling words.
+    const occupied=wordsOnField.reduce((n,w)=>n+(!w.foxfireHidden&&!w.ignoreCollision?wordRows(w):0),0);
+    const need=Math.min(Math.max(0,3-chosen.length),Math.max(0,laneCapacity()-occupied-1));
     if(!need)return chosen;
     const exclude=new Set(wordsOnField.map(w=>normalizeAnswer(w.answer)));
     const spawned=[];
@@ -4191,9 +4202,12 @@ async function debugJumpTo(mode, idx){
   }
   function operatorStartLupa(){
     if(window.RPG_VESPER?.deferLupa())return null;
+    if(operatorEventRestricted()){operatorPendingLupa=true;return null;}
+    operatorPendingLupa=false;
     window.RPG_VESPER?.takeLupa();
     if(operatorPassive?.debug?.().lupaActive)return null;
     const targets=operatorPrepareLupaTargets();
+    if(!targets.length){operatorPendingLupa=true;return null;}
     const effect=operatorPassive?.startLupa?.(targets.map(w=>w.id),stageElapsedSec());
     if(effect)applyOperatorFieldEffect(effect);
     return effect;
@@ -4237,10 +4251,12 @@ async function debugJumpTo(mode, idx){
       nitrateReleaseVisual();
       updateUI();
     }else if(effect.type==='crossbow-showoff'){
+      operatorPendingCrossbow=null;
       if(effect.forceLongest){
         const entry=operatorLongestStageEntry();
         const spawned=entry?spawnOneWord({prompt:entry.prompt,answer:entry.answer,forceOperatorSpawn:true}):null;
         if(spawned)operatorPassive?.markCrossbowWord(spawned);
+        else if(entry&&operatorEventRestricted())operatorPendingCrossbow=entry;
       }
       pushMsg('SHOW-OFF · BULLSEYE MARKED',true);
     }else if(effect.type==='charge'){
@@ -4390,6 +4406,8 @@ async function debugJumpTo(mode, idx){
     }else if(effect.type==='hound-force-spawn'){
       // Forced chain targets bypass ordinary spawn pacing, not stage/word rules.
       if(gameState==='playing'){
+        if(operatorEventRestricted()){operatorPendingHound=true;return;}
+        operatorPendingHound=false;
         spawnOneWord({forceOperatorSpawn:true});
         const newMark=operatorPassive?.updateField(wordsOnField,stageElapsedSec());
         if(newMark?.type==='hound-mark')applyOperatorFieldEffect(newMark);
@@ -4743,6 +4761,7 @@ function updateUI(){
     setSleepyBgmGain(1);
     clearChainCleaveHex();
     cancelFoxfireRewind();
+    resetOperatorPending();
     window.RPG_VALCREST?.reset();
     window.RPG_VESPER?.reset();
     const preservePermafrost = !!opts.preservePermafrost;
@@ -6066,6 +6085,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
 
   function spawnOneWord(opts = {}){
     if(gameState !== "playing") return null;
+    if(opts.forceOperatorSpawn&&operatorEventRestricted())return null;
     if(!opts.forceOperatorSpawn && operatorSpawnPaused() && (opts.state||'falling')==='falling')return null;
 
     const state = opts.state || "falling";
@@ -6250,7 +6270,7 @@ if(state === "landed"){
     const nitrateSpawnMark=operatorPassive?.onWordSpawn?.(obj,playerHp);
     if(nitrateSpawnMark?.type==='nitrate-mark')applyOperatorFieldEffect(nitrateSpawnMark);
     // Hex new timed spawns immediately, without modifying the spawn schedule.
-    if(!operatorHexSummoned&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
+    if(!operatorHexSummoned&&opts.valcrestEvent!=='duel'&&operatorPassive?.isChainCleaveActive(stageElapsedSec()))hexWord(obj);
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
     // Panic consumes a normal spawn; never generate extra words or interfere with operator marks.
     if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&currentMode==='story'&&!obj.challengeComet&&!obj.ex1Highlighted)window.RPG_CH1_SPECIAL?.markSpawn(obj,stageElapsedSec(),wordsOnField);
@@ -6464,7 +6484,7 @@ if(state === "landed"){
 
       if(window.RPG_VESPER?.locked(w))continue;
       let rank = w.valcrestKind==='duel'?1:0;
-      if(w.vesperExecution)rank=5;else if(window.RPG_VESPER?.active()&&w.el?.classList?.contains('operator-lupa-weakpoint'))rank=4;else if(w.vesperKind)rank=3;
+      if(w.vesperExecution||w.valcrestKind==='duel')rank=6;else if(w.vesperKind==='death_mark'||w.chapterPanic)rank=5;else if(w.el?.classList?.contains('operator-lupa-weakpoint')||w.el?.classList?.contains('operator-hound-prey'))rank=4;else if(w.vesperKind)rank=3;
       if(rank > bestRank || (rank === bestRank && (!best || w.y > best.y))){
         best = w;
         bestRank = rank;
@@ -7854,6 +7874,7 @@ if(gameState === "paused"){
       ex4HandlePhaseTriggers(elapsed);
       ex2HandlePhaseTriggers(elapsed);
       updateEx2HackMechanic();
+      operatorPassive?.protectDeadlines?.(dt,{blackout:chapterBlackout,blackoutSeconds:window.RPG_CH1_SPECIAL?.blackoutSeconds?.()??(chapterBlackout?dt:0)});
       operatorPassive?.tick(elapsed);
       syncChainCleaveHex(elapsed);
       operatorPassive?.syncAdrenaline?.(wordsOnField,playerHp);
@@ -7873,7 +7894,7 @@ if(gameState === "paused"){
       const vesperEvent=window.RPG_VESPER?.frame(elapsed,{words:wordsOnField,field:wordLane,lupaActive:!!vesperDebug?.lupaActive,lupaTargets:vesperDebug?.lupaTargets||[],paused:elapsed<storySquadGraceUntil||!!operatorPassive?.isFieldFrozen(elapsed),grace:elapsed<storySquadGraceUntil,damage:damagePlayer,notify:text=>pushMsg(text,true)})??false;
       if(gameState!=='playing'){scheduleTick(true);return;}
       if(window.RPG_VESPER?.takeLupa()&&operatorPassive?.rule?.id==='lupa')operatorStartLupa();
-      const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec,paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed),spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
+      const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec,paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed),lupaActive:!!operatorPassive?.debug?.().lupaActive,spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
       if(!overflowSpawnPaused && !operatorPause && !valcrestEvent && !vesperEvent){
         spawnAccMs += spawnDt * 1000;
       }else{
@@ -7915,6 +7936,19 @@ if(gameState === "paused"){
           }
         }
 
+      // Resolve deferred operator charges once the restricted event is over.
+      if(!operatorEventRestricted()){
+        if(operatorPendingLupa&&operatorPassive?.rule?.id==='lupa')operatorStartLupa();
+        if(operatorPendingHound&&operatorPassive?.rule?.id==='hound'){
+          if(operatorPassive.debug().houndPhase==='chain'&&!operatorPassive.debug().houndPreyId)applyOperatorFieldEffect({type:'hound-force-spawn'});
+          else operatorPendingHound=false;
+        }
+        if(operatorPendingCrossbow&&operatorPassive?.rule?.id==='crossbow'){
+          const entry=operatorPendingCrossbow;operatorPendingCrossbow=null;
+          const spawned=spawnOneWord({prompt:entry.prompt,answer:entry.answer,forceOperatorSpawn:true});
+          if(spawned)operatorPassive.markCrossbowWord(spawned);
+        }
+      }
       // Operator effects advance after new spawns. Hidden Foxfire words cannot
       // be typed/moved until their turn, and Hound can force a chain target.
       const frameLaneHeight=laneHeight();

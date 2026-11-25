@@ -1180,3 +1180,8 @@ body.story-squad-layout .storySquadHero img.storySquadArtWide{
 .conquest-hit{font-size:12px;font-weight:900;text-align:center;color:inherit}.conquest-hit:empty{display:none}.conquest-hit.critical{color:#e4a329}
 
 .conquest-hit[hidden]{display:none!important}
+
+/* v142: focus never hides an enemy hazard or its readable translation. */
+body.adventure-client.operator-lupa-focus #wordLane .word:is(.chapter-panic-word,.valcrest-fortification,.valcrest-siege,.valcrest-reinforcements,.valcrest-encirclement,.valcrest-duel,.vesper-poison,.vesper-blood_pact,.vesper-infiltration,.vesper-death_mark,.vesper-execution-target,.challengeComet) {
+  opacity:1!important; filter:none!important;
+}

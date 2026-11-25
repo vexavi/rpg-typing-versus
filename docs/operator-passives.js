@@ -48,7 +48,7 @@
   const ALLOWED_MODES = new Set(['normal','extra','practice','story','challenge','shared']);
   const validTime=t=>Number.isFinite(t)&&t>=0?t:0;
   const fallingWord=w=>w&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
-  const rewindableWord=w=>w&&!w.vesperExecution&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
+  const rewindableWord=w=>w&&!w.vesperExecution&&w.valcrestKind!=='duel'&&(w.state==='falling'||w.state==='landed')&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
   const lowestWord=words=>(Array.isArray(words)?words:[]).filter(fallingWord).reduce((best,w)=>!best||w.y>best.y?w:best,null);
 
   function create(characterId,mode,random=Math.random,preciseHp=false){
@@ -188,8 +188,9 @@
     }
     function longestCrossbowWord(words){
       const available=(Array.isArray(words)?words:[]).filter(crossbowTypeable);
+      const readable=available.filter(w=>w.y>=0&&!w.el?.classList?.contains('rift-repressed'));
       // Length uses A-Z letters, matching existing game vocabulary scoring.
-      return available.reduce((best,w)=>{
+      return (readable.length?readable:available).reduce((best,w)=>{
         const len=String(w.answer||'').replace(/[^a-z]/gi,'').length;
         if(!best||len>best.len||(len===best.len&&w.y>best.word.y))return {word:w,len};
         return best;
@@ -308,6 +309,13 @@
       shieldUpperUsed=false;shieldLowerUsed=false;shieldPending=null;releaseShieldFrozen();
       releaseCrossbowTarget();crossbowCombo=0;adrenalineActive=false;adrenalineTriggered=false;adrenalineLastStandUntil=0;
       adrenalineMomentumStreak=0;adrenalineMomentumUnlocked=false;
+    }
+    // Extend only interactive deadlines; the ordinary passive clock still advances.
+    function protectDeadlines(dt,{blackout=false,blackoutSeconds=blackout?dt:0}={}){
+      const delta=Math.max(0,Number(dt)||0);
+      const closed=Math.min(delta,Math.max(0,Number(blackoutSeconds)||0));
+      if(lupaActive)lupaDeadline+=closed;
+      if(houndMarked){const hidden=houndMarked.foxfireHidden||houndMarked.el?.classList?.contains('rift-repressed')||(houndMarked.state==='falling'&&houndMarked.y<0);houndDeadline+=hidden?delta:closed;}
     }
     function tick(time){
       const t=validTime(time);
@@ -823,7 +831,7 @@
     function isInvulnerable(time){return (rule?.id==='cassian'&&validTime(time)<cassianGuardUntil)||getAdrenalinePhase(time)==='last-stand';}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,onRevive,updateField,
-      startLupa,markCrossbowWord,syncAdrenaline,onWordSpawn,nitrateAbsorbDamage,getNitrateShield,
+      startLupa,markCrossbowWord,syncAdrenaline,protectDeadlines,onWordSpawn,nitrateAbsorbDamage,getNitrateShield,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
       isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,debug});
   }

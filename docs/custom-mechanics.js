@@ -148,7 +148,7 @@ window.RPG_MECHANICS?.register({
   const s=settings.sleepy;return s.minIntervalSec+Math.random()*(s.maxIntervalSec-s.minIntervalSec);
  }
  // Effects are local to the battle clock; no new timers, network calls or assets.
- let disorientStart=0,disorientLastElapsed=0,disorientPhase='normal',disorientLane=null;
+ let lastBlackoutSeconds=0,disorientStart=0,disorientLastElapsed=0,disorientPhase='normal',disorientLane=null;
  const repressed=new Map();
  function showPhase(phase,lane=disorientLane){
   if(disorientLane!==lane){disorientLane?.classList?.remove('rift-freeze','rift-rush');disorientLane=lane;disorientPhase='normal';}
@@ -189,10 +189,10 @@ window.RPG_MECHANICS?.register({
  }
  function markRepression(word,elapsed){
   const r=settings.repression;
-  if(!r.enabled||fullyClosed||disorientPhase==='rush'||word.chapterPanic||word.challengeComet||word.ex1Highlighted||word.ex5StarStruck||word.operatorHexSummoned||repressed.has(word)||repressed.size>=Math.floor(r.maxActive)||Math.random()*100>=r.chancePct)return;
+  if(!r.enabled||fullyClosed||disorientPhase==='rush'||word.chapterPanic||word.challengeComet||word.ex1Highlighted||word.ex5StarStruck||word.operatorHexSummoned||word.chainHexed||repressed.has(word)||repressed.size>=Math.floor(r.maxActive)||Math.random()*100>=r.chancePct)return;
   repressed.set(word,{from:elapsed+r.visibleSec,until:elapsed+r.visibleSec+r.hiddenSec,hidden:false});
  }
- function reset(){showPhase('normal');disorientLane=null;for(const word of repressed.keys())clearRepression(word);active=false;stageId='';blink=null;nextBlink=Infinity;fullyClosed=false;lastPanicAt=-Infinity;eyelidClosure=0;setClosure(0);}
+ function reset(){lastBlackoutSeconds=0;showPhase('normal');disorientLane=null;for(const word of repressed.keys())clearRepression(word);active=false;stageId='';blink=null;nextBlink=Infinity;fullyClosed=false;lastPanicAt=-Infinity;eyelidClosure=0;setClosure(0);}
  function start(mode,id,elapsedAtStart=0){
   reset();if(mode!=='story'||!/^1-[1-9]\d*$/.test(String(id||'')))return;
   active=true;stageId=String(id);config();ensureOverlay();disorientStart=Math.max(0,Number(elapsedAtStart)||0);disorientLastElapsed=disorientStart;
@@ -225,6 +225,7 @@ window.RPG_MECHANICS?.register({
   return changed;
  }
  function frame(elapsed,{words=[],vocabulary=[],normalize=s=>String(s).trim().toLowerCase(),onClosed=null,lane=null,onRelabel=null}={}){
+  lastBlackoutSeconds=0;
   if(!active||!settings.sleepy.enabled){fullyClosed=false;setClosure(0);updateRift(elapsed,lane);disorientLastElapsed=elapsed;return false;}
   if(!blink&&elapsed>=nextBlink)blink={start:elapsed,changed:false};
   if(!blink){fullyClosed=false;setClosure(0);updateRift(elapsed,lane);disorientLastElapsed=elapsed;return false;}
@@ -233,6 +234,7 @@ window.RPG_MECHANICS?.register({
   const closing=s.closingSec,closed=s.closedSec,opening=s.openingSec,total=closing+closed+opening;
   const blackoutStart=blink.start+closing,blackoutEnd=blackoutStart+closed;
   const blackoutSeconds=Math.max(0,Math.min(elapsed,blackoutEnd)-Math.max(disorientLastElapsed,blackoutStart));
+  lastBlackoutSeconds=blackoutSeconds;
   let fraction=0;
   // Delirium must fire exactly once even if a slow frame skips the closed hold.
   if(t>=closing&&!blink.changed){blink.changed=true;if(typeof onClosed==='function')onClosed();mutateWords(words,vocabulary,normalize);if(typeof onRelabel==='function')for(const w of words)onRelabel(w);}
@@ -264,7 +266,7 @@ window.RPG_MECHANICS?.register({
  // Multiplier follows the visual eyelids, including both groggy partial reopenings.
  // At the default 45% dip, full closure retains 55% of the user's chosen BGM volume.
  function bgmGain(){return active&&settings.sleepy.enabled?1-(settings.sleepy.bgmDipPct/100)*eyelidClosure:1;}
- const api=Object.freeze({start,reset,suspend,frame,markSpawn,clearRepression,motionMultiplier,panicDamage,bgmGain,isFullyClosed:()=>fullyClosed,inspect:()=>({active,stageId,fullyClosed,eyelidClosure,nextBlink,blinkStart:blink?.start??null,settings:JSON.parse(JSON.stringify(settings))})});
+ const api=Object.freeze({start,reset,suspend,frame,markSpawn,clearRepression,motionMultiplier,panicDamage,bgmGain,isFullyClosed:()=>fullyClosed,blackoutSeconds:()=>lastBlackoutSeconds,inspect:()=>({active,stageId,fullyClosed,eyelidClosure,nextBlink,blinkStart:blink?.start??null,settings:JSON.parse(JSON.stringify(settings))})});
  window.RPG_CH1_SPECIAL=api;
 })();
 
@@ -300,13 +302,13 @@ window.RPG_MECHANICS?.register({
  function armorHit(w){if(!(w?.valcrestArmor>0))return false;w.valcrestArmor--;if(w.valcrestArmor>0)w.el?.setAttribute?.('data-armor',String(w.valcrestArmor));else{w.el?.classList?.remove('valcrest-fortification');w.el?.removeAttribute?.('data-armor');}return true;}
  function finish(t){if(!event)return;due[event.id]=t+settings[event.id].intervalSec;event=null;recovery=t+3;for(const k of timed)if(enabled(k)&&due[k]<=t)due[k]=t+settings[k].intervalSec;lane?.removeAttribute?.('data-valcrest-event');lane?.removeAttribute?.('data-valcrest-side');}
  function removed(w,t=lastTime){if(event?.id==='duel'&&event.wordId===w?.id)finish(t);}
- function frame(t,{words=[],height=0,paused=false,spawn,notify=()=>{},field=null,fallSpeed=50}={}){
+ function frame(t,{words=[],height=0,paused=false,spawn,notify=()=>{},field=null,fallSpeed=50,lupaActive=false}={}){
   if(!active)return false;lastTime=t;lane=field||lane;
   if(event?.id==='duel'&&event.wordId!=null){if(!words.some(w=>w.id===event.wordId))finish(t);else return true;}
   if(paused){if(event)event.next=Math.max(event.next,t+0.1);return !!event;}
   const stack=words.reduce((n,w)=>n+(w.state==='landed'?30*rows(w):0),0);
   const safe=height-stack>=120;
-  if(!event){if(t<recovery||!safe)return false;const id=timed.find(k=>enabled(k)&&t>=due[k]&&(k!=='duel'||!words.some(w=>w.ex1Highlighted||w.challengeComet))); if(!id)return false;
+  if(!event){if(t<recovery||!safe)return false;const id=timed.find(k=>enabled(k)&&t>=due[k]&&(k!=='duel'||(!lupaActive&&!words.some(w=>w.ex1Highlighted||w.challengeComet)))); if(!id)return false;
    const s=settings[id];event={id,next:t+(id==='duel'?0.75:s.warningSec),remaining:s.count||1,wordId:null};lane?.setAttribute?.('data-valcrest-event',id);if(id==='encirclement')lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');notify(id.toUpperCase());return true;}
   if(t<event.next)return true;
   const {id}=event,s=settings[id];if(!safe){finish(t);return false;}
@@ -325,7 +327,7 @@ window.RPG_MECHANICS?.register({
   event.remaining--;event.retries=0;if(event.remaining<=0){finish(t);return true;}event.next=t+(id==='reinforcements'?s.gapSec:Math.max(0.5,s.entrySec));return true;
  }
  function motion(w,t){if(!active)return 1;if(event?.id==='duel'&&event.wordId!=null&&w.id!==event.wordId)return 0;if(w.valcrestEntryUntil){if(t<w.valcrestEntryUntil)return 0;delete w.valcrestEntryUntil;w.el?.classList?.remove('valcrest-entering');}return 1;}
- window.RPG_VALCREST=Object.freeze({start,reset,markSpawn,armorHit,frame,motion,removed,rows,active:()=>active,inspect:()=>({active,event:event?{...event}:null,recovery,due:{...due}})});
+ window.RPG_VALCREST=Object.freeze({start,reset,markSpawn,armorHit,frame,motion,removed,rows,active:()=>active,busy:()=>!!event,dueling:()=>event?.id==='duel',inspect:()=>({active,event:event?{...event}:null,recovery,due:{...due}})});
 })();
 
 /* Vesper: exclusive word modifiers and one execution event on the battle clock. */
@@ -393,7 +395,7 @@ window.RPG_MECHANICS?.register({
   if(poison){const w=words.find(v=>v.id===poison.id&&v.state==='landed');if(!w){if(words.some(v=>v.id===poison.id))klass(words.find(v=>v.id===poison.id),'vesper-poison-active',false);poison=null;}
    else if(!suspended){const d=Math.min(poison.remaining,Math.max(0,t-Math.max(t-dt,poison.clock)));poison.remaining-=d;poison.acc+=d;const ticks=Math.floor(poison.acc+1e-8);poison.acc-=ticks;hits+=ticks*settings.poison.damage;if(poison.remaining<=1e-8){klass(w,'vesper-poison-active',false);poison=null;}}
   }
-  for(const w of words){if(w.vesperKind!=='death_mark')continue;const d=Math.max(0,t-Math.max(t-dt,w.vesperClock??t));w.vesperClock=t;if(!suspended&&!w.foxfireHidden)w.vesperRemaining-=d;
+  for(const w of words){if(w.vesperKind!=='death_mark')continue;const d=Math.max(0,t-Math.max(t-dt,w.vesperClock??t));w.vesperClock=t;const unreadable=!!w.foxfireHidden||(w.state==='falling'&&w.y<0);if(!suspended&&!unreadable&&!w.vesperUnreadable)w.vesperRemaining-=d;w.vesperUnreadable=unreadable;
    if(w.vesperRemaining<=0){hits+=settings.death_mark.damage;delete w.vesperKind;klass(w,'vesper-death_mark',false);w.el?.removeAttribute?.('data-vesper-time');w.tagEl?.removeAttribute?.('data-vesper-time');w.fallMult=(w.fallMult||1)*100/settings.death_mark.speedPct;}
    else markTime(w,Math.max(0,w.vesperRemaining).toFixed(1));}
   refreshLocks();
