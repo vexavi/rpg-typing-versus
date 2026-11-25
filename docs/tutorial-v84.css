@@ -141,3 +141,5 @@ body.tutorial-client #tutorialModeOverlay .tutorial-lesson-guide p{
    max-height:none; overflow:visible; flex-shrink:0;
  }
 }
+
+.tutorial-client .word .tag.translation{font-family:Arial,"Noto Sans",sans-serif;color:#fff5b5;font-weight:800;font-size:clamp(15px,1.65vw,21px);letter-spacing:.15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px #000}

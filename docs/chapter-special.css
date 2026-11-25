@@ -15,3 +15,20 @@
 .word.rift-repressed{background:linear-gradient(120deg,#181321,#30263c 48%,#181321)!important;border-color:#79608e!important;box-shadow:inset 0 0 12px #120d1a!important}
 .word.rift-repressed .prompt,.word.rift-repressed .answer{visibility:hidden!important}
 .word.rift-repressed .prompt::after{content:'…';visibility:visible;color:#b8a5cd;position:absolute;left:12px;top:50%;transform:translateY(-50%)}
+/* Valcrest: no media, no independent animation timers. */
+body.adventure-client .word.valcrest-fortification{border:2px solid #9ec4ed;box-shadow:inset 0 0 0 2px #41638b;background:#30445b}
+body.adventure-client .word.valcrest-fortification .tag::before{content:'ARMOR';font-size:10px;font-weight:900;color:#c4e0ff}
+body.adventure-client .word.valcrest-siege{height:var(--valcrest-height,60px);background:#354558;border:2px solid #a9c5e0}
+body.adventure-client .word.valcrest-siege .tag::before{content:'SIEGE';font-size:10px;font-weight:900;color:#c4e0ff}
+body.adventure-client .word.valcrest-reinforcements,body.adventure-client .word.valcrest-encirclement{border-color:#86b4e4;background:#30445b}
+body.adventure-client .word.valcrest-duel{z-index:9000!important;border:2px solid #ffe092;background:#5c4824;box-shadow:0 0 8px #e7be55}
+body.adventure-client .word.valcrest-duel .tag::before{content:'DUEL';font-size:10px;font-weight:900;color:#ffe3a4}
+.word.valcrest-entering{animation:valcrest-entry var(--valcrest-entry,.5s) ease-out both}
+@keyframes valcrest-entry{from{translate:var(--valcrest-side,105%) 0;opacity:0}to{translate:0 0;opacity:1}}
+.wordLane[data-valcrest-event]{outline:2px solid #83addb;outline-offset:-2px}
+.wordLane[data-valcrest-event="duel"]{outline-color:#e7c66c}
+@media(prefers-reduced-motion:reduce){.word.valcrest-entering{animation:none}}
+.wordLane[data-valcrest-event]::before{content:attr(data-valcrest-event);position:absolute;z-index:9999;top:0;left:50%;transform:translateX(-50%);padding:2px 8px;background:#21354c;color:#d4e8ff;font:800 11px/1.2 Arial,sans-serif;text-transform:uppercase;pointer-events:none;white-space:nowrap}
+.wordLane[data-valcrest-event="duel"]::before{background:#624b22;color:#fff0b9}
+.wordLane[data-valcrest-event="encirclement"][data-valcrest-side="right"]::before{content:'ENCIRCLEMENT ←';left:auto;right:0;transform:none}
+.wordLane[data-valcrest-event="encirclement"][data-valcrest-side="left"]::before{content:'→ ENCIRCLEMENT';left:0;transform:none}

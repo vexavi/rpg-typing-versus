@@ -70,6 +70,12 @@ export function cleanStory(raw){
     if(name==='repression'&&values.maxActive!==undefined&&!Number.isInteger(values.maxActive))throw Error(`Stage ${id}: repression.maxActive must be a whole number.`);
     if(name==='sleepy'&&(values.minIntervalSec??16)>(values.maxIntervalSec??22))throw Error(`Stage ${id}: Sleepy shortest interval cannot exceed longest interval.`);
    }
+   const valcrestRanges={fortification:{chancePct:[0,100],maxActive:[1,5],hits:[2,3],speedPct:[40,100]},reinforcements:{intervalSec:[5,120],count:[1,5],gapSec:[0.5,3],warningSec:[0.5,4]},siege:{chancePct:[0,100],rows:[2,3],speedPct:[40,100],maxActive:[1,3]},encirclement:{intervalSec:[5,120],count:[1,3],warningSec:[0.5,4],entrySec:[0.2,1.5],heightPct:[0,35]},duel:{intervalSec:[5,120],speedPct:[40,150],damagePct:[100,500],damage:[1,10]}};
+   for(const [name,ranges] of Object.entries(valcrestRanges)){const v=battle.mechanics[name];if(!v)continue;
+    if(chId!=='2'&&v.enabled===true)throw Error(`Stage ${id}: ${name} is exclusive to Valcrest.`);
+    if(v.enabled!==undefined&&typeof v.enabled!=='boolean')throw Error(`Stage ${id}: ${name}.enabled must be boolean.`);
+    for(const [key,[min,max]] of Object.entries(ranges))if(v[key]!==undefined&&(typeof v[key]!=='number'||!Number.isFinite(v[key])||v[key]<min||v[key]>max||(['count','rows','hits','maxActive','damage'].includes(key)&&!Number.isInteger(v[key]))))throw Error(`Stage ${id}: invalid ${name}.${key}.`);
+   }
    if(!Number.isInteger(battle.template)||battle.template<1||battle.template>5||!battle.bossName||battle.bossName.length>40||!Number.isInteger(battle.bossHp)||battle.bossHp<1||battle.bossHp>999)throw Error(`Stage ${id}: invalid battle template, boss name or HP.`);
    function scenes(items,phase){
     if(!Array.isArray(items)||items.length>50)throw Error(`Stage ${id}: too many ${phase} slides (max 50).`);

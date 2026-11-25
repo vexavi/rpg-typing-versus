@@ -897,3 +897,13 @@ body.adventure-client.story-squad-layout .storyEnemyPanel{display:block}
  body.adventure-client.story-squad-layout .uiRow>.storyPlayerPanel{grid-column:2!important;grid-row:1!important}
  body.adventure-client.story-squad-layout .uiRow>.storyEnemyPanel{grid-column:3!important;grid-row:1!important}
 }
+
+/* v140 translation legibility across Adventure, Conquest, Challenge and Tutorial. */
+body.adventure-client .word .right,body.tutorial-client .word .right{flex:1 1 57%;max-width:68%;min-width:0;gap:5px}
+body.adventure-client .word .prompt,body.tutorial-client .word .prompt{flex:1 1 40%;min-width:0}
+body.adventure-client .word .answer,body.tutorial-client .word .tag.translation{font-family:Arial,"Noto Sans",sans-serif;font-size:clamp(15px,1.65vw,21px);font-weight:800;letter-spacing:.15px;color:#fff5b5;text-shadow:0 1px 2px #000;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-ligatures:none;will-change:auto}
+body.adventure-client .word.obscured .answer{color:#b1b1b1;letter-spacing:0}
+body.adventure-client .word.ex2Hacked .answer{color:#b4f5ff}
+body.adventure-client .word.valcrest-fortification .tag,body.adventure-client .word.valcrest-siege .tag,body.adventure-client .word.valcrest-duel .tag{display:inline-block}
+
+body.adventure-client .word .answer.answer-wrap{white-space:normal;overflow-wrap:anywhere;line-height:12px;max-height:26px;text-overflow:clip}

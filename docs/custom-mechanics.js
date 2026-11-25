@@ -224,7 +224,7 @@ window.RPG_MECHANICS?.register({
   }
   return changed;
  }
- function frame(elapsed,{words=[],vocabulary=[],normalize=s=>String(s).trim().toLowerCase(),onClosed=null,lane=null}={}){
+ function frame(elapsed,{words=[],vocabulary=[],normalize=s=>String(s).trim().toLowerCase(),onClosed=null,lane=null,onRelabel=null}={}){
   if(!active||!settings.sleepy.enabled){fullyClosed=false;setClosure(0);updateRift(elapsed,lane);disorientLastElapsed=elapsed;return false;}
   if(!blink&&elapsed>=nextBlink)blink={start:elapsed,changed:false};
   if(!blink){fullyClosed=false;setClosure(0);updateRift(elapsed,lane);disorientLastElapsed=elapsed;return false;}
@@ -235,7 +235,7 @@ window.RPG_MECHANICS?.register({
   const blackoutSeconds=Math.max(0,Math.min(elapsed,blackoutEnd)-Math.max(disorientLastElapsed,blackoutStart));
   let fraction=0;
   // Delirium must fire exactly once even if a slow frame skips the closed hold.
-  if(t>=closing&&!blink.changed){blink.changed=true;if(typeof onClosed==='function')onClosed();mutateWords(words,vocabulary,normalize);}
+  if(t>=closing&&!blink.changed){blink.changed=true;if(typeof onClosed==='function')onClosed();mutateWords(words,vocabulary,normalize);if(typeof onRelabel==='function')for(const w of words)onRelabel(w);}
   if(t<closing){
    const p=t/Math.max(0.001,closing);
    fraction=keyedClosure(p,sleepyClosing);
@@ -266,4 +266,64 @@ window.RPG_MECHANICS?.register({
  function bgmGain(){return active&&settings.sleepy.enabled?1-(settings.sleepy.bgmDipPct/100)*eyelidClosure:1;}
  const api=Object.freeze({start,reset,suspend,frame,markSpawn,clearRepression,motionMultiplier,panicDamage,bgmGain,isFullyClosed:()=>fullyClosed,inspect:()=>({active,stageId,fullyClosed,eyelidClosure,nextBlink,blinkStart:blink?.start??null,settings:JSON.parse(JSON.stringify(settings))})});
  window.RPG_CH1_SPECIAL=api;
+})();
+
+/* Valcrest: one simulation-clock scheduler, no network or independent timers. */
+(function(){
+ 'use strict';
+ const num=(key,label,min,max,step,def)=>({key,label,type:'number',min,max,step,default:def});
+ const enable={key:'enabled',label:'Enabled',type:'boolean',default:false};
+ const definitions=[
+  {id:'fortification',label:'Fortification',description:'Armored words need two correct entries. Only the final entry grants damage and rewards.',fields:[enable,num('chancePct','Chance (%)',0,100,1,20),num('maxActive','Maximum armored words',1,5,1,2),num('hits','Required entries',2,3,1,2),num('speedPct','Falling speed (%)',40,100,5,75)]},
+  {id:'reinforcements',label:'Reinforcements',description:'A warned wave of normal words replaces regular spawning temporarily.',fields:[enable,num('intervalSec','Interval (sec)',5,120,1,20),num('count','Words per wave',1,5,1,3),num('gapSec','Spawn gap (sec)',0.5,3,0.1,0.5),num('warningSec','Warning (sec)',0.5,4,0.5,1.5)]},
+  {id:'siege',label:'Siege',description:'Oversized words occupy extra stack rows; one correct entry clears them.',fields:[enable,num('chancePct','Chance (%)',0,100,1,15),num('rows','Stack rows',2,3,1,2),num('speedPct','Falling speed (%)',40,100,5,80),num('maxActive','Maximum Siege words',1,3,1,1)]},
+  {id:'encirclement',label:'Encirclement',description:'Warned words enter from alternating sides if sufficient space is available.',fields:[enable,num('intervalSec','Interval (sec)',5,120,1,15),num('count','Words per event',1,3,1,2),num('warningSec','Warning (sec)',0.5,4,0.5,1),num('entrySec','Entry duration (sec)',0.2,1.5,0.1,0.5),num('heightPct','Entry depth (%)',0,35,5,25)]},
+  {id:'duel',label:'Duel',description:'One golden word falls through the stack while normal words freeze. Clear it for bonus boss damage.',fields:[enable,num('intervalSec','Interval (sec)',5,120,1,25),num('speedPct','Falling speed (%)',40,150,5,100),num('damagePct','Boss damage (%)',100,500,25,300),num('damage','Miss damage (10 HP units)',1,10,1,1)]}
+ ];
+ for(const d of definitions)window.RPG_MECHANICS?.register({...d,modes:['story'],defaultEnabled:false});
+ let active=false,settings={},due={},event=null,recovery=0,lastTime=0,side=1,lane=null;
+ const timed=['duel','reinforcements','encirclement'];
+ const enabled=id=>settings[id]?.enabled===true;
+ const rows=w=>Math.max(1,Number(w?.valcrestRows)||1);
+ const count=(words,id)=>words.reduce((n,w)=>n+(w.valcrestKind===id&&(id!=='fortification'||w.valcrestArmor>0)?1:0),0);
+ function reset(){active=false;event=null;settings={};due={};recovery=0;lastTime=0;side=1;if(lane){lane.removeAttribute?.('data-valcrest-event');lane.removeAttribute?.('data-valcrest-side');lane=null;}}
+ function start(mode,id,t=0){reset();if(mode!=='story'||!/^2-[1-9]\d*$/.test(String(id)))return;
+  for(const d of definitions){settings[d.id]={};for(const f of d.fields){const v=window.RPG_BALANCE?.mechanic(d.id,f.key,f.default)??f.default;settings[d.id][f.key]=f.type==='boolean'?v===true:(typeof v==='number'&&Number.isFinite(v)?Math.min(f.max,Math.max(f.min,f.step===1?Math.round(v):v)):f.default);}}
+  active=definitions.some(d=>enabled(d.id));lastTime=t;for(const id of timed)due[id]=t+settings[id].intervalSec;
+ }
+ function mark(w,kind){w.valcrestKind=kind;w.el?.classList?.add('valcrest-'+kind);}
+ function markSpawn(w,words){if(!active||!w||w.state!=='falling'||w.valcrestKind||w.operatorHexSummoned||w.challengeComet||w.ex1Highlighted||w.chapterPanic)return;
+  const s=settings.siege,f=settings.fortification;
+  if(enabled('siege')&&count(words,'siege')<s.maxActive&&Math.random()*100<s.chancePct){mark(w,'siege');w.valcrestRows=s.rows;w.el?.style?.setProperty('--valcrest-height',`${30*s.rows}px`);w.fallMult=(w.fallMult||1)*s.speedPct/100;w.y=Math.min(w.y,-30*s.rows);return;}
+  if(enabled('fortification')&&count(words,'fortification')<f.maxActive&&Math.random()*100<f.chancePct){mark(w,'fortification');w.valcrestArmor=f.hits-1;w.fallMult=(w.fallMult||1)*f.speedPct/100;w.el?.setAttribute?.('data-armor',String(w.valcrestArmor));}
+ }
+ function armorHit(w){if(!(w?.valcrestArmor>0))return false;w.valcrestArmor--;if(w.valcrestArmor>0)w.el?.setAttribute?.('data-armor',String(w.valcrestArmor));else{w.el?.classList?.remove('valcrest-fortification');w.el?.removeAttribute?.('data-armor');}return true;}
+ function finish(t){if(!event)return;due[event.id]=t+settings[event.id].intervalSec;event=null;recovery=t+3;for(const k of timed)if(enabled(k)&&due[k]<=t)due[k]=t+settings[k].intervalSec;lane?.removeAttribute?.('data-valcrest-event');lane?.removeAttribute?.('data-valcrest-side');}
+ function removed(w,t=lastTime){if(event?.id==='duel'&&event.wordId===w?.id)finish(t);}
+ function frame(t,{words=[],height=0,paused=false,spawn,notify=()=>{},field=null,fallSpeed=50}={}){
+  if(!active)return false;lastTime=t;lane=field||lane;
+  if(event?.id==='duel'&&event.wordId!=null){if(!words.some(w=>w.id===event.wordId))finish(t);else return true;}
+  if(paused){if(event)event.next=Math.max(event.next,t+0.1);return !!event;}
+  const stack=words.reduce((n,w)=>n+(w.state==='landed'?30*rows(w):0),0);
+  const safe=height-stack>=120;
+  if(!event){if(t<recovery||!safe)return false;const id=timed.find(k=>enabled(k)&&t>=due[k]&&(k!=='duel'||!words.some(w=>w.ex1Highlighted||w.challengeComet))); if(!id)return false;
+   const s=settings[id];event={id,next:t+(id==='duel'?0.75:s.warningSec),remaining:s.count||1,wordId:null};lane?.setAttribute?.('data-valcrest-event',id);if(id==='encirclement')lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');notify(id.toUpperCase());return true;}
+  if(t<event.next)return true;
+  const {id}=event,s=settings[id];if(!safe){finish(t);return false;}
+  let y=-30;
+  if(id==='reinforcements')y=words.reduce((min,w)=>w.state==='falling'&&!w.foxfireHidden?Math.min(min,w.y-30):min,-30);
+  if(id==='encirclement'){
+   y=Math.floor(height*s.heightPct/100);const bottom=height-stack;
+   // The entire entry row and 90px below it must be clear. Postpone instead of dropping onto a word.
+   if(bottom-y<Math.max(120,30+2*fallSpeed)||words.some(w=>w.state==='falling'&&!w.foxfireHidden&&y<w.y+30*rows(w)+4&&y+34>w.y)){event.next=t+0.25;event.retries=(event.retries||0)+1;if(event.retries>=8){finish(t);return false;}return true;}
+  }
+  const w=spawn?.({state:'falling',y,countSpawn:false,skipMechanicHooks:true,valcrestEvent:id});
+  if(!w){event.next=t+0.25;return true;}
+  mark(w,id);
+  if(id==='duel'){w.ignoreCollision=true;w.fallMult=(w.fallMult||1)*s.speedPct/100;w.valcrestDuelDamage=s.damagePct/100;w.valcrestMiss=s.damage;event.wordId=w.id;return true;}
+  if(id==='encirclement'){w.valcrestEntryUntil=t+s.entrySec;w.el?.style?.setProperty('--valcrest-entry',`${s.entrySec}s`);w.el?.style?.setProperty('--valcrest-side',`${side*105}%`);side=-side;lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');w.el?.classList?.add('valcrest-entering');}
+  event.remaining--;event.retries=0;if(event.remaining<=0){finish(t);return true;}event.next=t+(id==='reinforcements'?s.gapSec:Math.max(0.5,s.entrySec));return true;
+ }
+ function motion(w,t){if(!active)return 1;if(event?.id==='duel'&&event.wordId!=null&&w.id!==event.wordId)return 0;if(w.valcrestEntryUntil){if(t<w.valcrestEntryUntil)return 0;delete w.valcrestEntryUntil;w.el?.classList?.remove('valcrest-entering');}return 1;}
+ window.RPG_VALCREST=Object.freeze({start,reset,markSpawn,armorHit,frame,motion,removed,rows,active:()=>active,inspect:()=>({active,event:event?{...event}:null,recovery,due:{...due}})});
 })();

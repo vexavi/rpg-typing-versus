@@ -19,31 +19,14 @@
   async function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
 function fitAnswerToRight(wordEl){
-    try{
-      const el = wordEl && (wordEl.el || wordEl);
-      if(!el) return;
-
-      const ans = el.querySelector(".answer");
-      const right = el.querySelector(".right");
-      if(!ans || !right) return;
-
-      // Reset any previous fitting
-      ans.style.fontSize = "";
-      ans.style.transform = "";
-
-      // Available width inside the right block
-      const maxW = Math.max(60, right.clientWidth - 6);
-
-      // Measure once; avoid repeated reflow loops
-      const sw = ans.scrollWidth;
-
-      if(sw > maxW){
-        const scale = maxW / Math.max(1, sw);
-        const clamped = Math.max(0.72, Math.min(1, scale));
-        ans.style.transformOrigin = "right center";
-        ans.style.transform = `scaleX(${clamped.toFixed(3)})`;
-      }
-    }catch(_){}
+    const el=wordEl&&(wordEl.el||wordEl),ans=el?.querySelector('.answer');
+    if(!ans||!ans.style||!ans.classList)return;
+    // CSS sizes normal answers. Longer phrases get a readable adaptive font,
+    // avoiding horizontal squashing or per-frame layout measurements.
+    ans.style.removeProperty('font-size');ans.style.removeProperty('transform');ans.classList.remove('answer-wrap');
+    if(ans.textContent.length<9)return;
+    const available=ans.clientWidth,needed=ans.scrollWidth;
+    if(available>0&&needed>available){const size=parseFloat(getComputedStyle(ans).fontSize)||18;ans.style.fontSize=`${Math.max(12,Math.floor(size*available/needed))}px`;if(needed*12/size>available)ans.classList.add('answer-wrap');}
   }
 
   // ✅ VOCAB SETS BY CLASS YEAR
@@ -3900,6 +3883,7 @@ async function debugJumpTo(mode, idx){
     word.answerNorm=normalizeAnswer(word.answer);
     if(word.promptEl)word.promptEl.textContent=word.prompt;
     if(word.answerEl)word.answerEl.textContent=word.answer;
+    if(typeof fitAnswerToRight==='function')fitAnswerToRight(word.el);
     if(word.tagEl)word.tagEl.textContent='☾';
     word.el?.classList?.add('operator-chain-hex');
     return true;
@@ -3913,6 +3897,7 @@ async function debugJumpTo(mode, idx){
       word.prompt=original.prompt;word.answer=original.answer;word.answerNorm=original.answerNorm;
       if(word.promptEl)word.promptEl.textContent=original.shownPrompt;
       if(word.answerEl)word.answerEl.textContent=original.shownAnswer;
+    if(typeof fitAnswerToRight==='function')fitAnswerToRight(word.el);
       if(word.tagEl)word.tagEl.textContent=original.shownTag;
       delete word.chainHexed;delete word.chainHexOrigin;delete word.chainHexSummoned;
       word.el?.classList?.remove('operator-chain-hex');
@@ -4334,7 +4319,7 @@ async function debugJumpTo(mode, idx){
       const ids=new Set(effect.wordIds);
       const rewound=[];
       for(const word of wordsOnField){
-        if(!ids.has(word.id))continue;
+        if(!ids.has(word.id)||word.valcrestKind==='duel')continue;
         // The simulation is safely moved to -30 immediately, but an independent
         // CSS `translate` starts at the original on-screen coordinate. All
         // affected words visibly travel BACK up the lane before entering stasis.
@@ -4754,6 +4739,7 @@ function updateUI(){
     setSleepyBgmGain(1);
     clearChainCleaveHex();
     cancelFoxfireRewind();
+    window.RPG_VALCREST?.reset();
     const preservePermafrost = !!opts.preservePermafrost;
 
     if(!preservePermafrost){
@@ -4783,6 +4769,7 @@ function updateUI(){
   }
 
 function laneHeight(){ return wordLane.clientHeight; }
+  function wordRows(w){return Math.max(1,Number(w?.valcrestRows)||1);}
   function laneCapacity(){ return Math.floor(laneHeight() / 30); }
   function landedWords(){
     // Expired Extra Stage 3 ghosts are non-interactive, but they still count as solid landed words.
@@ -4802,8 +4789,10 @@ function laneHeight(){ return wordLane.clientHeight; }
   function restackLanded(){
     const h = laneHeight();
     const landed = landedWords().sort((a,b)=> b.y - a.y);
+    let occupied=0;
     for(let i=0;i<landed.length;i++){
-      const y = h - 30 * (i+1);
+      occupied+=wordRows(landed[i]);
+      const y = h - 30 * occupied;
       landed[i].y = y;
       setWordY(landed[i].el, y);
     }
@@ -5584,6 +5573,7 @@ let ex2PhaseSpawnCount = 0; // counts falling spawns within the current phase
     try{ w.el && w.el.classList.remove("obscured"); }catch(_){}
     if(w.promptEl) w.promptEl.textContent = w.prompt;
     if(w.answerEl) w.answerEl.textContent = w.answer;
+    fitAnswerToRight(w.el);
   }
 
   function ex2HackStartFreeze(){
@@ -6259,6 +6249,9 @@ if(state === "landed"){
     if(state==='falling'&&!opts.skipMechanicHooks && currentMode!=='shared')mechanicEvent('onSpawn',obj,{spawnCount:spawnCountThisStage});
     // Panic consumes a normal spawn; never generate extra words or interfere with operator marks.
     if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&currentMode==='story'&&!obj.challengeComet&&!obj.ex1Highlighted)window.RPG_CH1_SPECIAL?.markSpawn(obj,stageElapsedSec(),wordsOnField);
+    if(state==='falling'&&countSpawn&&!opts.skipMechanicHooks&&!opts.forceOperatorSpawn)window.RPG_VALCREST?.markSpawn(obj,wordsOnField);
+    setWordY(el,obj.y);
+    fitAnswerToRight(el);
     return obj;
   }
 
@@ -6319,6 +6312,7 @@ if(state === "landed"){
     if(idx === -1) return;
 
     window.RPG_CH1_SPECIAL?.clearRepression?.(wordsOnField[idx]);
+    window.RPG_VALCREST?.removed(wordsOnField[idx],stageElapsedSec());
     wordsOnField[idx].el.remove();
     wordsOnField.splice(idx,1);
     restackDirty = true; // defer restack to next frame for performance
@@ -6461,7 +6455,7 @@ if(state === "landed"){
       // answerNorm is cached on spawn/shuffle for speed + reliability
       if((w.answerNorm || normalizeAnswer(w.answer)) !== norm) continue;
 
-      let rank = 0;
+      let rank = w.valcrestKind==='duel'?1:0;
       if(rank > bestRank || (rank === bestRank && (!best || w.y > best.y))){
         best = w;
         bestRank = rank;
@@ -6495,6 +6489,7 @@ if(state === "landed"){
       return false;
     }
 
+    if(window.RPG_VALCREST?.armorHit(best)){pushMsg('ARMOR BROKEN',true);return true;}
     const pts = best.chainHexed ? calcMaximumHexWordScore(best) : calcWordScore(best);
     guildCorrectThisRun++; // Counts real successful submitted words only.
     addScore(pts);
@@ -6535,10 +6530,11 @@ if(state === "landed"){
     }
     // Combine manual and instant secondary damage into ONE boss hit. Otherwise
     // the first hit could finish the stage before the automatic hit is awarded.
-    let dmg = baseHitDamage+bonusDamage;
+    const duelMultiplier=best.valcrestDuelDamage||1;
+    let dmg = baseHitDamage*duelMultiplier+bonusDamage;
     if(currentMode==='story'&&window.RPG_CONQUEST?.run){
       const original=best.chainHexOrigin?.answer||best.answer;
-      const hit=window.RPG_CONQUEST.manualDamage(original,baseHitDamage,bonusDamage,window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0));
+      const hit=window.RPG_CONQUEST.manualDamage(original,baseHitDamage*duelMultiplier,bonusDamage,window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0));
       dmg=hit.amount;
       if(hit.crit){pushMsg('CRITICAL HIT',true);}
       const indicator=document.getElementById('conquestLastHit');
@@ -6988,6 +6984,7 @@ function storyIncomingDamage(key,fallback){
     // using the CURRENT stage clock, not the original stage start time.
     setSleepyBgmGain(1);
     window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
+    window.RPG_VALCREST?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
     restoreBgmState();
     gameState = "playing";
     if(window.RPG_V66_DISCONNECTED||!navigator.onLine)setLocalOnlyRun(true);
@@ -7259,6 +7256,7 @@ function storyIncomingDamage(key,fallback){
     stagePlayStartMs = nowMs();
     setSleepyBgmGain(1);
     window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'');
+    window.RPG_VALCREST?.start(currentMode,storySelectedStage?.id||'');
     // Normal/Extra carry HP. Fletcher can activate Last Stand at 1 HP;
     // Mara queues Emergency Readiness if already below her HP threshold.
     // Both are initialized after the countdown, with a fresh stage clock.
@@ -7834,7 +7832,7 @@ if(gameState === "paused"){
       // Only fresh normal spawns wait until the eyes start opening.
       const chapterBlackout=!!window.RPG_CH1_SPECIAL?.frame(elapsed,{
         words:wordsOnField,lane:wordLane,vocabulary:currentMode==='story'?operatorStageWordEntries():[],
-        normalize:normalizeAnswer,onClosed:()=>{answerInput.value='';}
+        normalize:normalizeAnswer,onClosed:()=>{answerInput.value='';},onRelabel:fitAnswerToRight
       });
       setSleepyBgmGain(window.RPG_CH1_SPECIAL?.bgmGain?.() ?? 1);
       const battleDt=dt; // Regular battle time continues during Sleepy darkness.
@@ -7859,7 +7857,8 @@ if(gameState === "paused"){
       wordLane?.classList?.toggle('operator-sovereign-guard',operatorPassive?.rule?.id==='cassian'&&!!operatorPassive?.isInvulnerable(elapsed));
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
-      if(!overflowSpawnPaused && !operatorPause){
+      const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec,paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed),spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
+      if(!overflowSpawnPaused && !operatorPause && !valcrestEvent){
         spawnAccMs += spawnDt * 1000;
       }else{
         spawnAccMs = 0;
@@ -7892,7 +7891,7 @@ if(gameState === "paused"){
       // Apply after stage mechanics so both phases scale the actual stage pace.
       spawnMs = Math.max(80, Math.round(spawnMs * (operatorPassive?.getSpawnIntervalMultiplier?.(elapsed)||1)));
         let loops = 0;
-        if(!overflowSpawnPaused && !operatorPause && !chapterBlackout){
+        if(!overflowSpawnPaused && !operatorPause && !chapterBlackout && !valcrestEvent){
           while(spawnAccMs >= spawnMs && loops < 6){
             spawnWord();
             spawnAccMs -= spawnMs;
@@ -7936,9 +7935,11 @@ if(gameState === "paused"){
       }
       // PERF: Avoid repeated .filter() inside the per-word loop.
       const words = wordsOnField;
+      if(window.RPG_VALCREST?.active())words.sort((a,b)=>b.y-a.y);
+      let valcrestCeiling=Infinity;
       let landedCount = 0;
       for(let i=0;i<words.length;i++){
-        if(words[i].state === "landed") landedCount++;
+        if(words[i].state === "landed") landedCount+=wordRows(words[i]);
       }
 
       let needsRestack = restackDirty;
@@ -7956,14 +7957,17 @@ if(gameState === "paused"){
           : (fallSpeed * (w.fallMult || 1) * (w.ex2FallMult || 1))) * (operatorPassive?.getFallMultiplier(elapsed)||1);
         const frozenByOperator=!!operatorPassive?.isWordFrozen(w,elapsed);
         const wordMotion=w.chapterPanic?panicMotion:riftMotion;
+        const valcrestMotion=window.RPG_VALCREST?.motion(w,elapsed)??1;
+        if(valcrestMotion===0){if(window.RPG_VALCREST?.active()&&!w.ignoreCollision)valcrestCeiling=Math.min(valcrestCeiling,w.y);setWordY(w.el,w.y);continue;}
         if(!frozenByOperator&&wordMotion!==0)w.y += v * battleDt * wordMotion;
+        if(window.RPG_VALCREST?.active()&&!w.ignoreCollision){w.y=Math.min(w.y,valcrestCeiling-30*wordRows(w));valcrestCeiling=w.y;}
         // Word-specific Shield Advance holds also suspend custom movement hooks.
         if(!frozenByOperator&&wordMotion!==0&&!operatorPassive?.isFieldFrozen(elapsed))mechanicEvent('onTick',w,{dt:battleDt*wordMotion});
 
         const baseCount = Number.isFinite(w.spawnBaseCount) ? w.spawnBaseCount : landedCount;
         const gIdx = (w.groupIndex || 0);
         const ignoreCollide = !!w.ex3Ghost || !!w.ignoreCollision;
-        const targetY = ignoreCollide ? (h - 30) : (h - 30 * (baseCount + gIdx + 1));
+        const targetY = ignoreCollide ? (h - 30*wordRows(w)) : (h - 30 * (baseCount + gIdx + wordRows(w)));
 
         if(w.challengeComet){
           challengeUpdateCometGlow(w, (w.y || 0) / Math.max(1, h - 30));
@@ -7971,8 +7975,10 @@ if(gameState === "paused"){
 
         // A resize or other position adjustment must not force a frozen Panic impact.
         if(w.chapterPanic&&(wordMotion===0||frozenByOperator)){setWordY(w.el,w.y);continue;}
+        if(w.valcrestKind==='duel'&&frozenByOperator){setWordY(w.el,w.y);continue;}
         if(w.y >= targetY){
           w.y = targetY;
+          if(w.valcrestKind==='duel'){const hit=w.valcrestMiss||1;removeWord(w.id);damagePlayer(hit,'Duel');if(gameState!=='playing'){scheduleTick(true);return;}i--;continue;}
           // Panic is a falling hazard, never a stacked word. Exactly one hit at the floor.
           if(w.chapterPanic){
             const panicDamage=window.RPG_CH1_SPECIAL?.panicDamage()||1;
@@ -7991,6 +7997,7 @@ if(gameState === "paused"){
 
           w.state = "landed";
           window.RPG_CH1_SPECIAL?.clearRepression?.(w);
+          if(window.RPG_VALCREST?.active()&&!w.ignoreCollision)valcrestCeiling=w.y;
           w.el.classList.add("landed");
           mechanicEvent('onLand',w);
           if(shootingStarActive() && w.ex1Highlighted){
@@ -8006,7 +8013,7 @@ if(gameState === "paused"){
             ex4ArmInfectionTimer(w);
           }
 
-          landedCount++;
+          landedCount+=wordRows(w);
           needsRestack = true;
         }
 
@@ -8031,7 +8038,7 @@ if(gameState === "paused"){
       if(needsRestack) restackLanded();
 
       const wasOverflowing = overflow;
-      overflow = wordsOnField.reduce((count,w)=>count+(w.state==='landed'?1:0),0) >= Math.floor(h / 30);
+      overflow = wordsOnField.reduce((count,w)=>count+(w.state==='landed'?wordRows(w):0),0) >= Math.floor(h / 30);
       if(overflow){
         overflowSpawnGraceUntilMs = 0;
         overflowAcc += battleDt;
