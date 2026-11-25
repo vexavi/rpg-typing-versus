@@ -3,6 +3,7 @@
  * Scores/XP are client-reported (not secure against a modified browser).
  * Never trust this bridge for paid or scarce rewards. */
 import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js?v=86.30';
+import {combineProgress,validateDelta,planTerritorySave,progressResponse,validStageId,territoryOf,hasClear} from './conquest-progress.mjs?v=132.0';
 import {makePull,getJstDate} from './recruitment-core.mjs';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
@@ -211,8 +212,7 @@ async function guildClaim(b){
   claimKey=mode+'-'+runToken;
  }else{
   stageId=String(b.stage_id||'');attemptId=String(b.attempt_id||'');
-  if(!/^\d{1,4}-\d{1,4}$/.test(stageId)||!guildUUID(attemptId))err('Invalid Story stage or attempt.');
-  if(!(p.player.story?.completed||[]).includes(stageId))err('Save the Story battle clear to Firebase before claiming coins.');
+  if(!validStageId(stageId)||!guildUUID(attemptId))err('Invalid Story stage or attempt.');
  }
  const firstKey=mode==='story'?`story-first-${stageId}`:null;
  let result=await runTransaction(db,async tx=>{
@@ -222,7 +222,10 @@ async function guildClaim(b){
   if(!Number.isSafeInteger(oldCoins)||oldCoins<0)err('Guild Coin wallet is invalid.');
   let refKey=claimKey,amount=0,firstClear=false,duplicate=false,receipt=null;
   if(mode==='story'){
-   if(!(d.story?.completed||[]).includes(stageId))err('Story clear not saved.');
+   if(!hasClear(d.story,stageId)){
+    const progress=await tx.get(territoryRef(p.id,territoryOf(stageId)));
+    if(!hasClear(d.story,stageId,progress.data()?.stages))err('Conquest clear not saved.');
+   }
    const firstRef=ref('guildClaims',`${p.id}__${firstKey}`),first=await tx.get(firstRef);
    if(!first.exists()){refKey=firstKey;firstClear=b.first_clear===true;amount=firstClear?20:5;}
    else if(first.data().attemptId===attemptId){return {ok:true,awarded:0,coins:oldCoins,duplicate:true,firstClear:true};}
@@ -423,11 +426,24 @@ async function profileCustom(b){
 async function adventureProgress(b){const p=await currentPlayer(b),a=p.player.adventure||{};if(b.action==='load')return {ok:true,...a};if(b.action!=='save')err('Invalid action.');
  const up={xp:Math.max(a.xp||0,Number(b.xp)||0),best_normal:Math.max(a.best_normal||0,Number(b.best_normal)||0),best_extra:Math.max(a.best_extra||0,Number(b.best_extra)||0),normal_clear:!!(a.normal_clear||b.normal_clear),extra_clear:!!(a.extra_clear||b.extra_clear),achievements:[...new Set([...(a.achievements||[]),...(Array.isArray(b.achievements)?b.achievements:[])])].slice(0,200)};
  if(up.xp>100000000||up.best_normal>2000000||up.best_extra>2000000)err('Progress out of range.');await updateDoc(p.playerRef,{adventure:up});return {ok:true,...up};}
-async function storyProgress(b){const p=await currentPlayer(b),old=p.player.story||{},base=old.best_stars||{};
- if(!b.action||b.action==='load')return {ok:true,completed:old.completed||[],best_stars:base};
- const completed=[...new Set([...(old.completed||[]),...(Array.isArray(b.completed)?b.completed:[])])].slice(0,200);
- const stars={...base};for(const [key,val] of Object.entries(b.best_stars||{})){if(/^\d+-\d+$/.test(key)&&Number.isInteger(val)&&val>=0&&val<=4)stars[key]=Math.max(stars[key]||0,val);}
- await updateDoc(p.playerRef,{story:{completed,best_stars:stars}});return {ok:true,completed,best_stars:stars};}
+// Per-player, per-territory subcollection; independent from the wallet and profile.
+const territoryRef=(playerId,id)=>doc(db,'players',playerId,'conquestProgress',id);
+async function storyProgress(b){
+ const p=await currentPlayer(b);
+ if(!b.action||b.action==='load'){
+  const snap=await getDocsFromServer(collection(db,'players',p.id,'conquestProgress'));
+  return {ok:true,...combineProgress(p.player.story,snap.docs.map(d=>({id:d.id,stages:d.data().stages})))};
+ }
+ if(b.action!=='save')err('Invalid progress action.');
+ const {id,stages:delta}=validateDelta(b),target=territoryRef(p.id,id);
+ return runTransaction(db,async tx=>{
+  const player=await tx.get(p.playerRef),old=await tx.get(target);
+  if(!player.exists()||player.data().disabled)err('Player no longer active.');
+  const plan=planTerritorySave(id,player.data().story,old.data()?.stages,delta);
+  if(plan.changed)tx.set(target,{version:1,territoryId:id,stages:plan.stages,updatedAt:serverTimestamp()});
+  return {ok:true,territory_id:id,...progressResponse(plan.stages),first_clears:plan.firstClears};
+ });
+}
 async function call(path,body={}){
  if(!navigator.onLine || blocked)err('Online Firestore session required. Reconnect and reload.');
  if(path==='ping'){await currentConfig();return {ok:true,source:'firestore'};}

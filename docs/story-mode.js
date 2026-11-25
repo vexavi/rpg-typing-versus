@@ -25,13 +25,25 @@ function storageGet(){try{const v=JSON.parse(localStorage.getItem(STORAGE)||'[]'
 function starGet(){try{const v=JSON.parse(localStorage.getItem(STAR_STORAGE)||'{}');if(!v||typeof v!=='object'||Array.isArray(v))return {};const out={};for(const [id,n] of Object.entries(v))if(validId(id)&&Number.isInteger(n)&&n>=0&&n<=4)out[id]=n;return out}catch{return {}}}
 function storageSave(){try{localStorage.setItem(STORAGE,JSON.stringify([...completed]));localStorage.setItem(STAR_STORAGE,JSON.stringify(bestStars))}catch{}}
 completed=new Set();bestStars={}; // Firebase remains authoritative; saved progress is read-only if disconnected.
-async function serverProgress(action='load'){
+async function serverProgress(action='load',territoryId=null,stages=null){
  if(!serverOnline)return null;
- try{const response=await fetch('/api/story/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_code:identity.card_code,action,completed:[...completed],best_stars:bestStars})});if(!response.ok)return null;return await response.json()}catch{return null}
+ const body={card_code:identity.card_code,action};
+ if(action==='save'){body.territory_id=territoryId;body.stages=stages;}
+ try{const response=await fetch('/api/story/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!response.ok)return null;return await response.json()}catch{return null}
 }
 async function loadProgress(){const remote=await serverProgress();if(!Array.isArray(remote?.completed)){
- completed=new Set(storageGet());bestStars=starGet();return; // read-only display; cannot unlock stages offline
+ if(serverOnline&&navigator.onLine&&!window.RPG_V66_DISCONNECTED)throw Error('Conquest progress unavailable. Check your connection and Firebase rules, then reopen Conquest.');
+ completed=new Set(storageGet());bestStars=starGet();return; // offline display only
  }if(Array.isArray(remote?.completed)){completed=new Set(remote.completed.filter(validId));bestStars={}}if(remote?.best_stars&&typeof remote.best_stars==='object'){for(const [id,n] of Object.entries(remote.best_stars))if(validId(id)&&Number.isInteger(n)&&n>=0&&n<=4)bestStars[id]=Math.max(bestStars[id]??0,n)}storageSave()}
+function acceptTerritorySave(saved,id,required){
+ if(!saved?.ok||saved.territory_id!==id||!Array.isArray(saved.completed)||!Array.isArray(saved.first_clears)||!required.every(key=>saved.completed.includes(key)))return false;
+ const belongs=key=>validId(key)&&key.split('-')[0]===id;
+ completed=new Set([...completed].filter(key=>!belongs(key)));
+ for(const key of Object.keys(bestStars))if(belongs(key))delete bestStars[key];
+ for(const key of saved.completed)if(belongs(key))completed.add(key);
+ for(const [key,n] of Object.entries(saved.best_stars||{}))if(belongs(key)&&completed.has(key)&&Number.isInteger(n)&&n>=0&&n<=4)bestStars[key]=n;
+ storageSave();return true;
+}
 const allStages=()=>chapters.flatMap(c=>c.stages);
 function normalizeManifest(raw){
  if(!raw||!Array.isArray(raw.chapters))throw Error('Invalid story chapters file.');
@@ -178,33 +190,23 @@ function showSlides(scenes,stageId,phase){
 
 async function markCompleted(id,result={}){
  if(!validId(id))return null;
- const firstClear=!completed.has(id);
- const previousStars={...bestStars};
- completed.add(id);
- const battle=Boolean(result&&result.isBattle);
- let stars=null;
- if(battle){
-   const damage=Math.max(0,Math.floor(Number(result.damageTaken)||0));
-   stars=starsForDamage(damage,id);
-   bestStars[id]=Math.max(bestStars[id]??0,stars);
- }
- const saved=await serverProgress('save');
- if(!saved?.ok){if(firstClear)completed.delete(id);bestStars=previousStars;throw Error('Story progress was not saved to Firebase.');}
- storageSave();
- return {stars,best:bestStars[id]??null,firstClear};
+ const territory=id.split('-')[0],stars=result?.isBattle?starsForDamage(result.damageTaken,id):null;
+ const saved=await serverProgress('save',territory,{[id]:stars??-1});
+ if(!acceptTerritorySave(saved,territory,[id]))throw Error('Conquest progress was not saved to Firebase.');
+ return {stars,best:bestStars[id]??null,firstClear:saved.first_clears.includes(id)};
 }
 async function markConquestCompleted(run){
- const previous=new Set(completed),previousStars={...bestStars},firstClears=[];
+ const territory=String(run.chapter.id),delta={};
+ if(run.unranked||!run.encounters.length||run.records.length!==run.encounters.length)return {ok:false,firstClears:[]};
  for(const stage of run.encounters){
-   if(!validId(stage.id))continue;
-   if(!completed.has(stage.id))firstClears.push(stage.id);
-   completed.add(stage.id);
+   if(!validId(stage.id)||stage.id.split('-')[0]!==territory)return {ok:false,firstClears:[]};
    const rec=run.records.find(r=>r.stageId===stage.id);
-   if(rec)bestStars[stage.id]=Math.max(bestStars[stage.id]??0,starsForDamage(rec.damage,stage.id));
+   if(!rec)return {ok:false,firstClears:[]};
+   delta[stage.id]=starsForDamage(rec.damage,stage.id);
  }
- const saved=await serverProgress('save');
- if(!saved?.ok||!run.encounters.every(stage=>saved.completed?.includes(stage.id))){completed=previous;bestStars=previousStars;return {ok:false,firstClears:[]};}
- storageSave();return {ok:true,firstClears};
+ const saved=await serverProgress('save',territory,delta);
+ if(!acceptTerritorySave(saved,territory,Object.keys(delta)))return {ok:false,firstClears:[]};
+ return {ok:true,firstClears:saved.first_clears.filter(key=>Object.hasOwn(delta,key))};
 }
 function cancelConquestOverlay(){if(conquestOverlayFinish)conquestOverlayFinish();}
 function conquestBannerResult(run,done,captured,animate){

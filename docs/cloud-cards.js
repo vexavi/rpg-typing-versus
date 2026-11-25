@@ -1,4 +1,4 @@
-await import('./online-spark.js');
+await import('./online-spark.js?v=132.0');
 import {googleTeacher,currentTeacher,teacherSignOut,listCards,createCards,importCards,disableCard,enableCard,clearCard,revokeCard,rotateCard,normalizeCode,formatCode,errorMessage} from './cloud-api.js';
 const $=s=>document.getElementById(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let teacher=null,records=[],busy=false;
