@@ -325,6 +325,10 @@ async function auraChange(b){
   tx.update(p.playerRef,change);
   const wallet={...shardWallet(d.recruitment),[field]:shards-cost};
   return {ok:true,...wallet,rarity,auras:{...auras,[id]:after},level:after.level,equipped:after.equipped,spent:cost};
+ }).catch(e=>{
+  if(/permission|insufficient/i.test(String(e?.code||'')+' '+String(e?.message||'')))
+   err('This aura change was blocked by the class Firebase rules. Ask your teacher to publish the latest Firestore rules — no shards were spent.');
+  throw e;
  });return result;
 }
 async function profile(b,verifiedPlayer=null){const p=verifiedPlayer||await currentPlayer(b),d=p.player;const owned=Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id));const safe=sanitizedCosmetics(d);
@@ -397,8 +401,10 @@ async function recruitmentPull(b={}){
  const receiptId=`${p.id}__${drawId}`;
  const receiptRef=ref('recruitmentDraws',receiptId);
  // The transaction handles race conditions and duplicate free claims across devices.
+ const pullMeta={dupHigh:false};
  const out=await runTransaction(db,async tx=>{
   const [snapshot,prior]=await Promise.all([tx.get(p.playerRef),tx.get(receiptRef)]);
+  pullMeta.dupHigh=false;
   if(!snapshot.exists())err('Player not found.');
   const d=snapshot.data(),r=d.recruitment||{},t=d.tutorial||{version:1,step:5};
   if(prior.exists()){
@@ -420,13 +426,24 @@ async function recruitmentPull(b={}){
   const roll=makePull({count,owned:r.owned||{},pitySix:r.pity_six,pityFive:r.pity_five,featuredGuarantee:r.featured_guarantee,featuredId:featured,catalog:pool});
   const results=roll.results.map(x=>({id:x.id,rarity:x.rarity,duplicate:x.duplicate,shards:x.shards,featured:x.featured}));
   const next={...r,coins:coins-spent,owned:roll.owned,pity_six:roll.pitySix,pity_five:roll.pityFive,featured_guarantee:roll.featuredGuarantee,
-   shards:shardCount(r.shards)+roll.shardsByRarity[4],shards5:shardCount(r.shards5)+roll.shardsByRarity[5],shards6:shardCount(r.shards6)+roll.shardsByRarity[6],lastDrawId:receiptId,lastDrawMode:mode,lastDrawResults:results,lastDrawAt:serverTimestamp(),
+   shards:shardCount(r.shards)+roll.shardsByRarity[4],lastDrawId:receiptId,lastDrawMode:mode,lastDrawResults:results,lastDrawAt:serverTimestamp(),
    recent:[...results,...(r.recent||[])].slice(0,10)};
+  // v148.9: only touch the 5★/6★ pools when they exist or change, so pulls still pass
+  // older (pre-v148.6) rules unless a 5★/6★ duplicate actually needs the new pools.
+  const extra={};
+  for(const [k,n] of [['shards5',5],['shards6',6]]){
+   if(roll.shardsByRarity[n]>0||k in r)next[k]=shardCount(r[k])+roll.shardsByRarity[n];
+   if(roll.shardsByRarity[n]>0){extra['shardsEarned'+n]=roll.shardsByRarity[n];pullMeta.dupHigh=true;}
+  }
   if(mode!=='paid')next.lastDailyDate=date;
   if(mode==='tutorial')next.tutorialClaimed=true;
   tx.update(p.playerRef,{recruitment:next});
-  tx.set(receiptRef,{publicId:p.id,mode,count,spent,coinsBefore:coins,coinsAfter:next.coins,results,shardsEarned:roll.shardsByRarity[4],shardsEarned5:roll.shardsByRarity[5],shardsEarned6:roll.shardsByRarity[6],featuredId:featured,dateJst:date,createdAt:serverTimestamp()});
+  tx.set(receiptRef,{publicId:p.id,mode,count,spent,coinsBefore:coins,coinsAfter:next.coins,results,shardsEarned:roll.shardsByRarity[4],...extra,featuredId:featured,dateJst:date,createdAt:serverTimestamp()});
   return {ok:true,replayed:false,results,coins:next.coins,pity_six:next.pity_six,...shardWallet(next),drawId:receiptId};
+ }).catch(e=>{
+  if(/permission|insufficient/i.test(String(e?.code||'')+' '+String(e?.message||'')))
+   err(pullMeta.dupHigh?'This pull gave a 5★/6★ duplicate, but the class Firebase rules are out of date. Ask your teacher to publish the latest Firestore rules, then try again — no coins were spent.':'Recruitment was blocked by the class Firebase rules. Ask your teacher to publish the latest Firestore rules — no coins were spent.');
+  throw e;
  });
  // Merge display metadata from versioned roster, never from user content.
  return {...out,results:(out.results||[]).map(x=>({...x,...(pool.find(c=>c.id===x.id)||{})}))};

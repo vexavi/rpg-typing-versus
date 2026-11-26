@@ -46,6 +46,7 @@
     const lv=img.dataset.auraForce!=null?Number(img.dataset.auraForce)||0:level(id);
     if(img.dataset.aura===String(lv)&&img.dataset.auraFor===id&&(lv===0||kind==='icon'||layerFor(host)))return;
     img.dataset.aura=String(lv);img.dataset.auraFor=id;img.dataset.auraKind=kind;img.classList.add('aura-img');
+    if(kind!=='icon')host.classList.add('aura-host'); // v148.9: keep the raised art inside its own frame
     img.style.setProperty('--aura',COLORS[lv]||'transparent');
     if(kind==='icon')return; // frame only, drawn on the image itself
     let layer=layerFor(host);

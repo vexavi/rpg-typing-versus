@@ -4,6 +4,8 @@
  */
 .aura-fx{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;--aura:#fff}
 .aura-img[data-aura-kind="art"],.aura-img[data-aura-kind="cut"]{z-index:1}
+/* v148.9: the art is lifted above its glow only inside its own frame, never over names/tags on the card */
+.aura-host{isolation:isolate}
 .aura-fx>*{position:absolute;display:block}
 /* Body glow */
 .aura-fx::before{content:'';position:absolute;inset:4% 8% 0;opacity:.55;

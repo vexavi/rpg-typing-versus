@@ -131,7 +131,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=148.6');
+   await import('./online-spark.js?v=148.9');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');

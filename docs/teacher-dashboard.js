@@ -5,7 +5,7 @@
  * grades via /api/cards/set-class, coins with a guildCoinGrants receipt, shards on the
  * per-rarity fields, card actions via cloud-api.js.
  */
-await import('./online-spark.js?v=148.6');
+await import('./online-spark.js?v=148.9');
 import {currentTeacher,teacherSignOut,createCards,disableCard,enableCard,clearCard,rotateCard,formatCode,errorMessage} from './cloud-api.js';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getFirestore,doc,collection,getDocsFromServer,getDocFromServer,runTransaction,serverTimestamp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
