@@ -3137,6 +3137,10 @@ function showModeSelectScreen(){
       window.location.assign('auras.html');
     }});
   auraWorkshopMode.classList.add('aura-mode-card');
+  addMode('Collection', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
+    lockedReason:'Online Firebase required',onClick:()=>{
+      window.location.assign('collection.html');
+    }});
   if(window.RPG_V66_DISCONNECTED||!ADVENTURE_CONTEXT.online)addMode('Reconnect', {onClick:()=>location.reload()});
   addMode('Rankings', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     void openRankings('normal');

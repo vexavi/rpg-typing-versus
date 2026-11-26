@@ -1,0 +1,41 @@
+<!doctype html><html lang="en" class="cl-theme"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>RPG Typing Versus — Collection</title>
+<link rel="preload" href="assets/fonts/ak-roboto-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="aura-fx.css?v=3"><link rel="stylesheet" href="collection.css?v=1"></head><body class="collection-client">
+<div id="v66Startup" class="startup"><div>CONNECTING…<p>An online connection is required to load your operators.</p></div></div>
+<div class="cl-app" id="collection">
+ <header class="cl-top">
+  <nav class="student-workshop-nav cl-nav" aria-label="Student navigation"><a href="adventure.html" data-return-modes="1" class="cl-back">‹ MODE SELECT</a><a href="recruitment.html">RECRUITMENT</a><a href="auras.html">AURA WORKSHOP</a><a href="collection.html" class="current" aria-current="page">COLLECTION</a></nav>
+  <div class="cl-title"><small>OPERATOR ARCHIVE // 図鑑</small><h1>COLLECTION</h1></div>
+  <div class="cl-count"><small>RECRUITED</small><b id="ownedCount">—</b></div>
+ </header>
+ <div class="cl-bar">
+  <div class="cl-filters" role="group" aria-label="Filter by rarity">
+   <button type="button" data-filter="all" aria-pressed="true">ALL</button><button type="button" data-filter="6" aria-pressed="false">★6</button><button type="button" data-filter="5" aria-pressed="false">★5</button><button type="button" data-filter="4" aria-pressed="false">★4</button>
+  </div>
+  <label class="cl-toggle"><input type="checkbox" id="ownedOnly"> RECRUITED ONLY</label>
+  <span id="message" class="cl-msg" role="status" aria-live="polite"></span>
+ </div>
+ <main class="cl-grid" id="grid" aria-label="Operators"></main>
+</div>
+
+<section class="cl-detail" id="detail" hidden aria-modal="true" role="dialog" aria-labelledby="dName">
+ <div class="cl-d-emblem" aria-hidden="true"><span id="dEmblem">6</span><i>★</i></div>
+ <div class="cl-d-top"><button type="button" class="cl-d-btn" data-close aria-label="Back to collection"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><a class="cl-d-btn cl-d-home" href="adventure.html" data-return-modes="1" aria-label="Mode Select"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg></a></div>
+ <div class="cl-d-art" id="dArt" data-aura-art><img id="dImg" alt="" decoding="async" draggable="false"></div>
+ <div class="cl-d-id">
+  <div class="cl-d-class"><span id="dRarityLabel">6★ OPERATOR</span><b id="dStars">★★★★★★</b></div>
+  <h2 id="dName">—</h2>
+  <div class="cl-d-chips"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></svg><b id="dAura">NO AURA</b></span><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="11" height="15"/><path d="M8 3h12v15"/></svg><b id="dCopies">×1</b></span></div>
+ </div>
+ <aside class="cl-d-panel">
+  <h3>Basic Info</h3>
+  <dl id="dInfo"></dl>
+  <h3>Passive</h3>
+  <dl id="dPassive"></dl>
+  <a class="cl-d-link" id="dWorkshop" href="auras.html">AURA WORKSHOP ›</a>
+ </aside>
+ <div class="cl-d-nav"><button type="button" class="cl-d-btn" data-step="-1" aria-label="Previous operator"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><span id="dIndex">1 / 1</span><button type="button" class="cl-d-btn" data-step="1" aria-label="Next operator"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>
+</section>
+
+<script src="student-links-v86.js?v=86" defer></script><script src="gacha-catalog.js?v=106.0"></script><script src="operator-passives.js?v=147.0"></script><script src="aura-core.js?v=148.6"></script><script src="aura-fx.js?v=2"></script><script type="module">await import('./online-spark.js?v=148.9');const s=document.createElement('script');s.src='collection.js?v=1';document.body.append(s);</script>
+</body></html>

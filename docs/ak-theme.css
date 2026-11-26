@@ -612,6 +612,7 @@
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="normal"] .ak-tile-icon{color:var(--ak-cyan)}
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card:is([data-ak-tile="challenge"],[data-ak-tile="shared"]){--tile-accent:var(--ak-red)}
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="practice"]{--tile-accent:#38d996}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="collection"]{--tile-accent:#9d7bff}
 /* Recruitment: the one light tile, like a featured banner */
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]:not(:disabled){
   --tile-accent:var(--ak-yellow);color:#15161a;border-color:rgba(255,255,255,.6);
@@ -650,11 +651,13 @@
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="shared"]{grid-column:7 / 13;grid-row:2}
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]{grid-column:1 / 8;grid-row:3}
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="aura"]{grid-column:8 / 13;grid-row:3}
-:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="rankings"]{grid-column:1 / 5;grid-row:4}
-:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="tournament"]{grid-column:5 / 9;grid-row:4}
-:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="reconnect"]{grid-column:9 / 13;grid-row:4}
-:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-no-reconnect .student-mode-card[data-ak-tile="rankings"]{grid-column:1 / 7}
-:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-no-reconnect .student-mode-card[data-ak-tile="tournament"]{grid-column:7 / 13}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="rankings"]{grid-column:4 / 7;grid-row:4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="collection"]{grid-column:1 / 4;grid-row:4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="tournament"]{grid-column:7 / 10;grid-row:4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="reconnect"]{grid-column:10 / 13;grid-row:4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-no-reconnect .student-mode-card[data-ak-tile="rankings"]{grid-column:5 / 9}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-no-reconnect .student-mode-card[data-ak-tile="collection"]{grid-column:1 / 5}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-no-reconnect .student-mode-card[data-ak-tile="tournament"]{grid-column:9 / 13}
 :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card:not([data-ak-tile]){grid-column:span 4}
 :root.ak-theme body.adventure-client #overlay.mode-select-active #localPracticeNotice{
   grid-column:1 / -1;margin:0!important;padding:8px 12px!important;

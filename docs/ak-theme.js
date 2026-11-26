@@ -14,6 +14,7 @@
     challenge:'<circle cx="12" cy="13" r="7.5"/><path d="M12 13V9"/><path d="M12 13l3 2"/><path d="M9.5 3h5"/><path d="M12 3v2.5"/>',
     shared:'<circle cx="8" cy="9" r="3"/><circle cx="16.5" cy="9" r="3"/><path d="M2.5 19c.8-3 2.9-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><path d="M13.5 15c.9-.4 1.9-.5 3-.5 2.6 0 4.4 1.5 5 4.5"/>',
     recruit:'<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.9-3.6 3.4-5.5 6.5-5.5 1.6 0 3 .5 4.1 1.4"/><path d="M18 13v7"/><path d="M14.5 16.5h7"/>',
+    collection:'<rect x="3.5" y="4" width="5" height="16"/><rect x="9.5" y="4" width="5" height="16"/><rect x="15.5" y="4" width="5" height="16"/><path d="M3.5 15l5-3M9.5 15l5-3M15.5 15l5-3"/>',
     aura:'<path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/>',
     rankings:'<path d="M4 20V11"/><path d="M10 20V5"/><path d="M16 20v-6"/><path d="M2.5 20.5h19"/>',
     tournament:'<rect x="3.5" y="3.5" width="6.5" height="6.5"/><rect x="14" y="3.5" width="6.5" height="6.5"/><rect x="3.5" y="14" width="6.5" height="6.5"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM14 20.5h1.5M20.5 14v1.5"/>',
@@ -28,9 +29,10 @@
     'All Grades Challenge':{key:'shared',code:'04',jp:'全学年チャレンジ',en:'SHARED RANKED'},
     'Recruitment':{key:'recruit',code:'05',jp:'採用',en:'RECRUIT OPERATORS'},
     'Aura Workshop':{key:'aura',code:'06',jp:'オーラ工房',en:'COSMETICS'},
-    'Rankings':{key:'rankings',code:'07',jp:'ランキング',en:'LEADERBOARD'},
-    'Tournament':{key:'tournament',code:'08',jp:'大会',en:'QR ENTRY'},
-    'Reconnect':{key:'reconnect',code:'09',jp:'再接続',en:'GO ONLINE'}
+    'Collection':{key:'collection',code:'07',jp:'図鑑',en:'OPERATOR ARCHIVE'},
+    'Rankings':{key:'rankings',code:'08',jp:'ランキング',en:'LEADERBOARD'},
+    'Tournament':{key:'tournament',code:'09',jp:'大会',en:'QR ENTRY'},
+    'Reconnect':{key:'reconnect',code:'10',jp:'再接続',en:'GO ONLINE'}
   };
   const svg=(name,cls)=>{
     const el=document.createElementNS(NS,'svg');
