@@ -131,7 +131,7 @@ async function onlineReady(){
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
-   await import('./online-spark.js?v=147.0');
+   await import('./online-spark.js?v=148.4');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
@@ -169,9 +169,9 @@ async function load(identity,progress,{offline=false}={}){
  window.RPG_PERF?.end('Game scripts');
  gate.remove();
 }
-async function finish(card){
+async function finish(card,boot=null){
  status('Loading your saved progress…');
- const {progress,profile,vocab}=await window.RPG_V66.call('/api/adventure/bootstrap',{card_code:code});
+ const {progress,profile,vocab}=boot||await window.RPG_V66.call('/api/adventure/bootstrap',{card_code:code});
  // A failed profile read must not bypass onboarding or overwrite the local identity.
  if(!progress?.ok||!profile?.ok||profile.public_id!==card.public_id)throw Error('Player profile unavailable. Retry sign-in.');
  const selectedCharacter=String(profile?.selected_character||profile?.cosmetics?.featured||'mc');
@@ -185,16 +185,23 @@ async function finish(card){
 }
 // Recover the card through Firestore using the browser's persisted Firebase Auth UID.
 // Never use a locally cached display name as authority to enter someone else's account.
+// One bootstrap request verifies cardSessions -> cloudCards -> players and returns the
+// profile and word list together, so no separate card check (or session write) is needed.
+async function verifiedSession(expected=''){
+ const boot=await window.RPG_V66.call('/api/adventure/bootstrap',expected?{card_code:expected}:{});
+ const verified=clean(boot?.card?.card_code);
+ if(!boot?.ok||!cardPattern.test(verified)||!boot.card.public_id||(expected&&verified!==expected))throw Error('Saved card session unavailable.');
+ if(!boot.card.name)throw Error('Adventure Card registration must be completed again.');
+ return boot;
+}
 async function resumeRememberedCard(){
  if(busy)return;
  busy=true;view('checking','WELCOME BACK','Restoring this browser’s Adventure Card…');
+ let boot=null;
  try{
   await onlineReady();
-  const saved=await window.RPG_V66.call('/api/adventure/resume',{});
-  const verified=clean(saved?.card_code);
-  if(!cardPattern.test(verified)||!saved?.public_id)throw Error('Saved card session unavailable.');
-  code=verified;
-  await finish(saved);
+  boot=await verifiedSession();
+  code=clean(boot.card.card_code);
  }catch(e){
   console.info('Adventure Card auto-resume unavailable:',String(e?.message||e));
   // No remembered Firebase session, cleared browser storage, disabled card, or network issue.
@@ -203,7 +210,29 @@ async function resumeRememberedCard(){
    'Could not restore this browser’s sign-in. Connect to the internet, or enter your card code for offline practice.':
    'Scan your Adventure Card or enter its code below.';
   view('manual','SCAN YOUR CARD',message);
- }finally{busy=false;}
+  busy=false;return;
+ }
+ try{await finish(boot.card,boot);}
+ catch(e){view('error','COULD NOT CONNECT',e?.message||'Card verification failed.');}
+ finally{busy=false;}
+}
+// Returning from Recruitment/Profile/Tutorial in the same tab: this browser's Firebase
+// session is already linked to the card, so re-verify it with one bootstrap instead of
+// repeating the full QR sign-in (which also rewrote cardSessions every time).
+async function returnToModeSelect(){
+ if(busy)return;
+ busy=true;view('checking','WELCOME BACK','Returning to Mode Select…');
+ let boot=null;
+ try{await onlineReady();boot=await verifiedSession(code);}
+ catch(e){
+  // Session changed, expired, or the network is down: use the normal card check,
+  // which also handles offline practice and shows the real error.
+  console.info('Quick return unavailable; checking card again:',String(e?.message||e));
+  busy=false;return resolveCard();
+ }
+ try{await finish(boot.card,boot);}
+ catch(e){view('error','COULD NOT CONNECT',e?.message||'Card verification failed.');}
+ finally{busy=false;}
 }
 // Explicit switching is safe on shared school computers: sign out of persisted Auth
 // before opening a different student's card. Does not require Firestore rule changes.
@@ -276,5 +305,6 @@ document.getElementById('introSwitchPlayer')?.addEventListener('click',()=>{
 
 // Explicit QR entry always wins; otherwise first try a verified remembered Firebase session.
 if(switchPlayer)void beginSwitchPlayer();
-else if(code)void resolveCard();
+else if(qrCode)void resolveCard();
+else if(code)void returnToModeSelect();
 else void resumeRememberedCard();

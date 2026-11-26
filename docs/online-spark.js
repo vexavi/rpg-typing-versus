@@ -20,13 +20,30 @@ const read=async(c,id)=>{const snap=await getDocFromServer(ref(c,id));return sna
 const teacher=async()=>{const t=await currentTeacher();if(!t)err('Authorized teacher Google sign-in required.');if(t.uid!==TEACHER_UID)err('Teacher UID does not match configured Firestore rules.');return t;};
 const poolOf=g=>g?.endsWith('b')?'b':g;
 const codeInfo=async(code)=>{code=cleanCode(code);if(!cardPattern.test(code))err('Enter a valid Adventure Card code.');const c=await read('cloudCards',code);if(!c||c.disabled||c.deleted)err('Card not registered or disabled.');if(!/^P\d{6,}$/.test(c.publicId||''))err('Card needs a valid player ID.');return {code,card:c};};
-async function currentPlayer(body={}){
- if(!uid())err('Firebase sign-in required.');const s=await read('cardSessions',uid());
+// One verified account snapshot (cardSessions -> cloudCards + players) is shared by
+// read-only requests on the same page for a few seconds. Every request that writes
+// (or depends on a just-written value) clears it first and afterwards, so writes and
+// transactions always verify against fresh server data.
+const PLAYER_SNAPSHOT_MS=20000;
+let playerSnapshot=null;
+const forgetPlayer=()=>{playerSnapshot=null;};
+async function verifyPlayer(){
+ const s=await read('cardSessions',uid());
  if(!s||!s.code||!s.publicId)err('Scan your Adventure Card first.');
- if(body.card_code&&cleanCode(body.card_code)!==s.code)err('Adventure Card does not match your session.');
  const [c,p]=await Promise.all([read('cloudCards',s.code),read('players',s.publicId)]);
  if(!c||c.disabled||c.deleted||c.publicId!==s.publicId||!p||p.disabled)err('Card session expired, disabled, or missing.');
  return {session:s,card:c,player:p,id:s.publicId,playerRef:ref('players',s.publicId)};
+}
+async function currentPlayer(body={}){
+ if(!uid())err('Firebase sign-in required.');
+ const owner=uid();
+ if(!playerSnapshot||playerSnapshot.uid!==owner||Date.now()-playerSnapshot.at>PLAYER_SNAPSHOT_MS){
+  const entry={uid:owner,at:Date.now(),promise:verifyPlayer()};playerSnapshot=entry;
+  entry.promise.catch(()=>{if(playerSnapshot===entry)playerSnapshot=null;});
+ }
+ const p=await playerSnapshot.promise;
+ if(body.card_code&&cleanCode(body.card_code)!==p.session.code)err('Adventure Card does not match your session.');
+ return p;
 }
 const defaultPlayer=(card)=>({publicId:card.publicId,username:card.username,character:'mc',grade:card.grade||null,rankIconId:'icon01',rankIconUpdatedAt:0,disabled:false,
  adventure:{xp:0,best_normal:0,normal_clear:false,achievements:[]},
@@ -307,10 +324,12 @@ async function profile(b,verifiedPlayer=null){const p=verifiedPlayer||await curr
 // Share one freshly verified account snapshot only within this login request.
 async function bootstrapPlayer(b){
  const player=await currentPlayer(b),details=await profile(b,player);
+ // Card identity lets a same-tab return to Mode Select skip a separate card check.
+ const c=player.card,card=c?{ok:true,public_id:player.id,name:typeof c.username==='string'?c.username:'',grade:c.grade||null,card_code:player.session?.code||'',online:true,cloud:true}:null;
  let timer;
  try{
   const words=await Promise.race([vocab({mode:'normal'},player),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),7500);})]).catch(()=>null);
-  return {ok:true,profile:details,progress:{ok:true,...details.adventure},vocab:words};
+  return {ok:true,card,profile:details,progress:{ok:true,...details.adventure},vocab:words};
  }finally{clearTimeout(timer);}
 }
 // Each new profile has tutorial.version=0. Profiles created in older builds do not,
@@ -459,7 +478,14 @@ async function storyProgress(b){
   return {ok:true,territory_id:id,...progressResponse(plan.stages),first_clears:plan.firstClears};
  });
 }
+const READ_ONLY_PATHS=new Set(['ping','/api/config/version','/api/adventure/resume','/api/adventure/bootstrap','/api/profile','/api/tutorial/state','/api/recruitment/state','/api/vocab/load','/api/rankings','/api/recruitment/banners']);
+const readOnly=(path,body)=>READ_ONLY_PATHS.has(path)||(path==='/api/rankings/icon'&&body?.action!=='set')||(path==='/api/adventure/progress'&&body?.action==='load');
 async function call(path,body={}){
+ if(readOnly(path,body))return route(path,body);
+ forgetPlayer();
+ try{return await route(path,body);}finally{forgetPlayer();}
+}
+async function route(path,body={}){
  if(!navigator.onLine || blocked)err('Online Firestore session required. Reconnect and reload.');
  if(path==='ping'){await currentConfig();return {ok:true,source:'firestore'};}
  if(path==='/api/config/version')return {ok:true,revision:await currentConfig()};
@@ -511,13 +537,19 @@ function lost(reason){
  // Never show a blocking login gate over an active battle; cloud calls remain blocked.
  if(!window.RPG_ADVENTURE_READY)message(reason||'Firestore session interrupted. Reload after reconnecting.');
 }
+const CONFIG_CHECK_KEY='rpgSparkConfigCheckedAt',CONFIG_CHECK_MS=10*60*1000;
+function configCheckedRecently(){try{const t=Number(sessionStorage.getItem(CONFIG_CHECK_KEY))||0;return t<=Date.now()&&Date.now()-t<CONFIG_CHECK_MS;}catch(_){return false;}}
+function markConfigChecked(){try{sessionStorage.setItem(CONFIG_CHECK_KEY,String(Date.now()));}catch(_){}}
 async function check(){
  try{
   if(!navigator.onLine)err('Internet unavailable.');
   await ensureStudent();
-  // One server read verifies the Firestore connection and current settings.
-  await currentConfig();
-  const needTeacher=document.documentElement.dataset.v66Teacher==='required';if(needTeacher)await teacher();
+  const needTeacher=document.documentElement.dataset.v66Teacher==='required';
+  // One server read verifies the Firestore connection and that Spark setup ran. A student
+  // moving between pages in the same tab does not need to repeat it every time: the next
+  // real request reads the server anyway, and ranked runs always re-read the settings.
+  if(needTeacher||!configCheckedRecently()){await currentConfig();markConfigChecked();}
+  if(needTeacher)await teacher();
   if(!navigator.onLine||window.RPG_V66_DISCONNECTED)err('Connection interrupted during login.');
   bootReady=true;blocked=false;$('v66OnlineGate')?.remove();$('v66Startup')?.remove();return true;
  }catch(e){

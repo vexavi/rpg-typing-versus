@@ -1460,7 +1460,15 @@ const achOverlay = document.getElementById("achOverlay");
   // teacher-assigned class and authoritative words before the next ranked run.
   (async () => {
     const cloudProfileUpdated = await refreshSavedCloudProfileFromSheet({ quiet:true });
-    if(!cloudProfileUpdated) await refreshVocabFromCloud(activeClassYear, { quiet:true });
+    // The sign-in bootstrap has just downloaded and verified this card's words; reuse
+    // them instead of downloading the same list again on every visit to Mode Select.
+    const signInVocabFresh=!cloudProfileUpdated&&vocabLastServerSuccess&&vocabRefreshedForMode==='normal'&&
+      Date.now()-vocabRefreshedAt<VOCAB_REFRESH_INTERVAL_MS&&restoreVerifiedVocab();
+    if(signInVocabFresh){
+      vocabSourceLabel='Firebase';
+      if(profile&&profile.classYear!==activeClassYear){profile.classYear=activeClassYear;saveProfile(profile);}
+    }
+    else if(!cloudProfileUpdated) await refreshVocabFromCloud(activeClassYear, { quiet:true });
     await refreshStageConfigFromCloud({ quiet:true });
   })();
 
@@ -3749,6 +3757,7 @@ async function debugJumpTo(mode, idx){
       if(!storySquad.enabled||gameState!=='squad-deploy'||currentMode!=='story')return;
       activeOperatorId=storySquad.ids[next];
       operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode,undefined,!!window.RPG_CONQUEST?.run)||null;
+      globalThis.RPG_FX?.prepare?.(activeOperatorId);
       playerMaxHp=BASE_PLAYER_MAX_HP+(operatorPassive?.getMaxHpBonus?.()||0);
       if(window.RPG_CONQUEST?.run)playerMaxHp=window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0).hp;
       playerHp=playerMaxHp;
@@ -3914,6 +3923,7 @@ async function debugJumpTo(mode, idx){
       activeOperatorId=storySquad.ids[storySquad.index];
     }
     operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode,undefined,!!operation)||null;
+    globalThis.RPG_FX?.prepare?.(activeOperatorId);
     renderStorySquad();
   }
   // Keeps one unobtrusive visible 3-second countdown inside the word lane.
@@ -4206,6 +4216,7 @@ async function debugJumpTo(mode, idx){
   // after frame spawns, so timed effects can pick up newly arriving words.
   function applyOperatorFieldEffect(effect){
     if(!effect)return;
+    globalThis.RPG_FX?.passive?.(effect,id=>wordsOnField.find(w=>w.id===id)?.el);
     if(effect.type==='nitrate-mark'){
       if(effect.wordIds?.length)pushMsg(`NITRATE · WRATH MARKED (${effect.wordIds.length})`,true);
     }else if(effect.type==='chain-cleave-start'){
@@ -4349,6 +4360,7 @@ async function debugJumpTo(mode, idx){
     const word=wordsOnField.find(w=>w.id===wordId&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost);
     if(!word)return 0;
     const pts=grantRewards?calcMinimumWordScore(word):0;
+    globalThis.RPG_FX?.autoClear?.(word.el,grantRewards?operatorId:'aveline');
     const slash=grantRewards?document.createElement('span'):null;
     if(slash){
       slash.className=operatorId==='cassian'?'operator-sovereign-slash':'operator-phantom-slash';
@@ -4374,7 +4386,7 @@ async function debugJumpTo(mode, idx){
   }
   function operatorOnMistake(){
     const effect=operatorPassive?.onMistake(stageElapsedSec());
-    if(effect?.type==='mistake-guard')pushMsg('KADE · TRICKSTER (NO HP LOSS)',true);
+    if(effect?.type==='mistake-guard'){globalThis.RPG_FX?.passive?.(effect);pushMsg('KADE · TRICKSTER (NO HP LOSS)',true);}
     return !!effect?.preventHpLoss;
   }
   function operatorSpawnPaused(time=stageElapsedSec()){
@@ -4666,6 +4678,7 @@ function updateUI(){
     setSleepyBgmGain(1);
     clearChainCleaveHex();
     cancelFoxfireRewind();
+    globalThis.RPG_FX?.reset?.();
     resetOperatorPending();
     window.RPG_VALCREST?.reset();
     window.RPG_VESPER?.reset();
@@ -4916,6 +4929,7 @@ function challengeUpdateCometGlow(w, progress){
 }
 function challengeHandleCometLanding(w){
   if(!w) return;
+  globalThis.RPG_FX?.impact?.(w.el,'comet');
   try{ pushMsg("☄️ COMET landed!", true); }catch(_){}
   // If this word was both Comet + star-struck, the sun spot still happens where it landed.
   try{
@@ -5012,6 +5026,7 @@ function ex1IsFrozenInput(_norm){ return false; }
       if(remMs <= 0){
         w.ex1DamageArmed = false;
         ex1ClearShootingStarGlow(w);
+        globalThis.RPG_FX?.impact?.(w.el,'star');
         damagePlayer(storyIncomingDamage("shootingStarDamage",2), "shooting star");
         removeWord(w.id);
         // A defeat (continue prompt / squad swap) ends this frame's star damage.
@@ -5352,7 +5367,7 @@ if(state === "landed"){
       return false;
     }
 
-    if(window.RPG_VALCREST?.armorHit(best)){pushMsg('ARMOR BROKEN',true);return true;}
+    if(window.RPG_VALCREST?.armorHit(best)){globalThis.RPG_FX?.armorBreak?.(best.el);pushMsg('ARMOR BROKEN',true);return true;}
     const pts = best.chainHexed ? calcMaximumHexWordScore(best) : calcWordScore(best);
     guildCorrectThisRun++; // Counts real successful submitted words only.
     addScore(pts);
@@ -5366,6 +5381,8 @@ if(state === "landed"){
     }
 
     if(currentMode !== 'shared') mechanicEvent('onCorrect',best);
+    // Battle effects need the word's screen position before it leaves the field.
+    const fxRect=best.el?.getBoundingClientRect?.(),fxClasses=best.el?.className||'';
     removeWord(best.id);
     const passiveEffect=operatorOnCorrect(best);
     let bonusDamage=0;
@@ -5394,15 +5411,22 @@ if(state === "landed"){
     // Combine manual and instant secondary damage into ONE boss hit. Otherwise
     // the first hit could finish the stage before the automatic hit is awarded.
     const duelMultiplier=best.valcrestDuelDamage||1;
+    let fxCrit=false;
     let dmg = baseHitDamage*duelMultiplier+bonusDamage;
     if(currentMode==='story'&&window.RPG_CONQUEST?.run){
       const original=best.chainHexOrigin?.answer||best.answer;
       const hit=window.RPG_CONQUEST.manualDamage(original,baseHitDamage*duelMultiplier,bonusDamage,window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0));
-      dmg=hit.amount;
+      dmg=hit.amount;fxCrit=!!hit.crit;
       if(hit.crit){pushMsg('CRITICAL HIT',true);}
       const indicator=document.getElementById('conquestLastHit');
       if(indicator){indicator.textContent=`${hit.crit?'CRIT · ':''}${window.RPG_CONQUEST.displayed(dmg)} DMG`;indicator.classList.toggle('critical',hit.crit);}
     }
+    try{
+      const fxStage=STAGES[stageIndex]||null;
+      globalThis.RPG_FX?.attack?.({rect:fxRect,classes:fxClasses,operatorId:activeOperatorId,damage:dmg,crit:fxCrit,effect:passiveEffect,score:pts,
+        immune:currentMode==='practice'||!!fxStage?.bossInvulnerable,
+        display:currentMode==='story'&&window.RPG_CONQUEST?.run?window.RPG_CONQUEST.displayed(dmg):Math.round(dmg*10)/10});
+    }catch(_){}
     damageBoss(dmg);
     if(passiveEffect?.forceSpawn && gameState==='playing' && (bossHp>0||operatorStageWithoutBoss())){
       applyOperatorFieldEffect({type:'hound-force-spawn'});
@@ -5678,6 +5702,7 @@ function storyIncomingDamage(key,fallback){
     if(operatorPassive?.isInvulnerable(stageElapsedSec())&&gameState==='playing'){
       // Invulnerability means no lost HP and no recorded damage (including
       // special mechanics, overflow and incorrect submissions).
+      globalThis.RPG_FX?.guard?.('immune');
       return;
     }
 
@@ -5687,7 +5712,7 @@ function storyIncomingDamage(key,fallback){
     // No player-damage stage hooks fire on a fully shielded hit.
     const shieldAbsorbed=operatorPassive?.nitrateAbsorbDamage?.(scaled)||0;
     const hpDamage=conquest?window.RPG_CONQUEST.q(scaled-shieldAbsorbed):scaled-shieldAbsorbed;
-    if(shieldAbsorbed)nitrateBlockVisual(shieldAbsorbed);
+    if(shieldAbsorbed){nitrateBlockVisual(shieldAbsorbed);globalThis.RPG_FX?.guard?.('block',conquest?window.RPG_CONQUEST.displayed(shieldAbsorbed):shieldAbsorbed);}
     if(hpDamage<=0){updateUI();return;}
     damageTakenThisStage += hpDamage;
     damageTakenThisRun += hpDamage;
@@ -5695,6 +5720,8 @@ function storyIncomingDamage(key,fallback){
     playerHp = Math.max(0, playerHp - hpDamage);
     if(conquest)playerHp=window.RPG_CONQUEST.q(playerHp);
     const passiveEffect=operatorPassive?.onPlayerDamage(previousHp,playerHp,stageElapsedSec(),wordsOnField);
+    globalThis.RPG_FX?.player?.({amount:hpDamage,reason,display:conquest?window.RPG_CONQUEST.displayed(hpDamage):hpDamage});
+    if(passiveEffect?.type==='slowdown'||passiveEffect?.type==='fletcher-last-stand')globalThis.RPG_FX?.passive?.(passiveEffect);
     if(passiveEffect?.type==='slowdown')pushMsg('ALDEN · SECOND WIND (5s)',true);
     else if(passiveEffect?.type==='shield-advance')applyOperatorFieldEffect(passiveEffect);
     else if(passiveEffect?.type==='fletcher-last-stand'){
@@ -6770,10 +6797,11 @@ if(gameState === "paused"){
 
         if(w.y >= targetY){
           w.y = targetY;
-          if(w.valcrestKind==='duel'){const hit=w.valcrestMiss||1;removeWord(w.id);damagePlayer(hit,'Duel');if(gameState!=='playing'){scheduleTick(true);return;}i--;continue;}
+          if(w.valcrestKind==='duel'){const hit=w.valcrestMiss||1;globalThis.RPG_FX?.impact?.(w.el,'duel');removeWord(w.id);damagePlayer(hit,'Duel');if(gameState!=='playing'){scheduleTick(true);return;}i--;continue;}
           // Panic is a falling hazard, never a stacked word. Exactly one hit at the floor.
           if(w.chapterPanic){
             const panicDamage=window.RPG_CH1_SPECIAL?.panicDamage()||1;
+            globalThis.RPG_FX?.impact?.(w.el,'panic');
             removeWord(w.id);
             damagePlayer(panicDamage,'Panic word');
             if(gameState!=='playing'){scheduleTick(true);return;}
