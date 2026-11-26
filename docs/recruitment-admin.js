@@ -17,7 +17,7 @@ async function loadFeaturedOptions(){
 }
 function fieldValues(){const b=current();if(!b)return;for(const f of fields)$(f).value=b[f]||'';}
 function preview(){const b=current();if(!b)return;
- const character=sixStars.find(c=>c.id===b.featured_character_id);$('previewOperatorName').textContent=character?`FEATURED 6★ · ${character.name.toUpperCase()}`:'CHOOSE A 6★';$('previewOperatorArt').src=character?.art||'';$('previewOperatorArt').hidden=!character;
+ const character=sixStars.find(c=>c.id===b.featured_character_id);$('previewOperatorName').textContent=character?`FEATURED 6★ · ${character.name.toUpperCase()}`:'CHOOSE A 6★';if(character){$('previewOperatorArt').src=character.art;}else $('previewOperatorArt').removeAttribute('src');$('previewOperatorArt').hidden=!character;
  for(const [id,key] of [['previewKicker','kicker'],['previewTitle','title'],['previewSubtitle','subtitle'],['previewDescription','description'],['previewTab','tab']])$(id).textContent=b[key]||'';
 }
 function collect(){const b=current();if(!b)return;for(const f of fields)b[f]=$(f).value;preview();}
@@ -29,9 +29,9 @@ async function load(){setBusy(true);status('Loading banner text…');try{
  const remote=await api('load');revision=Number(remote.revision)||0;
  const merged=utils.merge(local.banners,remote.banners);
  banners=utils.assertEditable(merged);
- if(!sixStars.some(c=>c.id===banners[0].featured_character_id))throw Error('Featured operator is not in the 6★ catalog.');
+ if(!sixStars.some(c=>c.id===banners[0].featured_character_id)){banners[0].featured_character_id=sixStars[0].id;status('The saved featured operator is no longer a 6★ — pick one and save.','error');}
  $('revision').textContent='Revision '+revision;
- fieldValues();preview();status(revision?'Saved banner text loaded.':'Using packaged defaults. Save to publish your first Firebase version.','good');
+ fieldValues();preview();if(!/error/.test($('status').className))status(revision?'Saved banner loaded. Edit the text and press Save.':'Showing the default banner. Press Save to publish your own version.','good');
  }catch(e){status(e.message||String(e),'error');}finally{setBusy(false)}}
 async function save(){if(busy)return;collect();let safe;try{safe=utils.assertEditable(banners);}catch(e){status(e.message,'error');return;}
  if(!sixStars.some(c=>c.id===safe[0].featured_character_id)){status('Select an operator from the available 6★ roster.','error');return;}
@@ -40,6 +40,7 @@ async function save(){if(busy)return;collect();let safe;try{safe=utils.assertEdi
  status('Saved to Firebase. Students see the update on their next Recruitment visit or reload.','good');
  }catch(e){status(e.message||String(e),'error');}finally{setBusy(false)}}
 for(const f of fields)$(f).addEventListener('input',collect);
+$('featured_character_id').addEventListener('change',collect);
 $('editor').addEventListener('submit',e=>{e.preventDefault();void save()});
-$('reload').addEventListener('click',()=>{if(!busy&&confirm('Discard unsaved text and reload Firebase values?'))void load()});
+$('reload').addEventListener('click',()=>{if(!busy&&confirm('Discard unsaved changes and reload the saved banner?'))void load()});
 void load();

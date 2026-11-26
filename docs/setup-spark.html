@@ -1,21 +1,88 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spark Setup — RPG Typing Versus</title><style>body{font:16px system-ui;background:#e8eef6;color:#223249;margin:0}main{max-width:780px;margin:26px auto;background:#fff;padding:25px;border:1px solid #bec9d7;border-radius:12px}main button{padding:12px 18px;margin:7px;font-weight:bold}pre{white-space:pre-wrap;max-width:100%;overflow-wrap:anywhere;background:#f2f4f9;padding:14px}a{color:#224f9e}</style>
-<link rel="stylesheet" href="teacher-nav.css?v=148.8"><script defer src="teacher-nav.js?v=148.8"></script>
-</head><body><main><h1>Firebase Setup</h1><p>Create missing vocabulary pools. Existing pools are preserved.</p><button id="sign">SIGN IN AS TEACHER</button><button id="init" disabled>INITIALIZE MISSING POOLS</button><pre id="log">Sign in to begin.</pre></main><script type="module">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firebase setup — RPG Typing Versus</title>
+<style>
+:root{color-scheme:light}*{box-sizing:border-box}body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:#edf1f6;color:#1e2d43;margin:0}
+main{max-width:820px;margin:26px auto;padding:0 18px 40px}h1{margin:0 0 4px;font-size:28px}.lead{margin:0 0 18px;color:#52637c}
+.card{background:#fff;border:1px solid #cdd7e4;border-radius:12px;padding:20px 22px;margin-bottom:14px;box-shadow:0 2px 8px #1929450d}
+.card h2{font-size:17px;margin:0 0 10px}
+.check{list-style:none;margin:0;padding:0}.check li{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #eef2f7}.check li:last-child{border-bottom:0}
+.check b{display:block}.check small{color:#687991}
+.icon{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:13px;color:#fff;background:#aab6c6}
+.ok .icon{background:#2e8b57}.bad .icon{background:#c0392b}.warn .icon{background:#d69a00}.wait .icon{background:#aab6c6}
+.check a{font-weight:700;color:#2353a1;white-space:nowrap}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+button{font:inherit;font-weight:750;border-radius:7px;padding:11px 18px;border:1px solid #aebdce;background:#fff;color:#22334d;cursor:pointer}
+button.primary{background:#255ff0;border-color:#2352b3;color:#fff}button:disabled{opacity:.5;cursor:default}
+#log{white-space:pre-wrap;background:#f6f8fb;border:1px solid #dde4ee;border-radius:8px;padding:12px 14px;margin:12px 0 0;font:13px/1.5 ui-monospace,Menlo,monospace;color:#33445e}
+#log:empty{display:none}
+ol.steps{margin:0;padding-left:20px}ol.steps li{margin:6px 0}code{background:#eef2f7;padding:1px 6px;border-radius:4px;font-size:13px}
+</style>
+<link rel="stylesheet" href="teacher-nav.css?v=148.9"><script defer src="teacher-nav.js?v=148.9"></script>
+</head><body><main>
+<h1>Firebase setup</h1>
+<p class="lead">Checks that everything the game needs exists in Firebase, and creates anything missing. It never changes or deletes existing data, so it is safe to run again.</p>
+<section class="card"><h2>Status</h2>
+ <ul class="check" id="checks"><li class="wait"><span class="icon">…</span><div><b>Checking…</b></div></li></ul>
+ <div class="row"><button id="sign" class="primary" hidden>Sign in with Google</button><button id="init" class="primary" disabled>Create missing items</button><button id="recheck" disabled>Check again</button></div>
+ <pre id="log" role="status" aria-live="polite"></pre>
+</section>
+<section class="card"><h2>Firestore rules (one-time, after each update that changes them)</h2>
+ <ol class="steps"><li>Open <b>Firebase Console → Firestore Database → Rules</b>.</li><li>Replace everything with the contents of <code>FIRESTORE_RULES_V148_6_COMPLETE.txt</code> from the game files.</li><li>Press <b>Publish</b>.</li></ol>
+ <p class="lead" style="margin:10px 0 0">This page can't check the rules. If students see “Missing or insufficient permissions”, the rules are usually out of date.</p>
+</section>
+</main><script type="module">
 import {googleTeacher,currentTeacher} from './cloud-api.js';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getFirestore,doc,getDocFromServer,setDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 const $=id=>document.getElementById(id),db=getFirestore(getApp());
-function msg(s){$('log').textContent=s}
-async function show(){const t=await currentTeacher();if(!t){msg('Sign in with the teacher Google account.');return;}const teacherUid='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
- if(teacherUid!==t.uid){msg('Teacher UID mismatch. Change the teacher UID in firestore.rules, online-spark.js, and setup-spark.html to '+t.uid+', then publish the files and deploy the rules.');return}
- $('init').disabled=false;$('sign').hidden=true;msg('Authorized teacher: '+t.email+'\nInitialize only missing pool documents. No player data will be overwritten.');}
-$('sign').onclick=async()=>{try{await googleTeacher();await show()}catch(e){msg(String(e.message||e))}};
-$('init').onclick=async()=>{try{const seed=await fetch('seed-vocab.json').then(r=>r.json());let logs=[];
- const config=doc(db,'systemConfig','current'),old=await getDocFromServer(config);if(!old.exists()){await setDoc(config,{revision:1,updatedAt:serverTimestamp()});logs.push('Created config revision 1')}else logs.push('Existing config preserved');
- for(const pool of ['1','2','3','b','all']){const r=doc(db,'vocabPools',pool),snap=await getDocFromServer(r);if(snap.exists()){logs.push(pool+': existing pool preserved');continue;}
- const words=(seed[pool]||[]).map((w,i)=>({id:i+1,prompt:String(w.prompt||''),answer:String(w.answer||''),active:w.active!==false}));
- await setDoc(r,{words,revision:1,updatedAt:serverTimestamp()});logs.push(pool+': created '+words.length+' words');}
- msg(logs.join('\n')+'\nReady. Create/import Adventure Cards and assign grades.');
- }catch(e){msg('Setup stopped: '+String(e.message||e))}};
-show().catch(e=>msg(String(e.message||e)));
+const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
+const POOLS=[['1','1年生'],['2','2年生'],['3','3年生'],['b','1B / 2B / 3B'],['all','All Grades']];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let teacher=null,missing=0,busy=false;
+const log=s=>{$('log').textContent=s;};
+const row=(state,title,detail,link)=>`<li class="${state}"><span class="icon">${state==='ok'?'✓':state==='bad'?'✕':state==='warn'?'!':'…'}</span><div><b>${esc(title)}</b>${detail?`<small>${esc(detail)}</small>`:''}</div>${link||''}</li>`;
+async function get(col,id){const s=await getDocFromServer(doc(db,col,id));return s.exists()?s.data():null;}
+async function check(){
+ if(!teacher){$('checks').innerHTML=row('bad','Teacher sign-in','Sign in with the teacher Google account to check setup.');$('sign').hidden=false;$('init').disabled=true;$('recheck').disabled=true;return;}
+ $('sign').hidden=true;$('recheck').disabled=true;$('checks').innerHTML=row('wait','Checking Firebase…','');
+ const items=[row('ok','Teacher account',teacher.email)];missing=0;
+ try{
+  const config=await get('systemConfig','current');
+  if(!config)missing++;
+  items.push(config?row('ok','Game settings record','Needed for rankings and difficulty changes.'):row('bad','Game settings record is missing','“Create missing items” will add it.'));
+  const pools=await Promise.all(POOLS.map(([id])=>get('vocabPools',id)));
+  POOLS.forEach(([id,label],i)=>{const p=pools[i];if(!p){missing++;items.push(row('bad',`Word list ${label} is missing`,'“Create missing items” will add the starter words.'));return;}
+   const n=Array.isArray(p.words)?p.words.filter(w=>w.active!==false).length:0;
+   items.push(n<20?row('warn',`Word list ${label}: ${n} active words`,'Fewer than 20 words — the game works, but words repeat a lot.','<a href="vocabulary-admin.html">Edit ›</a>'):row('ok',`Word list ${label}`,`${n} active words`,'<a href="vocabulary-admin.html">Edit ›</a>'));});
+  const story=await get('storyContent','published');
+  items.push(story?row('ok','Conquest','Published from the Conquest editor.','<a href="story-editor.html">Open ›</a>'):row('warn','Conquest uses the built-in stages','Optional: publish from the Conquest editor to customise.','<a href="story-editor.html">Open ›</a>'));
+  const banner=await get('recruitmentConfig','banners');
+  items.push(banner?row('ok','Recruitment banner','Saved banner text is in use.','<a href="recruitment-admin.html">Open ›</a>'):row('warn','Recruitment banner uses the default text','Optional.','<a href="recruitment-admin.html">Open ›</a>'));
+  $('checks').innerHTML=items.join('');
+  $('init').disabled=!missing;$('init').textContent=missing?`Create ${missing} missing item${missing===1?'':'s'}`:'Nothing missing';
+  log(missing?'':'Setup is complete. Students can play.');
+ }catch(e){$('checks').innerHTML=items.join('')+row('bad','Could not read Firebase',String(e?.message||e));}
+ finally{$('recheck').disabled=false;}
+}
+async function boot(){
+ try{const t=await currentTeacher();
+  if(t&&t.uid!==TEACHER_UID){$('checks').innerHTML=row('bad','This Google account is not the teacher account',`Signed in as ${t.email}. Sign out and use the teacher account, or update the teacher UID in the rules and game files to ${t.uid}.`);$('sign').hidden=false;return;}
+  teacher=t||null;}catch(e){log(String(e?.message||e));}
+ await check();
+}
+$('sign').onclick=async()=>{try{await googleTeacher();await boot();}catch(e){log(String(e?.message||e));}};
+$('recheck').onclick=()=>void check();
+$('init').onclick=async()=>{if(busy||!teacher)return;busy=true;$('init').disabled=true;const logs=[];
+ try{
+  const config=doc(db,'systemConfig','current');
+  if(!(await getDocFromServer(config)).exists()){await setDoc(config,{revision:1,updatedAt:serverTimestamp()});logs.push('✓ Created the game settings record');}
+  let seed=null;
+  for(const [id,label] of POOLS){const r=doc(db,'vocabPools',id);if((await getDocFromServer(r)).exists())continue;
+   seed||=await fetch('seed-vocab.json').then(x=>{if(!x.ok)throw Error('seed-vocab.json is missing from the game files.');return x.json();});
+   const words=(seed[id]||[]).map((w,i)=>({id:i+1,prompt:String(w.prompt||''),answer:String(w.answer||''),active:w.active!==false}));
+   await setDoc(r,{words,revision:1,updatedAt:serverTimestamp()});logs.push(`✓ Created word list ${label} (${words.length} words)`);}
+  log(logs.join('\n')||'Nothing needed creating.');
+ }catch(e){log((logs.length?logs.join('\n')+'\n':'')+'Setup stopped: '+String(e?.message||e));}
+ finally{busy=false;await check();if(logs.length)log(logs.join('\n')+'\nDone. Next: create player cards and set each student’s grade.');}
+};
+void boot();
 </script></body></html>

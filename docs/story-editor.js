@@ -161,7 +161,9 @@ function mechanicMarkup(st,onlyChapter1=false){
    const input=field.type==='boolean'?`<select ${attr}><option value="true" ${current===true?'selected':''}>Enabled</option><option value="false" ${current!==true?'selected':''}>Disabled</option></select>`:`<input type="number" ${attr} min="${field.min}" max="${field.max}" step="${field.step||1}" value="${esc(current)}">`;
    return `<div class="field"><label>${esc(field.label)}</label>${input}</div>`;
   }).join('');
-  return `<div class="mechanicgroup"><h4>${esc(m.label)}</h4><p class="muted">${esc(m.description||'')}</p><div class="grid">${controls}</div></div>`;
+  const on=(settings.enabled??(()=>{let v=m.fields.find(f=>f.key==='enabled')?.default;for(const scope of ['mode:story',`chapter:${currentChapter()?.id}`,`stage:story:${st.id}`])if(liveBalance[scope]?.mechanics?.[m.id]?.enabled!==undefined)v=liveBalance[scope].mechanics[m.id].enabled;return v;})())===true;
+  const hasSwitch=m.fields.some(f=>f.key==='enabled');
+  return `<div class="mechanicgroup${hasSwitch&&!on?' is-off':''}"><h4>${esc(m.label)}</h4><p class="muted">${esc(m.description||'')}</p><div class="grid">${controls}</div></div>`;
  }).join('');
 }
 function clearPhotoSelection(){for(const data of stagedPhotos.values())URL.revokeObjectURL(data.url);stagedPhotos.clear();updateAuth()}
@@ -500,8 +502,8 @@ function renderFields(){
  const limits=st.stars?.damageMax||[0,1,2,3];
  $('stageFields').insertAdjacentHTML('beforeend',`<details class="cq-settings"><summary>Star rating (optional)</summary><div class="grid cq-config-body">${limits.map((n,i)=>`<div class="field"><label>${4-i}★ maximum damage</label><input type="number" min="0" max="990" step="10" data-star-index="${i}" value="${esc(n*10)}"></div>`).join('')}</div></details>`);
  $('slidesEditor').textContent='';
- for(const [id,title] of [['boss-preview','Boss sprite'],['bg-preview','Battle background']]){const img=$(id);if(img)img.addEventListener('error',()=>{img.removeAttribute('src');img.alt=title+' not found on website.';});}
- for(const img of $('slidesEditor').querySelectorAll('img[data-scene-preview]'))img.addEventListener('error',()=>{img.removeAttribute('src');img.alt='Image not found. Add it to docs/story/images/ first.';});
+ for(const [id,title] of [['boss-preview','Boss sprite'],['bg-preview','Battle background']]){const img=$(id);if(img)img.addEventListener('error',()=>{img.removeAttribute('src');img.dataset.missing='1';img.alt=title+' not found on website.';});}
+ for(const img of $('slidesEditor').querySelectorAll('img[data-scene-preview]'))img.addEventListener('error',()=>{img.removeAttribute('src');img.dataset.missing='1';img.alt='Image not found. Add it to docs/story/images/ first.';});
 }
 function render(){if(currentStage()?.type==='story-only')selectFirstEncounter();renderNav();renderFields();if(activeTab==='operators')renderOperatorSettings();updateAuth();if(activeTab==='encounters')void loadLiveValues();}
 function moveSelection(kind,index,d){const arr=kind==='chapter'?chapters:currentChapter()?.stages;if(!arr||!swap(arr,index,index+d))return;if(kind==='chapter')chapterIndex=index+d;else stageIndex=index+d;markDirty();render();}
@@ -815,3 +817,5 @@ async function boot(){
  }).catch(error=>{if(authToken===authReadId)console.warn('Teacher login status unavailable:',error);});
 }
 void boot();
+// v148.9: fold a mechanic's settings away while it is disabled.
+document.addEventListener('change',e=>{const t=e.target;if(t?.matches?.('select[data-mechanic-key="enabled"]'))t.closest('.mechanicgroup')?.classList.toggle('is-off',t.value!=='true');});

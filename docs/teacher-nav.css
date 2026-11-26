@@ -29,3 +29,13 @@ body.teacher-nav-ready.teacher-nav-aura main {margin:30px auto 50px;}
 }
 
 .teacher-player-nav{display:flex;gap:4px;padding:8px 16px;background:#e7edf5;border-bottom:1px solid #c8d4e4;font:600 13px system-ui;flex-wrap:wrap}.teacher-player-nav a{color:#263c57;padding:7px 14px;text-decoration:none;border-radius:5px}.teacher-player-nav a[aria-current=page]{background:#fff;box-shadow:0 1px 4px #22334420}.teacher-player-nav a:focus-visible{outline:2px solid #235cd1}@media print{.teacher-player-nav{display:none!important}}
+
+/* v148.9: page stylesheets must not reshape the shared menus.
+   Some pages style bare `nav`/`button` elements (margins, centring, display). */
+nav.teacher-hub-nav{display:block!important;margin:0!important;padding:0!important;width:auto!important;max-width:none!important;gap:0!important;flex-wrap:nowrap!important;justify-content:initial!important}
+nav.teacher-hub-nav .teacher-hub-nav__inner{justify-content:flex-start!important;margin:0 auto!important;flex-wrap:nowrap!important}
+nav.teacher-hub-nav a{font-size:13px!important;text-decoration:none!important}
+nav.teacher-player-nav{margin:0!important;width:auto!important;max-width:none!important}
+nav.teacher-player-nav a{text-decoration:none!important}
+/* The hidden attribute always wins (sign-in buttons, empty states). */
+[hidden]{display:none!important}

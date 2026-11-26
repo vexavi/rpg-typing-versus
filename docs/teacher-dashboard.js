@@ -47,7 +47,7 @@ function render(){
   const st=statusOf(s);
   const card=st==='disabled'?'<span class="td-pill off">Disabled</span>':st==='blank'?'<span class="td-pill wait">Not registered</span>':'<span class="td-pill ok">Playing</span>';
   const progress=!s.hasPlayer?'<span class="td-sub">—</span>':!s.tutorialDone?`<span class="td-sub">Tutorial step ${s.tutorialStep}/5</span>`:
-   `${s.normalClear?'<span class="td-tag">Normal ✓</span>':'<span class="td-sub">Normal not cleared</span>'}${s.conquest?` <span class="td-tag">Conquest ${s.conquest}</span>`:''}`;
+   `${s.normalClear?'<span class="td-tag">Normal ✓</span>':'<span class="td-sub">Normal not cleared</span>'}${s.conquest?` <span class="td-tag" title="Conquest encounters cleared">Conquest ${s.conquest} cleared</span>`:''}`;
   return `<tr data-id="${esc(s.id)}" class="${st}">
    <td><button type="button" class="td-name" data-open="${esc(s.id)}"><b>${esc(s.name||'(no name yet)')}</b><small>${esc(s.id)}</small></button></td>
    <td><select class="td-grade${s.grade?'':' missing'}" data-grade="${esc(s.id)}" aria-label="Grade for ${esc(s.name||s.id)}" ${s.disabled?'disabled':''}><option value="">— choose —</option>${Object.entries(GRADES).map(([v,l])=>`<option value="${v}" ${s.grade===v?'selected':''}>${l}</option>`).join('')}</select></td>
@@ -160,9 +160,9 @@ $('dToggle').addEventListener('click',()=>{const s=students.find(x=>x.id===openI
 $('dClear').addEventListener('click',()=>{const s=students.find(x=>x.id===openId);if(!s||!confirm(`Clear the name on ${s.id}? The next person to scan it chooses a new name. Their progress stays with the Player ID.`))return;
  void act(async()=>{await clearCard(s.code);return 'Name cleared.';});});
 $('dRotate').addEventListener('click',()=>{const s=students.find(x=>x.id===openId);if(!s||!confirm(`Make a new QR code for ${s.name||s.id}? The old printed card stops working, so print the new one.`))return;
- void act(async()=>{const fresh=await rotateCard(s.code);return `New card code ${formatCode(fresh)}. Print the new card from Player Management.`;});});
+ void act(async()=>{const fresh=await rotateCard(s.code);return `New card code ${formatCode(fresh)}. Print the new card from Player cards.`;});});
 $('newCards').addEventListener('submit',e=>{e.preventDefault();const n=Number($('newCount').value);if(!confirm(`Create ${n} new blank cards?`))return;
- void act(async()=>{await createCards(n);$('statusFilter').value='blank';return `${n} new cards created. Print them from Player Management.`;});});
+ void act(async()=>{await createCards(n);$('statusFilter').value='blank';return `${n} new cards created. Print them from Player cards.`;});});
 $('signOut').addEventListener('click',async()=>{await teacherSignOut();location.reload();});
 
 // ---------- start ----------

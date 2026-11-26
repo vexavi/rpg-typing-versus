@@ -4,6 +4,10 @@ import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js'
 import {nextModeConfig} from './dashboard-revisions.mjs?v=147.0';
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 const el=id=>document.getElementById(id);let teacher=null,db=null,chapters=[],ready=false,reading=0,loading=false,saving=false,dirty=false,loadedScope=null,loadedData=null,selected=null;
+// Built-in values from adventure_engine.js (Normal stages 1–5; Practice is derived from Normal stage 1).
+const BUILTIN={normal:[{fallSpeedPxPerSec:41,spawnEveryMs:2950,bossMaxHp:22,hitDamage:1},{fallSpeedPxPerSec:44,spawnEveryMs:2850,bossMaxHp:25,hitDamage:1},{fallSpeedPxPerSec:49,spawnEveryMs:2750,bossMaxHp:30,hitDamage:1},{fallSpeedPxPerSec:51,spawnEveryMs:2850,bossMaxHp:34,hitDamage:1},{fallSpeedPxPerSec:58,spawnEveryMs:2550,bossMaxHp:28,hitDamage:1}],
+ practice:[{fallSpeedPxPerSec:35,spawnEveryMs:6941}]};
+function builtinHint(mode,stage,key){const list=BUILTIN[mode]||[];if(stage){const v=list[Number(stage)-1]?.[key];return v==null?'':String(v);}const vals=list.map(x=>x[key]).filter(v=>v!=null);if(!vals.length)return '';const lo=Math.min(...vals),hi=Math.max(...vals);return lo===hi?String(lo):`${lo}–${hi} (by stage)`;}
 const fields={fallSpeedPxPerSec:['Falling speed (px/s)',5,250,1],spawnEveryMs:['Word spawn interval (ms)',180,15000,20],bossMaxHp:['Boss HP',1,2000,1],hitDamage:['Damage / word',1,100,1]};
 const options=list=>list.map(([id,label])=>{const o=document.createElement('option');o.value=id;o.textContent=label;return o});
 function message(s,bad=false){el('status').textContent=s;el('status').className=bad?'bad':'good'}
@@ -40,7 +44,7 @@ function refreshChoices(){
    w.append(l,input);if(f.help)input.title=f.help;grid.appendChild(w);
   }box.appendChild(grid);el('mechanics').appendChild(box);
  }
- if(!el('mechanics').children.length){const p=document.createElement('p');p.className='muted';p.textContent='No extra word mechanics for this mode. Conquest stage effects are set in the Conquest editor.';el('mechanics').appendChild(p);}
+ el('mechanics-panel').hidden=!el('mechanics').children.length; // Conquest stage effects live in the Conquest editor
 }
 function initInputs(){
  const dest=el('difficulty');dest.replaceChildren();
@@ -73,14 +77,21 @@ async function load(){
  if(!teacher){loading=false;lock();message('Sign in to edit settings.',true);return;}
  const scope=selectedScope();if(!scope||scope.endsWith(':')){loading=false;lock();message('Select a stage.',true);return;}
  try{
-  const snap=await getDocFromServer(doc(db,'gameBalance',scope));if(seq!==reading)return;
+  const mode=el('mode').value,stage=scope.startsWith('stage:')?el('stage').value:'';
+  const [snap,modeSnap]=await Promise.all([getDocFromServer(doc(db,'gameBalance',scope)),stage?getDocFromServer(doc(db,'gameBalance','mode:'+mode)).catch(()=>null):null]);if(seq!==reading)return;
   const data=snap.exists()?snap.data():{};loadedData=data;loadedScope=scope;
-  for(const input of document.querySelectorAll('[data-balance]'))input.value=data.values?.[input.dataset.balance]??'';
+  const modeValues=modeSnap?.exists?.()?modeSnap.data().values||{}:{};
+  for(const input of document.querySelectorAll('[data-balance]')){
+   const key=input.dataset.balance;input.value=data.values?.[key]??'';
+   const inherited=modeValues[key]!=null?`${modeValues[key]} (all-stages setting)`:builtinHint(mode,stage,key);
+   input.placeholder=inherited?`${inherited}`:'Built-in';input.title=inherited?`Now: ${inherited}`:'';input.classList.toggle('is-custom',input.value!=='');
+  }
   for(const input of document.querySelectorAll('[data-mechanic]')){
    const value=data.mechanics?.[input.dataset.mechanic]?.[input.dataset.field];
    input.value=value===true?'true':value===false?'false':value??'';
   }
-  message(snap.exists()?`Loaded ${scope}`:`No override for ${scope}`);
+  const where=stage?`${mode==='normal'?'Normal':'Practice'} stage ${stage}`:`all ${mode==='normal'?'Normal':'Practice'} stages`;
+  message(snap.exists()?`Custom values are set for ${where} (blue boxes).`:`Using built-in values for ${where}.`);
  }catch(e){if(seq===reading)message(errorMessage(e),true)}finally{if(seq===reading){loading=false;lock();}}
 }
 function collect(){
@@ -89,7 +100,7 @@ function collect(){
  for(const input of document.querySelectorAll('[data-balance]')){
   if(input.closest('.field')?.classList.contains('hidden')||input.value.trim()==='')continue;
   const key=input.dataset.balance,[,min,max]=fields[key],number=Number(input.value);
-  if(!Number.isFinite(number)||number<min||number>max)throw Error(`${key} must be between ${min} and ${max}`);
+  if(!Number.isFinite(number)||number<min||number>max)throw Error(`${fields[key][0]} must be between ${min} and ${max}.`);
   values[key]=number;
  }
  for(const input of document.querySelectorAll('[data-mechanic]')){
@@ -105,11 +116,11 @@ function collect(){
  return {values,mechanics};
 }
 async function save(){if(!teacher||!ready||loading||saving||loadedScope!==selectedScope())return;
- try{const data=collect();saving=true;lock();await commit(loadedScope,data);await load();message('Published.');}
+ try{const data=collect();saving=true;lock();await commit(loadedScope,data);await load();message('Published. Students get the new difficulty from their next run.');}
  catch(e){message(errorMessage(e),true)}finally{saving=false;lock();}}
 async function clear(){if(!teacher||loading||saving||loadedScope!==selectedScope())return;
- if(!confirm('Clear overrides for this scope?'))return;
- try{saving=true;lock();await commit(loadedScope,null,true);await load();message('Overrides cleared.');}
+ if(!confirm('Remove the custom values here and go back to the built-in difficulty?'))return;
+ try{saving=true;lock();await commit(loadedScope,null,true);await load();message('Back to built-in values.');}
  catch(e){message(errorMessage(e),true)}finally{saving=false;lock();}}
 async function signIn(){try{teacher=await googleTeacher();if(teacher?.uid!==TEACHER_UID){await teacherSignOut();teacher=null;throw Error('Use the authorized teacher account.');}db=getFirestore(getApp());ready=true;syncAuth();await load()}catch(e){message(errorMessage(e),true)}}
 function syncAuth(){el('google').classList.toggle('hidden',!!teacher);el('signout').classList.toggle('hidden',!teacher)}
@@ -120,7 +131,7 @@ async function boot(){initInputs();loading=true;lock();
   if(dirty&&!confirm('Discard unsaved settings?')){restoreSelection();return;}
   void load();
  });
- document.addEventListener('input',e=>{if(e.target.matches('[data-balance],[data-mechanic]'))dirty=true;});
+ document.addEventListener('input',e=>{if(e.target.matches('[data-balance],[data-mechanic]')){dirty=true;if(e.target.matches('[data-balance]'))e.target.classList.toggle('is-custom',e.target.value!=='');}});
  window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
  el('google').onclick=signIn;el('signout').onclick=async()=>{if(dirty&&!confirm('Discard unsaved settings?'))return;await teacherSignOut();teacher=null;syncAuth();await load()};
  el('save').onclick=save;el('reset').onclick=clear;el('reload-settings').onclick=()=>{if(!dirty||confirm('Discard unsaved settings?'))void load();};

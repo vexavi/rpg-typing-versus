@@ -22,17 +22,30 @@
      for(const field of FIELDS){
        if(typeof row[field]!=='string'||row[field].length>LIMITS[field])throw Error(field+' exceeds the maximum length.');
      }
-     if(!row.title.trim()||!row.tab.trim()||!row.kicker.trim())throw Error('Title, tab label, and kicker are required.');
+     if(!row.title.trim()||!row.tab.trim()||!row.kicker.trim())throw Error('Banner tab label, small heading and large title are required.');
      if(!/^[a-z][a-z0-9_]{0,39}$/.test(row.featured_character_id))throw Error('Choose an available featured operator.');
    }
    return normalize(source);
  }
+ const REQUIRED=['tab','title','kicker'];
  function merge(base,overrides){
-   const byId=new Map(normalize(overrides).map(x=>[x.id,x]));
+   const rows=Array.isArray(overrides)?overrides:[];
    return (Array.isArray(base)?base:[]).map(row=>{
-     const x=byId.get(row.id);
+     const o=rows.find(x=>x&&x.id===row.id);
+     if(!o)return row;
+     // v148.9: a saved banner that is missing fields keeps the packaged text for them
+     // (required fields never become blank); optional fields may be cleared on purpose.
+     const out={...row};
+     for(const field of FIELDS){
+       if(!(field in o))continue;
+       const value=String(o[field]??'').trim().slice(0,LIMITS[field]);
+       if(!value&&(REQUIRED.includes(field)||field==='featured_character_id'))continue;
+       out[field]=value;
+     }
+     if(!/^[a-z][a-z0-9_]{0,39}$/.test(out.featured_character_id||''))out.featured_character_id=row.featured_character_id||'tavi';
      // Never let teacher text overwrite file-backed artwork, ID, or game behavior.
-     return x?{...row,...x,art:row.art}:row;
+     out.art=row.art;
+     return out;
    });
  }
  const api={IDS,FIELD_LIMITS:LIMITS,FIELDS,normalize,assertEditable,merge};

@@ -13,11 +13,11 @@ body{margin:0}.wrap{max-width:1120px;margin:22px auto;padding:0 16px 40px}header
 @media(max-width:780px){.grid,.fields{grid-template-columns:1fr}.field.full{grid-column:auto}}
 </style>
 
-<link rel="stylesheet" href="teacher-nav.css?v=148.8"><script defer src="teacher-nav.js?v=148.8"></script>
+<link rel="stylesheet" href="teacher-nav.css?v=148.9"><script defer src="teacher-nav.js?v=148.8"></script>
 </head><body>
 <div id="v66Startup" style="position:fixed;inset:0;z-index:2147483646;background:#111225;color:#ffecc0;display:grid;place-items:center;padding:20px;font:800 18px system-ui;text-align:center">CONNECTING TO FIREBASE…</div>
 <main class="wrap">
-<header><div><h1>Recruitment Banner Editor</h1></div></header>
+<header><div><h1>Recruitment banner</h1></div></header>
 <section class="panel"><h2>Featured Recruitment</h2><p class="muted">Select the featured 6★ and update banner text. Changes save to Firebase.</p></section>
 <section class="grid">
 <section class="panel"><h2>Banner text</h2><form id="editor">
@@ -34,8 +34,8 @@ body{margin:0}.wrap{max-width:1120px;margin:22px auto;padding:0 16px 40px}header
 </form></section>
 <section class="panel"><h2>Live preview</h2><div class="preview"><img id="previewOperatorArt" alt="Featured operator preview" style="display:block;float:right;width:37%;height:265px;object-fit:contain;object-position:center bottom;margin:-10px -8px 0 12px"/><div id="previewOperatorName" style="font-size:12px;color:#ffe2a2;letter-spacing:.1em;font-weight:800"></div><div id="previewKicker" class="eyebrow"></div><h3 id="previewTitle"></h3><div id="previewSubtitle" class="sub"></div><p id="previewDescription" class="desc"></p><div id="previewTab" class="tab"></div></div><p class="muted">Changes appear here while typing. Students see the saved text when they next open or reload Recruitment.</p></section>
 </section>
-<section class="panel"><div class="note"><strong>Character artwork stays in the roster.</strong> Change the featured 6★ using the selector, without renaming artwork. Background pictures are still independent and can be added using <code>recruitment-banners.json</code> and GitHub. Actual random pulls, currency spending, and rewards remain disabled.</div></section>
+<section class="panel"><div class="note"><strong>How it works.</strong> Pick the featured 6★ operator and write the banner text, then press <b>Save to Firebase</b>. Students see it the next time they open or reload Recruitment. Pull rates, costs and rewards are not changed here, and operator artwork comes from the roster.</div></section>
 </main>
-<script src="recruitment-banner-config.js?v=75"></script>
-<script type="module" src="recruitment-admin.js?v=147.0"></script>
+<script src="recruitment-banner-config.js?v=148.9"></script>
+<script type="module" src="recruitment-admin.js?v=148.9"></script>
 </body></html>

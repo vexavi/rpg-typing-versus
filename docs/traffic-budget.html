@@ -1,10 +1,49 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firebase Traffic Budget — RPG Typing Versus</title><style>body{background:#edf1f7;color:#202f42;font:15px system-ui;margin:0}main{max-width:850px;margin:20px auto;background:#fff;border:1px solid #c5ceda;padding:25px;border-radius:12px}h1{font-size:25px}label{display:flex;align-items:center;justify-content:space-between;margin:12px 0;gap:15px}input{font:inherit;padding:8px;max-width:120px}article{display:grid;grid-template-columns:1fr 1fr;gap:15px}article div{background:#f4f6f9;padding:18px;border-radius:9px}strong{font-size:30px;display:block}small{color:#607186}.bar{background:#dae0e7;border-radius:10px;height:12px;overflow:hidden;margin:7px 0 13px}.bar span{display:block;height:100%;background:#2d719b;width:0%}@media(max-width:620px){article{grid-template-columns:1fr}}</style>
-<link rel="stylesheet" href="teacher-nav.css?v=148.8"><script defer src="teacher-nav.js?v=148.8"></script>
-</head><body><main><h1>Firebase Traffic Budget</h1><p>Estimate usage for a class. Figures are estimates, not live Firebase usage.</p><label>Students per day <input id="students" type="number" min="1" max="100" value="65"></label><label>Minutes online per student (RTDB connections) <input id="minutes" type="number" min="1" max="480" value="70"></label><label>Solo runs per student <input id="runs" type="number" min="0" max="30" value="5"></label><label>Leaderboard visits per student <input id="boards" type="number" min="0" max="30" value="2"></label><label>Conquest visits per student <input id="conquest" type="number" min="0" max="30" value="2"></label><label>Saved territory records per player <input id="territories" type="number" min="0" max="100" value="3"></label><label>Completed operations per student <input id="captures" type="number" min="0" max="30" value="1"></label><label>Recruitment draws per student <input id="draws" type="number" min="0" max="30" value="1"></label><article><div><small>Estimated daily Firestore reads</small><strong id="reads">—</strong><small>Free quota: 50,000/day</small><div class="bar"><span id="readbar"></span></div></div><div><small>Estimated daily Firestore writes</small><strong id="writes">—</strong><small>Free quota: 20,000/day</small><div class="bar"><span id="writebar"></span></div></div></article><p id="note"></p><p><small>Assumptions: zero scheduled Firestore connectivity reads; approximately 12–18 server reads per run, up to 40 rank-entry document reads per leaderboard opening (initial query + listener), and a few profile, score and session writes per run. Conquest adds an estimated 6 baseline reads plus one per saved territory per visit, 12 reads/5 writes per completed operation and 8 reads/3 writes per draw; encounter rewards may increase usage. Session duration does not determine Firestore reads: Realtime Database has separate connection/download limits. Security-rule lookups, reconnects, teacher administration and live leaderboard changes can add reads. Firebase free quota is shared by all your project users and resets daily on Pacific time. Use the Firebase Console's Usage tab for actual counts.</small></p></main><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Traffic estimator — RPG Typing Versus</title>
+<style>
+:root{color-scheme:light}*{box-sizing:border-box}body{background:#edf1f7;color:#202f42;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0}
+main{max-width:880px;margin:24px auto;padding:0 18px 40px}h1{margin:0 0 4px;font-size:28px}.lead{margin:0 0 16px;color:#52637c}
+.card{background:#fff;border:1px solid #cdd7e4;border-radius:12px;padding:20px 22px;margin-bottom:14px;box-shadow:0 2px 8px #1929450d}.card h2{font-size:17px;margin:0 0 12px}
+.inputs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 18px}
+.inputs label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #eef2f7;font-weight:600;font-size:14px}
+.inputs input{width:84px;padding:8px 10px;border:1px solid #b5c0d3;border-radius:6px;font:inherit;text-align:right}
+.results{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.meter{background:#f6f8fb;border:1px solid #dde4ee;border-radius:10px;padding:14px 16px}
+.meter small{display:block;color:#52637c;font-weight:600}.meter strong{display:block;font-size:30px;line-height:1.2}
+.bar{height:12px;background:#dde4ee;border-radius:6px;overflow:hidden;margin-top:8px}.bar span{display:block;height:100%;width:0;border-radius:6px;background:#2e8b57;transition:width .25s,background .25s}
+.bar span.warn{background:#d69a00}.bar span.bad{background:#c0392b}
+#note{margin:14px 0 0;padding:10px 14px;border-radius:8px;font-weight:650}#note.ok{background:#e6f4ec;color:#1d6b3a}#note.warn{background:#fff4d6;color:#7a5600}#note.bad{background:#fde8ec;color:#9d243c}
+details{color:#52637c;font-size:13px}details summary{cursor:pointer;font-weight:700;color:#2353a1}
+@media(max-width:600px){.results{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="teacher-nav.css?v=148.9"><script defer src="teacher-nav.js?v=148.9"></script>
+</head><body><main>
+<h1>Traffic estimator</h1>
+<p class="lead">Check that a normal school day fits inside Firebase’s free daily limits. These are estimates; the Firebase Console’s <b>Usage</b> tab shows real numbers.</p>
+<section class="card"><h2>A typical day</h2><div class="inputs">
+<label>Students playing <input id="students" type="number" min="1" max="500" value="65"></label>
+<label>Battles per student <input id="runs" type="number" min="0" max="30" value="5"></label>
+<label>Leaderboard visits per student <input id="boards" type="number" min="0" max="30" value="2"></label>
+<label>Conquest map visits per student <input id="conquest" type="number" min="0" max="30" value="2"></label>
+<label>Territories each student has started <input id="territories" type="number" min="0" max="100" value="3"></label>
+<label>Conquest operations finished per student <input id="captures" type="number" min="0" max="30" value="1"></label>
+<label>Recruitment pulls per student <input id="draws" type="number" min="0" max="30" value="1"></label>
+</div></section>
+<section class="card"><h2>Estimated use per day</h2><div class="results">
+<div class="meter"><small>Firestore reads</small><strong id="reads">—</strong><small id="readpct">of 50,000 free</small><div class="bar"><span id="readbar"></span></div></div>
+<div class="meter"><small>Firestore writes</small><strong id="writes">—</strong><small id="writepct">of 20,000 free</small><div class="bar"><span id="writebar"></span></div></div>
+</div><p id="note" role="status" aria-live="polite"></p></section>
+<section class="card"><details><summary>How this is estimated</summary><p>About 16 reads and 3 writes per battle; up to 40 reads per leaderboard visit (first load plus live updates); about 6 reads plus one per started territory for each Conquest map visit; about 12 reads / 5 writes per finished operation; about 8 reads / 3 writes per recruitment pull; plus around 12 reads and 3 writes when a student signs in. Teacher pages, reconnects and busy leaderboards add a little more. The free quota is shared by everyone using your Firebase project and resets each day at midnight Pacific time (5 pm in Japan, or 4 pm during US daylight saving time).</p></details></section>
+</main><script>
 const $=id=>document.getElementById(id),n=id=>Math.max(0,Number($(id).value)||0);
-function render(){const students=n('students'),minutes=n('minutes'),runs=n('runs'),boards=n('boards');
+function paint(bar,pct){const el=$(bar);el.style.width=Math.min(100,pct)+'%';el.className=pct>=100?'bad':pct>=80?'warn':'';}
+function render(){const students=n('students'),runs=n('runs'),boards=n('boards');
  const reads=Math.ceil(students*(16*runs+40*boards+12+n('conquest')*(6+Math.max(1,n('territories')))+n('captures')*12+n('draws')*8)),writes=Math.ceil(students*(3*runs+boards+3+n('captures')*5+n('draws')*3));
- $('reads').textContent=reads.toLocaleString();$('writes').textContent=writes.toLocaleString();$('readbar').style.width=Math.min(100,reads/500)+'%';$('writebar').style.width=Math.min(100,writes/200)+'%';
- $('note').textContent=(reads>40000||writes>16000?'High expected Firestore usage. Reduce runs or leaderboard views. ':'Within an 80% Firestore planning threshold under these assumptions. ')+`RTDB: approx. ${Math.round(students*minutes/60)} total student connection-hours; monitor its separate 100-connection and download quotas.`;
+ const rp=reads/500,wp=writes/200;
+ $('reads').textContent=reads.toLocaleString();$('writes').textContent=writes.toLocaleString();
+ $('readpct').textContent=`${Math.round(rp)}% of 50,000 free`;$('writepct').textContent=`${Math.round(wp)}% of 20,000 free`;
+ paint('readbar',rp);paint('writebar',wp);
+ const worst=Math.max(rp,wp),note=$('note');
+ note.className=worst>=100?'bad':worst>=80?'warn':'ok';
+ note.textContent=worst>=100?'Over the free limit: once it is reached, saving and loading stop until the daily reset. Reduce battles or leaderboard visits, or spread classes across days.':worst>=80?'Close to the free limit. It should work, but leave room for busy days.':'Comfortably inside the free daily limits.';
 }document.querySelectorAll('input').forEach(x=>x.addEventListener('input',render));render();
 </script></body></html>

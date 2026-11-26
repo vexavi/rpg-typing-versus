@@ -82,7 +82,7 @@ async function openCard(b){
  }
  return {ok:true,public_id:c.publicId,name:c.username,grade:c.grade||null,card_code:code,online:true,cloud:true};
 }
-async function currentConfig(mode){const data=await read('systemConfig','current');if(!data)err('Firebase setup incomplete. Teacher: run SETUP SPARK first.');return modeRevision(data,mode);}
+async function currentConfig(mode){const data=await read('systemConfig','current');if(!data)err('Firebase setup incomplete. Teacher: open Firebase setup on the Teacher Dashboard.');return modeRevision(data,mode);}
 async function vocab(b,verifiedPlayer=null){const p=verifiedPlayer||await currentPlayer(b);const shared=b.mode==='shared';const g=shared?'all':p.player.grade;if(!g)err('Teacher must assign your class before playing.');
  const pool=shared?'all':poolOf(g),data=await read('vocabPools',pool);if(!data||!Array.isArray(data.words))err('Vocabulary pool not installed. Teacher: run Spark setup.');
  return {ok:true,pool,grade:shared?'all':g[0],rank_grade:g,revision:Number(data.revision)||1,group:pool==='b'?'b':'standard',words:data.words.filter(x=>x.active!==false),ruleset:shared?`v65-shared-r${data.revision}-fixed-120s`:null};
