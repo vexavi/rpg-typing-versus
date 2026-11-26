@@ -3751,7 +3751,7 @@ async function debugJumpTo(mode, idx){
     resetOperatorForStage(); // Retire the outgoing rules engine and its temporary hexes.
     clearOutgoingSquadEffects();
     renderStorySquad();updateUI();
-    if(storySquadDeploy){storySquadDeploy.textContent=`${storyOperatorName(storySquad.ids[next])} DEPLOYING`;storySquadDeploy.classList.add('show');}
+    if(storySquadDeploy){storySquadDeploy.textContent=`${storyOperatorName(storySquad.ids[next])} DEPLOYING`;storySquadDeploy.setAttribute?.('data-down',storyOperatorName(storySquad.ids[next-1]||''));storySquadDeploy.classList.add('show');}
     storySquadSwitchTimer=setTimeout(()=>{
       storySquadSwitchTimer=null;
       if(!storySquad.enabled||gameState!=='squad-deploy'||currentMode!=='story')return;

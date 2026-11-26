@@ -12,7 +12,7 @@
  const safeId=s=>typeof s==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(s);
  const retired=new Set(['crimson_knight','silver_knight','mc']);
  const JP=['なし','白光','蒼光','紫光','金光'];
- const PERKS=['No aura','Soft rim light','Rim light + rising motes','Motes + rotating tech ring','Everything + golden rays'];
+ const PERKS=['No aura','Soft rim light','Rim light + rising motes','Motes + rotating tech ring','Everything + golden halo'];
  let player=null,code='',selected='',preview=0,hover=null,working=false,catalog=[],confirmUntil=0,confirmTimer=0;
 
  const notice=(text,kind='')=>{const m=$('message');m.textContent=text;m.dataset.kind=kind;};

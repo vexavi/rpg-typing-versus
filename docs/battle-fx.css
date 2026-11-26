@@ -432,6 +432,18 @@
 /* Equipped aura (Aura Workshop): a ring in the aura colour on every strike; higher tiers add motes and a halo. */
 .fx-aura-burst{width:170px;height:170px;translate:-50% -50%;border-radius:50%;border:2px solid var(--ac);box-shadow:0 0 14px var(--ac),inset 0 0 14px var(--ac);animation:fx-ring .7s ease-out .05s both}
 .fx-aura-burst.t3,.fx-aura-burst.t4{border-style:dashed;border-width:3px}
-.fx-aura-burst.t4{width:220px;height:220px;background:repeating-conic-gradient(color-mix(in srgb,var(--ac) 45%,transparent) 0 4deg,transparent 4deg 18deg);
-  -webkit-mask:radial-gradient(circle,transparent 30%,#000 32%);mask:radial-gradient(circle,transparent 30%,#000 32%)}
+.fx-aura-burst.t4{width:220px;height:220px;background:radial-gradient(circle,transparent 40%,color-mix(in srgb,var(--ac) 35%,transparent) 62%,transparent 72%)}
 .fx-aura-mote{width:7px;height:7px;translate:-50% -50%;rotate:var(--a);background:var(--c1);box-shadow:0 0 8px var(--c1);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);animation:fx-ember .9s cubic-bezier(.2,.8,.3,1) both}
+
+/* Conquest knockout: the "<name> DEPLOYING" notice sits above the operator art (and its aura). */
+body.story-squad-layout .storySquadDeploy{z-index:6;flex-direction:column;gap:10px;
+  background:linear-gradient(180deg,#07080bf2,#0b0d12e6);font:italic 900 clamp(18px,2.2vw,30px)/1 var(--ak-display,'Roboto',system-ui,sans-serif);font-stretch:75%;
+  letter-spacing:.06em;color:#fff;text-shadow:0 0 14px #2cc5f6aa;text-transform:uppercase}
+body.story-squad-layout .storySquadDeploy::before{content:'OPERATOR DOWN · ' attr(data-down);padding:4px 10px;background:#d4101f;color:#fff;
+  font:800 11px/1.2 var(--ak-display,'Roboto',sans-serif);font-style:normal;letter-spacing:.22em;text-shadow:none}
+body.story-squad-layout .storySquadDeploy:not([data-down])::before,body.story-squad-layout .storySquadDeploy[data-down=""]::before{content:'OPERATOR DOWN'}
+body.story-squad-layout .storySquadDeploy::after{content:'';width:70%;height:4px;background:linear-gradient(90deg,#2cc5f6,#fff200) 0 0/0% 100% no-repeat,#ffffff22;
+  animation:fx-deploy-bar 1.6s linear forwards}
+body.story-squad-layout .storySquadDeploy.show{animation:fx-deploy-in .35s cubic-bezier(.2,.8,.2,1) both}
+@keyframes fx-deploy-bar{to{background-size:100% 100%,auto}}
+@keyframes fx-deploy-in{from{opacity:0;clip-path:inset(0 0 100% 0)}to{opacity:1;clip-path:inset(0)}}

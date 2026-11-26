@@ -1,5 +1,5 @@
 /* RPG Typing Versus — operator aura display (v148.6). Used on every page that shows operators.
- * Tiers build on each other: WHITE rim light → AZURE motes → VIOLET tech ring → GOLD rays.
+ * Tiers build on each other: WHITE rim light → AZURE motes → VIOLET tech ring → GOLD halo.
  * Only transform/opacity animate; the art itself keeps a static glow.
  */
 .aura-fx{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;--aura:#fff}
@@ -24,11 +24,9 @@
   animation:aura-rise 6s linear infinite}
 .aura-fx>i:nth-child(2){animation-duration:8s;animation-delay:-3s;background-position:60% 30%,20% 80%,85% 55%}
 .aura-fx>i:nth-child(3){animation-duration:10s;animation-delay:-6s;background-position:30% 50%,90% 15%,5% 90%}
-/* Gold: slow rays behind the figure */
-.aura-fx>b{left:50%;top:46%;width:150%;aspect-ratio:1;translate:-50% -50%;opacity:0;border-radius:50%;
-  background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--aura) 40%,transparent) 0 5deg,transparent 5deg 22deg);
-  -webkit-mask:radial-gradient(circle,#000 0 18%,transparent 62%);mask:radial-gradient(circle,#000 0 18%,transparent 62%);
-  animation:aura-spin 40s linear infinite}
+/* Gold: a soft golden halo behind the figure (no rays). */
+.aura-fx>b{left:50%;top:44%;width:120%;aspect-ratio:1;translate:-50% -50%;opacity:0;border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--aura) 38%,transparent) 0 22%,transparent 60%)}
 @keyframes aura-breathe{50%{opacity:.85;scale:1.03}}
 @keyframes aura-rise{from{translate:0 0}to{translate:0 -28%}}
 @keyframes aura-spin{to{rotate:360deg}}
@@ -41,9 +39,9 @@
 .aura-fx[data-aura="3"]::after,.aura-fx[data-aura="4"]::after{opacity:.85;animation:aura-ring 14s linear infinite}
 .aura-fx[data-aura="3"]::before{opacity:.65}
 .aura-fx[data-aura="4"]::before{opacity:.75}
-.aura-fx[data-aura="4"]>b{opacity:.9}
+.aura-fx[data-aura="4"]>b{opacity:.9;animation:aura-breathe 3.2s ease-in-out infinite}
 /* Small hosts (cut-in windows, lineup cards) only get the glow and motes. */
-.aura-fx[data-kind="cut"]::after,.aura-fx[data-kind="cut"]>b{display:none}
+.aura-fx[data-kind="cut"]::after{display:none}
 
 /* Figure rim light: stronger per tier */
 .aura-img[data-aura="1"]:is([data-aura-kind="art"],[data-aura-kind="cut"]){filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 7px #ffffffaa)}
