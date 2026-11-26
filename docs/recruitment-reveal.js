@@ -1,167 +1,204 @@
-/* v86.19 — sequential 4★ border pulses, 5★ gold cinematic without scanning bars, 6★ unchanged. */
+/* v149 — Recruitment reveal.
+ * 1) Shutter wipe in, 2) signal pre-roll tinted by the best rarity in the pull,
+ * 3) Arknights-style one-by-one operator reveals (tap / Enter / Space to continue),
+ * 4) light Endfield-style lineup of slanted cards (tap a card to replay its reveal).
+ * Public API is unchanged: open, openResults, close, configure, setFeatured.
+ */
 (() => {
  'use strict';
  const tiers = {
-  4:{label:'4-STAR',color:'#b896ff',glow:'#6b48b9',panel:'linear-gradient(180deg,#302642,#1a1623 40%,#101116)',reward:'#d2beff'},
-  5:{label:'5-STAR',color:'#ffe36f',glow:'#b88f1a',panel:'linear-gradient(180deg,#4b3910,#241f14 40%,#101116)',reward:'#ffeaa8'},
-  6:{label:'6-STAR',color:'#ff8d64',glow:'#d34646',panel:'linear-gradient(180deg,#64301e,#28161a 40%,#101116)',reward:'#ffd2c4'}
+  4:{label:'4★ OPERATOR',signal:'STANDARD SIGNAL',color:'#a57bff',deep:'#2a1858',soft:'#ece4ff'},
+  5:{label:'5★ OPERATOR',signal:'ENHANCED SIGNAL',color:'#ffc21a',deep:'#5a3c00',soft:'#fff2c4'},
+  6:{label:'6★ OPERATOR',signal:'EXCEPTIONAL SIGNAL',color:'#ff6a2a',deep:'#6a1800',soft:'#ffe2d4'}
  };
+ // Total length of each rarity's entrance; a tap before this completes the animation instantly.
+ const revealMs={4:1050,5:1500,6:2500};
  const demoRarities=[4,4,5,4,4,4,6,4,5,4];
+ // Lineup cards use the portrait full-body art (assets/deployment, 480×900). Face centres
+ // [x%, y%] were measured by matching each profile-icon portrait against that art, so the
+ // crop can always keep the face in view. Characters not listed fall back to [50, 14].
+ const FACE={alden:[45.2,10.7],anodyne:[46.7,9.0],aveline:[59.8,10.2],cassian:[59.4,19.9],crossbow:[51.2,10.7],elise:[48.5,12.2],hexaxe:[51.7,10.0],hound:[65.2,33.7],isolde:[50.6,14.3],kade:[49.4,10.0],livia:[44.2,14.7],lupa:[79.2,20.0],mira:[51.7,10.2],nitrate:[40.8,19.7],nora:[48.1,12.4],seraphine:[57.3,9.9],shield:[38.5,12.2],tavi:[52.5,21.3],vern:[39.8,15.9],vex:[56.2,9.7]};
+ const faceOf=id=>FACE[id]||[50,14];
+ const deployArt=id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)&&id!=='unknown'?`assets/deployment/${id}.webp`:null;
  const safeArt=p=>typeof p==='string'&&/^assets\/recruitment\/[a-z0-9_-]+\.webp$/.test(p);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const pad=n=>String(n).padStart(2,'0');
  let catalog=[],featuredId='tavi',session=null,root=null,priorFocus=null,timers=[],generation=0;
+
  function configure(data){if(!Array.isArray(data?.characters))return;catalog=data.characters.filter(c=>c&&[4,5,6].includes(c.rarity)&&/^[a-z][a-z0-9_]{0,39}$/.test(c.id)&&safeArt(c.art));if(/^[a-z][a-z0-9_]{0,39}$/.test(data.featured_character_id))featuredId=data.featured_character_id;}
  function setFeatured(id){if(catalog.some(c=>c.id===id&&c.rarity===6))featuredId=id;}
  function previewOperators(rarities){const index={4:0,5:0,6:0};return rarities.map(r=>{const list=catalog.filter(c=>c.rarity===r);if(!list.length)return {id:'unknown',name:'OPERATOR',rarity:r,art:null,duplicate:false,shards:0};if(r===6){const featured=list.find(c=>c.id===featuredId);if(featured)return {...featured,duplicate:false,shards:0};}return {...list[index[r]++%list.length],duplicate:false,shards:0};});}
- function theme(stars){const t=tiers[stars]||tiers[4];return `--rarity-accent:${t.color};--rarity-glow:${t.glow};--panel-bg:${t.panel};--reward-color:${t.reward}`;}
+ function vars(r){const t=tiers[r]||tiers[4];return `--rc:${t.color};--rd:${t.deep};--rs:${t.soft}`;}
  function reducedMotion(){return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;}
  function clearTimers(){timers.forEach(window.clearTimeout);timers=[];generation++;}
- function later(fn,ms,gen){const id=window.setTimeout(()=>{if(session&&root&&generation===gen)fn();},ms);timers.push(id);}
- function figure(operator,className){return operator&&safeArt(operator.art)?`<img class="${className}" src="${esc(operator.art)}" alt="" loading="eager">`:`<div class="panel-placeholder ${className}" aria-hidden="true"><span>◇</span></div>`;}
- function reward(operator){if(!session.real)return '<span class="panel-badge panel-badge-preview">PREVIEW</span>';
-  if(operator.duplicate)return `<span class="panel-reward-value">+${Math.max(0,operator.shards|0)}</span><span class="panel-reward-label">SHARDS</span>`;
-  return '<span class="panel-badge panel-badge-new">NEW</span><span class="panel-reward-label">NEW RECRUIT</span>';
+ function later(fn,ms){const gen=generation;const id=window.setTimeout(()=>{if(session&&root&&generation===gen)fn();},reducedMotion()?0:ms);timers.push(id);return id;}
+ function img(op,cls){return op&&safeArt(op.art)?`<img class="${cls}" src="${esc(op.art)}" alt="" decoding="async" draggable="false">`:`<span class="${cls} rv-noart" aria-hidden="true">◇</span>`;}
+ // Full-body art positioned around the face; falls back to the banner art if missing.
+ function lineupArt(op){
+  const src=deployArt(op.id);
+  if(!src)return img(op,'rv-lu-img rv-lu-banner-art');
+  const [fx,fy]=faceOf(op.id);
+  const fallback=safeArt(op.art)?` data-fallback="${esc(op.art)}"`:'';
+  return `<img class="rv-lu-img rv-lu-body" style="--fx:${fx};--fy:${fy}" src="${esc(src)}"${fallback} alt="" decoding="async" draggable="false">`;
  }
- function panel(operator,index){const rarity=operator.rarity,tag=rarity===6?'scout-six':(rarity===5?'scout-five':'');
-  return `<article class="panel-recruit-card scout-card ${tag}" data-slot="${index}" data-state="hidden" style="${theme(rarity)}" aria-label="Recruitment slot ${index+1}: concealed">
-    <div class="panel-slice-bg"></div><div class="panel-grid-overlay"></div>
-    <div class="panel-rarity-label">${'★'.repeat(rarity)}</div>
-    <div class="panel-portrait-stage">${figure(operator,'panel-portrait')}</div>
-    <div class="panel-floor-glow"></div>
-    <div class="panel-silhouette-stage">${figure(operator,'panel-silhouette')}</div>
-    <div class="panel-bottom-ui">
-      <div class="panel-name-block"><strong>${esc(operator.name)}</strong><small>${tiers[rarity].label}</small></div>
-      <div class="panel-reward-block">${reward(operator)}</div>
-    </div>
-   </article>`;
+ function stars(r){return Array.from({length:r},(_,i)=>`<i style="--s:${i}">★</i>`).join('');}
+ function rewardTag(op){
+  if(!session.real)return '<span class="rv-tag rv-tag-preview">PREVIEW</span>';
+  return op.duplicate?`<span class="rv-tag rv-tag-dup">+${Math.max(0,op.shards|0)} SHARDS</span>`:'<span class="rv-tag rv-tag-new">NEW</span>';
  }
+
+ // ---- Frame ---------------------------------------------------------------
  function render(){
-  const n=session.count;
-  root.innerHTML=`<div class="reveal-frame scout-frame ${n===1?'scout-single':''}" style="${theme(4)}">
-   <header class="reveal-top"><div><strong>RPG TYPING VERSUS</strong><div class="reveal-meta">SCOUTING // ${esc(session.banner)} // ${session.real?'RECRUITMENT':'VISUAL PREVIEW'}</div></div><button type="button" class="reveal-exit" data-reveal="close" ${session.lockUntilResults?'disabled title="View results to finish tutorial"':''}>× CLOSE</button></header>
-   <main class="reveal-main scout-main" id="revealContent">
-    <div class="scout-heading"><p id="scoutEyebrow">RECRUITMENT SIGNAL</p><h1 id="scoutHeadline">INCOMING OPERATORS</h1><div id="scoutStatus" role="status" aria-live="polite">Establishing signal…</div></div>
-    <div class="scout-showcase ${n===1?'scout-showcase-single':'scout-showcase-ten'}" id="scoutShowcase" data-phase="intro" style="--slot-count:${n}">
-     ${session.operators.map(panel).join('')}
-     <div class="scout-rare-flare" aria-hidden="true"></div>
+  root.innerHTML=`
+   <div class="rv-view" id="rvView"></div>
+   <header class="rv-top">
+    <div class="rv-brand"><strong>RPG TYPING VERSUS</strong><span>RECRUITMENT // ${esc(session.banner)}${session.real?'':' // PREVIEW'}</span></div>
+    <div class="rv-top-actions">
+     <button type="button" class="rv-btn rv-btn-ghost" id="rvSkip" data-reveal="skip">SKIP <span aria-hidden="true">▸▸</span></button>
+     <button type="button" class="rv-btn rv-btn-ghost rv-close" id="rvClose" data-reveal="close" ${session.lockUntilResults?'disabled title="View all results to finish the tutorial"':''}>× CLOSE</button>
     </div>
-   </main>
-   <div class="reveal-demo-stamp">${session.real?'SAVED TO YOUR COLLECTION':'PREVIEW ONLY · NO CURRENCY SPENT'}</div>
-   <footer class="reveal-footer">
-    <button type="button" class="reveal-secondary is-hidden" id="scoutSecondary" data-reveal="results">BACK TO RESULTS</button>
-    <button type="button" class="reveal-primary" id="scoutAction" data-reveal="skip">SKIP REVEAL</button>
-   </footer>
-  </div>`;
-  root.querySelector('#scoutAction')?.focus({preventScroll:true});
+   </header>
+   <p class="rv-sr" id="rvLive" role="status" aria-live="polite"></p>
+   <div class="rv-wipe" aria-hidden="true"><i class="rv-wipe-a"></i><i class="rv-wipe-b"></i><b>RECRUITMENT<small>SIGNAL LINK ESTABLISHED</small></b></div>`;
  }
- function setWords(eyebrow,headline,status){if(!root)return;const a=root.querySelector('#scoutEyebrow'),b=root.querySelector('#scoutHeadline'),c=root.querySelector('#scoutStatus');if(a)a.textContent=eyebrow;if(b)b.textContent=headline;if(c)c.textContent=status;}
- function card(i){return root?.querySelector(`.scout-card[data-slot="${i}"]`);}
- function phase(name){const box=root?.querySelector('#scoutShowcase');if(box)box.dataset.phase=name;session.stage=name;}
- function reveal(i){const el=card(i);if(!el)return;el.dataset.state='revealed';el.setAttribute('aria-label',`Recruitment slot ${i+1}: ${session.operators[i].name}, ${session.operators[i].rarity} stars`);el.classList.remove('is-scanning');}
+ function view(){return root?.querySelector('#rvView');}
+ function live(text){const el=root?.querySelector('#rvLive');if(el)el.textContent=text;}
+ function setStage(name){session.stage=name;if(root)root.dataset.stage=name;const skip=root?.querySelector('#rvSkip');if(skip)skip.hidden=(name==='lineup');const close=root?.querySelector('#rvClose');if(close&&name==='lineup')close.disabled=false;}
+ function wipe(kind,label,sub){
+  const w=root?.querySelector('.rv-wipe');if(!w||reducedMotion())return;
+  w.className=`rv-wipe rv-wipe-${kind}`;w.querySelector('b').innerHTML=`${esc(label)}<small>${esc(sub||'')}</small>`;
+  void w.offsetWidth;w.classList.add('is-on');
+ }
 
- function newIndices(){return session?.real?session.operators.map((op,i)=>!op.duplicate?i:-1).filter(i=>i>=0):[];}
- function setButtons(primaryText,primaryAction,secondaryText='',secondaryAction='results'){
-  const primary=root?.querySelector('#scoutAction'),secondary=root?.querySelector('#scoutSecondary');
-  if(primary){primary.textContent=primaryText;primary.dataset.reveal=primaryAction;}
-  if(secondary){
-   if(secondaryText){secondary.textContent=secondaryText;secondary.dataset.reveal=secondaryAction;secondary.classList.remove('is-hidden');}
-   else secondary.classList.add('is-hidden');
-  }
+ // ---- 1+2: wipe in, then signal pre-roll -------------------------------------
+ function preload(){
+  const urls=[...new Set([...session.operators.map(o=>o.art).filter(safeArt),...session.operators.map(o=>deployArt(o.id)).filter(Boolean)])];
+  const loads=urls.map(u=>new Promise(res=>{const i=new Image();i.onload=i.onerror=()=>res();i.src=u;if(i.decode)i.decode().then(res,res);}));
+  return Promise.race([Promise.all(loads),new Promise(res=>setTimeout(res,2500))]);
  }
- function renderShowcase(index=0){
-  if(!session||!root)return;
-  const picks=newIndices();
-  if(!picks.length){results();return;}
-  const safeIndex=Math.max(0,Math.min(index,picks.length-1));
-  session.showcaseIndex=safeIndex;
-  session.stage='new-showcase';
-  const slot=picks[safeIndex],op=session.operators[slot],rarity=op.rarity,t=tiers[rarity]||tiers[4];
-  root.querySelector('#revealContent').innerHTML=`
-   <section class="new-showcase-screen rarity-${rarity}" style="${theme(rarity)}">
-    <div class="new-showcase-copy">
-      <p class="new-showcase-eyebrow">NEW CHARACTER UNLOCKED</p>
-      <h1 class="new-showcase-name">${esc(op.name)}</h1>
-      <div class="new-showcase-stars" aria-label="${rarity} stars">${'★'.repeat(rarity)}</div>
-      <div class="new-showcase-meta">${safeIndex+1} / ${picks.length} NEW RECRUIT${picks.length===1?'':'S'}</div>
-    </div>
-    <div class="new-showcase-artwrap">
-      <div class="new-showcase-backglow"></div>
-      ${figure(op,'new-showcase-art')}
-      <div class="new-showcase-shadow">${figure(op,'new-showcase-silhouette')}</div>
-    </div>
+ function intro(){
+  clearTimers();setStage('intro');
+  const best=Math.max(...session.operators.map(o=>o.rarity));
+  view().innerHTML=`
+   <section class="rv-intro r${best}" style="${vars(best)}">
+    <div class="rv-intro-grid"></div>
+    <div class="rv-beacon"><i></i><i></i><i></i><span></span></div>
+    <div class="rv-intro-copy"><small>RECRUITMENT SIGNAL</small><strong>RECEIVING ${session.count} OPERATOR${session.count===1?'':'S'}</strong><em>TAP TO BEGIN</em></div>
    </section>`;
-  setWords('NEW CHARACTER','FULL ART SHOWCASE',`${op.name.toUpperCase()} JOINED YOUR COLLECTION`);
-  setButtons(safeIndex<picks.length-1?'NEXT CHARACTER':'DONE', safeIndex<picks.length-1?'showcase-next':'results', 'BACK TO RESULTS','results');
-  root.querySelector('#scoutAction')?.focus({preventScroll:true});
+  live(`Receiving ${session.count} operator${session.count===1?'':'s'}.`);
+  wipe('dark','RECRUITMENT','SIGNAL LINK ESTABLISHED');
+  const ready=preload();let minDone=false,loaded=false;
+  const go=()=>{if(minDone&&loaded&&session?.stage==='intro')showOperator(0);};
+  later(()=>{minDone=true;go();},1500);
+  ready.then(()=>{loaded=true;go();});
  }
- function restoreResultsView(){
+
+ // ---- 3: one-by-one reveal -------------------------------------------------------
+ function showOperator(i,{replay=false}={}){
+  clearTimers();
+  const op=session.operators[i];if(!op){lineup();return;}
+  session.index=i;session.replay=replay;session.stepDone=false;setStage(replay?'replay':'reveal');
+  const r=op.rarity,t=tiers[r]||tiers[4];
+  const pips=session.count>1&&!replay?`<div class="rv-pips">${session.operators.map((o,k)=>`<i class="${k<i?'done':''} ${k===i?'now':''} r${o.rarity}"></i>`).join('')}</div>`:'';
+  view().innerHTML=`
+   <section class="rv-reveal r${r} ${op.duplicate&&session.real?'is-dup':'is-new'}" style="${vars(r)}">
+    <div class="rv-bg"><i class="rv-shaft a"></i><i class="rv-shaft b"></i><i class="rv-shaft c"></i><div class="rv-dust"></div><div class="rv-bignum">${pad(i+1)}</div></div>
+    ${r===6?`<div class="rv-build"><i></i><i></i><i></i><i></i><span>${t.signal}</span></div>`:''}
+    <div class="rv-flash"></div>
+    <div class="rv-art">${img(op,'rv-sil')}${img(op,'rv-img')}</div>
+    <div class="rv-info">
+     <div class="rv-rarity">${t.label}</div>
+     <div class="rv-stars" aria-label="${r} stars">${stars(r)}</div>
+     <h2 class="rv-name">${esc(op.name)}</h2>
+     <div class="rv-reward">${rewardTag(op)}</div>
+    </div>
+    <div class="rv-count">${pad(i+1)}<small>/ ${pad(session.count)}</small></div>
+    <div class="rv-hint">${replay?'TAP TO RETURN':'TAP TO CONTINUE'} <span aria-hidden="true">▸</span></div>
+    ${pips}
+   </section>`;
+  live(`${op.name}, ${r} stars${session.real?(op.duplicate?`, duplicate, +${op.shards} shards`:', new recruit'):''}.`);
+  later(()=>{session.stepDone=true;view()?.querySelector('.rv-reveal')?.classList.add('is-done');},revealMs[r]||1000);
+ }
+ function advance(){
+  if(!session)return;
+  if(session.stage==='intro'){showOperator(0);return;}
+  if(session.stage!=='reveal'&&session.stage!=='replay')return;
+  const el=view()?.querySelector('.rv-reveal');
+  if(!session.stepDone){session.stepDone=true;el?.classList.add('is-instant','is-done');return;}
+  if(session.stage==='replay'){lineup({fromReplay:true});return;}
+  if(session.index<session.count-1)showOperator(session.index+1);else lineup();
+ }
+
+ // ---- 4: Endfield-style lineup -----------------------------------------------------
+ function summary(){
+  const c={4:0,5:0,6:0};let fresh=0;for(const o of session.operators){c[o.rarity]++;if(!o.duplicate)fresh++;}
+  return [6,5,4].filter(r=>c[r]).map(r=>`<span class="r${r}" style="${vars(r)}">★${r} ×${c[r]}</span>`).join('')+(session.real?`<span class="rv-sum-new">NEW ×${fresh}</span>`:'');
+ }
+ function lineup({fromReplay=false}={}){
   if(!session||!root)return;
-  root.querySelector('#revealContent').innerHTML=`
-    <div class="scout-heading"><p id="scoutEyebrow">RECRUITMENT COMPLETE</p><h1 id="scoutHeadline">${session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS'}</h1><div id="scoutStatus" role="status" aria-live="polite">${session.real?'All rewards saved':'Preview — no rewards awarded'}</div></div>
-    <div class="scout-showcase ${session.count===1?'scout-showcase-single':'scout-showcase-ten'}" id="scoutShowcase" data-phase="results" style="--slot-count:${session.count}">
-     ${session.operators.map(panel).join('')}
-     <div class="scout-rare-flare" aria-hidden="true"></div>
-    </div>`;
-  session.operators.forEach((_,i)=>reveal(i));
+  clearTimers();setStage('lineup');
+  const n=session.count;
+  view().innerHTML=`
+   <section class="rv-lineup ${n===1?'is-single':'is-multi'} ${fromReplay?'from-replay':''}">
+    <header class="rv-lu-head">
+     <div class="rv-lu-code">RTV-RCT // RESULT REPORT // ${pad(n)}</div>
+     <h2>${n===1?'RECRUIT RESULT':'SCOUTING RESULTS'}</h2>
+     <div class="rv-lu-meta"><span class="rv-lu-banner">${esc(session.banner)}</span><span class="rv-lu-saved">${session.real?'SAVED TO YOUR COLLECTION':'PREVIEW ONLY · NO REWARDS'}</span></div>
+     <div class="rv-lu-sum">${summary()}</div>
+    </header>
+    <div class="rv-lu-row" style="--n:${n}">
+     ${session.operators.map((op,i)=>`
+      <button type="button" class="rv-lu-card r${op.rarity} ${op.duplicate&&session.real?'is-dup':'is-new'}" style="${vars(op.rarity)};--i:${i}" data-reveal="view" data-index="${i}" aria-label="${esc(op.name)}, ${op.rarity} stars${session.real?(op.duplicate?`, +${op.shards} shards`:', new'):''}. Replay reveal.">
+       <span class="rv-lu-skew">
+        <span class="rv-lu-art">${lineupArt(op)}</span>
+        <span class="rv-lu-top"></span>
+        <span class="rv-lu-info"><span class="rv-lu-no">${pad(i+1)}</span><span class="rv-lu-stars">${'★'.repeat(op.rarity)}</span><b>${esc(op.name)}</b>${rewardTag(op)}</span>
+       </span>
+      </button>`).join('')}
+    </div>
+    <footer class="rv-lu-foot">
+     <span class="rv-lu-tip">TAP AN OPERATOR TO REPLAY THEIR REVEAL</span>
+     <button type="button" class="rv-btn rv-btn-solid" data-reveal="close">BACK TO RECRUITMENT <span aria-hidden="true">▸</span></button>
+    </footer>
+   </section>`;
+  view().querySelectorAll('img.rv-lu-body[data-fallback]').forEach(el=>el.addEventListener('error',()=>{el.src=el.dataset.fallback;el.classList.replace('rv-lu-body','rv-lu-banner-art');},{once:true}));
+  live(`Results: ${session.operators.map(o=>`${o.name} ${o.rarity} stars`).join(', ')}.`);
+  if(!fromReplay)wipe('light','SCOUTING REPORT','RESULTS COMPILED');
+  root.querySelector('.rv-lu-foot [data-reveal="close"]')?.focus({preventScroll:true});
  }
- function animate(){
-  clearTimers();const gen=generation;
-  const fast=reducedMotion(),speed=v=>fast?Math.max(45,Math.round(v*.12)):v;
-  let time=0;
-  const at=(delay,fn)=>{time+=speed(delay);later(fn,time,gen);};
-  const fourStar=session.operators.map((op,i)=>op.rarity===4?i:-1).filter(i=>i>=0);
-  const fiveStar=session.operators.map((op,i)=>op.rarity===5?i:-1).filter(i=>i>=0);
-  const sixStar=session.operators.map((op,i)=>op.rarity===6?i:-1).filter(i=>i>=0);
-  phase('intro');setWords('RECRUITMENT SIGNAL','INCOMING OPERATORS',`Receiving ${session.count} ${session.count===1?'operator':'operators'}…`);
-  at(500,()=>{phase('silhouettes');setWords('SIGNAL LOCKED','IDENTITIES CONCEALED',`${session.count} signal${session.count===1?'':'s'} acquired`);});
-  at(650,()=>{phase('scanning');setWords('IDENTIFYING OPERATORS','4★ SIGNALS','Standard 4★ reveals first');});
 
-  // 4★ — each panel pulses purple along its border, then reveals in slot order.
-  // No moving line or sweep crosses the display or artwork.
-  for(const i of fourStar){
-   at(90,()=>{
-    const el=card(i);
-    if(el){
-     el.classList.add('scout-purple-pulse');
-     later(()=>el.classList.remove('scout-purple-pulse'),speed(620),gen);
-    }
-   });
-   at(185,()=>{reveal(i);setWords('4★ SIGNAL','STANDARD RECRUIT IDENTIFIED',`${fourStar.indexOf(i)+1} / ${fourStar.length} standard signal${fourStar.length===1?'':'s'}`);});
+ // ---- Input ------------------------------------------------------------------------
+ function keyboard(e){
+  if(!root||!session)return;
+  if(e.key==='Escape'){e.preventDefault();if(session.stage==='lineup')close();else if(session.stage==='replay')lineup({fromReplay:true});else lineup();return;}
+  if((e.key==='Enter'||e.key===' '||e.key==='ArrowRight')&&['intro','reveal','replay'].includes(session.stage)){
+   if(document.activeElement?.closest?.('.rv-top'))return; // let the focused header button act
+   e.preventDefault();advance();return;
   }
-
-  // 5★ — cinematic gold reveal after all 4★ cards, but always before any 6★.
-  if(fiveStar.length){
-   at(280,()=>{phase('five-wait');setWords('ENHANCED SIGNAL','5★ IDENTIFICATION PENDING',`${fiveStar.length} advanced ${fiveStar.length===1?'signal remains':'signals remain'}`);});
-   fiveStar.forEach((i,number)=>{
-    at(260,()=>{phase('five-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('ENHANCED SIGNAL','GOLD WAVE RISING…',`Priority reveal ${number+1} / ${fiveStar.length}`);});
-    at(280,()=>{card(i)?.classList.add('scout-gold-pulse');});
-    at(420,()=>{reveal(i);setWords('5★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
-    at(340,()=>{card(i)?.classList.remove('scout-gold-pulse');});
-   });
-  }
-
-  // 6★ — hidden until the end, then full cinematic reveal.
-  if(sixStar.length){
-   at(320,()=>{phase('rare-wait');setWords('UNKNOWN SIGNAL','IDENTIFICATION PENDING',`${sixStar.length} exceptional ${sixStar.length===1?'signal remains':'signals remain'}`);});
-   sixStar.forEach((i,number)=>{
-    at(300,()=>{phase('rare-focus');const el=card(i),box=root.querySelector('#scoutShowcase');box?.querySelectorAll('.scout-card').forEach(c=>c.classList.toggle('scout-focus',c===el));setWords('EXCEPTIONAL SIGNAL', 'SIGNAL STRENGTH RISING…',`Final reveal ${number+1} / ${sixStar.length}`);});
-    at(650,()=>{const el=card(i);el?.classList.add('scout-rare-burst');reveal(i);setWords('6★ OPERATOR','RECRUIT CONFIRMED',session.operators[i].name.toUpperCase());});
-    at(800,()=>{card(i)?.classList.remove('scout-rare-burst');});
-   });
-  }
-  at(350,()=>results());
+  if(e.key==='Tab'){const nodes=[...root.querySelectorAll('button:not([disabled]):not([hidden])')];if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
  }
- function results(){if(!session||!root)return;clearTimers();phase('results');restoreResultsView();setWords('RECRUITMENT COMPLETE',session.count===1?'SINGLE RECRUIT RESULT':'SCOUTING RESULTS',session.real?'All rewards saved':'Preview — no rewards awarded');const picks=newIndices();if(picks.length){setButtons('VIEW NEW CHARACTERS','showcase-open','BACK TO RECRUITMENT','close');}else{setButtons('BACK TO RECRUITMENT','close');}const exit=root.querySelector('.reveal-exit');if(exit)exit.disabled=false;root.querySelector('#scoutAction')?.focus({preventScroll:true});}
- function keyboard(e){if(!root)return;
-  if(e.key==='Escape'){e.preventDefault();if(session.lockUntilResults&&session.stage!=='results')results();else close();}
-  else if(e.key==='Tab'){const nodes=[...root.querySelectorAll('button:not([disabled])')];if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
+ function bind(){
+  root.addEventListener('click',e=>{
+   const el=e.target.closest('[data-reveal]');
+   if(el){if(el.disabled)return;const a=el.dataset.reveal;
+    if(a==='skip')lineup();else if(a==='close')close();
+    else if(a==='view')showOperator(Number(el.dataset.index)||0,{replay:true});
+    return;}
+   if(e.target.closest('.rv-intro,.rv-reveal'))advance();
+  });
+  document.addEventListener('keydown',keyboard);
  }
- function bind(){root.addEventListener('click',e=>{const el=e.target.closest('[data-reveal]');if(!el||el.disabled)return;const action=el.dataset.reveal;if(action==='skip')results();else if(action==='close')close();else if(action==='showcase-open')renderShowcase(0);else if(action==='showcase-next')renderShowcase((session?.showcaseIndex||0)+1);else if(action==='results')results();});document.addEventListener('keydown',keyboard);}
+
+ // ---- Lifecycle -----------------------------------------------------------------------
  function start(operators,banner,real,options={}){
   close(true);priorFocus=document.activeElement;
-  session={count:operators.length,banner:String(banner||'FEATURED').slice(0,60),operators,real,stage:'intro',showcaseIndex:0,lockUntilResults:!!options.lockUntilResults,onComplete:typeof options.onComplete==='function'?options.onComplete:null};
-  root=document.createElement('section');root.id='revealRoot';root.className='reveal-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',real?'Recruitment results':'Recruitment visual preview');document.body.appendChild(root);
-  render();bind();animate();
+  session={count:operators.length,banner:String(banner||'FEATURED').slice(0,60),operators,real,stage:'intro',index:0,stepDone:false,replay:false,lockUntilResults:!!options.lockUntilResults,onComplete:typeof options.onComplete==='function'?options.onComplete:null};
+  root=document.createElement('section');root.id='revealRoot';root.className='reveal-overlay rv';
+  root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label',real?'Recruitment results':'Recruitment visual preview');
+  document.body.appendChild(root);document.documentElement.classList.add('rv-open');
+  render();bind();intro();
+  // Focus the stage, not SKIP: Enter / Space should advance the reveal, not skip it.
+  root.tabIndex=-1;root.focus({preventScroll:true});
  }
  function open(count=1,banner='FEATURED'){const rarities=count===10?demoRarities:[5];start(previewOperators(rarities),banner,false);}
  function openResults(rows,banner='FEATURED',options={}){
@@ -173,9 +210,18 @@
   });
   start(ops,banner,true,options);
  }
- function close(force=false){if(!session)return;if(session.lockUntilResults&&!force&&session.stage!=='results'){results();return;}
-  const callback=session.real&&session.stage==='results'&&!force?session.onComplete:null;
-  clearTimers();document.removeEventListener('keydown',keyboard);root?.remove();root=null;session=null;priorFocus?.focus?.({preventScroll:true});priorFocus=null;callback?.();
+ // Closing plays a short exit wipe over the page; force=true removes immediately.
+ function close(force=false){
+  if(!session)return;
+  if(session.lockUntilResults&&!force&&session.stage!=='lineup'){lineup();return;}
+  const callback=session.real&&session.stage==='lineup'&&!force?session.onComplete:null;
+  clearTimers();document.removeEventListener('keydown',keyboard);
+  const old=root;root=null;session=null;document.documentElement.classList.remove('rv-open');
+  if(old){
+   if(force||reducedMotion())old.remove();
+   else{old.classList.add('is-leaving');old.inert=true;setTimeout(()=>old.remove(),520);}
+  }
+  priorFocus?.focus?.({preventScroll:true});priorFocus=null;callback?.();
  }
  window.RPG_RECRUITMENT_REVEAL={open,openResults,close,configure,setFeatured};
 })();
