@@ -148,3 +148,6 @@
 @media (max-width:1180px){.aw-title small{display:none}.aw-title h1{font-size:27px;white-space:nowrap}.aw-top{gap:14px}}
 @media (max-height:700px) and (min-width:821px){.aw-tier{min-height:46px;padding:5px 10px}.aw-orb{width:30px;height:30px}.aw-tier-name b{font-size:17px}.aw-help p{font-size:11px;margin-bottom:4px}#auraAction{min-height:46px}}
 @media (max-width:1100px) and (min-width:821px){.aw-title{visibility:hidden}}
+
+/* v148.9: elements with display:grid/flex above must still obey the hidden attribute */
+.aw-noart[hidden],.aw-preview[hidden],main [hidden]{display:none!important}
