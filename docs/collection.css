@@ -103,8 +103,8 @@ body.cl-open{overflow:hidden}
 .cl-d-home{width:84px}
 .cl-d-btn svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2.2}
 .cl-d-home svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:1.6}
-.cl-d-art{position:absolute;z-index:1;left:max(14vw,190px);bottom:-2vh;height:100vh;aspect-ratio:480/900;pointer-events:none}
-.cl-d-art img{display:block;height:100%;width:100%;object-fit:contain;filter:drop-shadow(10px 12px 0 #00000014)}
+.cl-d-art{position:absolute;z-index:1;left:max(9vw,120px);width:min(50vw,calc(100vw - 38vw - 3vw - max(9vw,120px) - 16px));top:4vh;bottom:2vh;pointer-events:none}
+.cl-d-art img{display:block;height:100%;width:100%;object-fit:contain;object-position:50% 100%;filter:drop-shadow(10px 12px 0 #00000014)}
 .cl-d-art.is-in img{animation:cl-art .5s cubic-bezier(.2,.8,.2,1) both}
 @keyframes cl-art{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
 .cl-d-id{position:absolute;z-index:2;left:0;bottom:4vh;display:grid;justify-items:start;gap:10px;padding-left:1.2vw;animation:cl-id .45s .08s cubic-bezier(.2,.8,.2,1) both}
@@ -137,7 +137,7 @@ body.cl-open{overflow:hidden}
  .cl-top{grid-template-columns:1fr auto}.cl-nav{grid-column:1/-1}
  .cl-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}
  .cl-card-name{font-size:12px}
- .cl-d-art{left:50%;transform:translateX(-62%);height:78vh;bottom:auto;top:8vh}
+ .cl-d-art{left:3vw;width:94vw;top:62px;bottom:calc(30vh + 150px)}
  .cl-d-panel{left:3vw;right:3vw;width:auto;top:auto;bottom:62px;max-height:30vh}
  .cl-d-id{bottom:calc(30vh + 74px)}
  .cl-d-id h2{font-size:44px}

@@ -57,7 +57,8 @@
   $('dAura').textContent=a.equipped?`${NAMES[a.equipped]} AURA`:'NO AURA';
   $('dCopies').textContent=`RECRUITED ×${n}`;
   const art=$('dArt');art.dataset.operatorId=c.id;
-  const img=$('dImg');img.dataset.used='';img.src=`assets/deployment/${c.id}.webp`;img.dataset.fallback=c.art||'';img.dataset.auraForce=String(a.equipped);
+  // Full-body original (transparent, high-res); the 480×900 deployment crop is only a fallback.
+  const img=$('dImg');img.dataset.used='';img.src=c.art||`assets/deployment/${c.id}.webp`;img.dataset.fallback=c.art?`assets/deployment/${c.id}.webp`:'';img.dataset.auraForce=String(a.equipped);
   art.classList.remove('is-in');void art.offsetWidth;art.classList.add('is-in');
   const row=(k,v)=>`<div><dt>[${esc(k)}]</dt><dd>${v}</dd></div>`;
   $('dInfo').innerHTML=row('Code Name',esc(c.name))+row('Rarity',`<span class="cl-d-rs">${stars(c.rarity)}</span> ${c.rarity}-star`)+
