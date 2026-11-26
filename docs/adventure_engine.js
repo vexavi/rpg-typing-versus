@@ -2309,6 +2309,7 @@ const iconDef = PROFILE_ICON_PRESETS.find(x=>x.id===iconId) || PROFILE_ICON_PRES
 
   function showOverlay(show){
     overlay.classList.toggle("show", show);
+    syncOverlayState(show);
     // Only Mode Select gets the full-screen background. Dialogue and battle
     // overlays retain their original translucent behavior.
     if(!show) overlay.classList.remove("mode-select-active", "defeat-active");
@@ -2322,7 +2323,13 @@ const iconDef = PROFILE_ICON_PRESETS.find(x=>x.id===iconId) || PROFILE_ICON_PRES
     const bf = document.getElementById("battlefield");
     if(bf) bf.classList.toggle("overlayOpen", !!show);
   }
+  // Exposes the current screen (dialogue, countdown, paused, stageclear, victory,
+  // continuePrompt, modeselect...) to CSS so themes can lay each one out differently.
+  function syncOverlayState(show=true){
+    try{ overlay.dataset.state = show ? String(gameState || "") : ""; }catch(_){/* gameState not ready yet */}
+  }
   function setOverlayText(title, desc, hint){
+    syncOverlayState(true);
     overlayBox?.querySelector('.operator-showcase')?.remove();
     overlay.querySelector('.operator-selection-backdrop')?.remove();
     overlay.classList.remove("mode-select-active", "defeat-active");
@@ -2458,7 +2465,11 @@ const bgm = new Audio();
 
       const p = bgm.play();
       if(p && typeof p.catch === "function"){
-        p.catch(() => {
+        p.catch((err) => {
+          // Only an autoplay-policy block warrants the muted fallback. An AbortError just
+          // means pause()/a new src interrupted this play(); forcing mute (and starting
+          // muted playback) there would silence BGM the player never muted.
+          if(err && err.name && err.name !== "NotAllowedError") return;
           // Fallback: try muted autoplay (often allowed) so BGM can begin immediately.
           try{
             const prevUserMuted = isMuted;
@@ -2518,7 +2529,8 @@ const bgm = new Audio();
       const p = bgm.play();
       try{ bgm.muted = false; }catch(_){/* ignore */}
       if(p && typeof p.catch === "function"){
-        p.catch(() => {
+        p.catch((err) => {
+          if(err && err.name === "AbortError") return; // interrupted, not blocked
           pushAudioHintOnce("⚠️ iPad/Safari：音が出ない時は、もう一度画面をタップしてからMUTE/UNMUTEを押してください");
         });
       }
@@ -5002,7 +5014,8 @@ function ex1IsFrozenInput(_norm){ return false; }
         ex1ClearShootingStarGlow(w);
         damagePlayer(storyIncomingDamage("shootingStarDamage",2), "shooting star");
         removeWord(w.id);
-        if(storySquad.enabled&&gameState!=='playing')return;
+        // A defeat (continue prompt / squad swap) ends this frame's star damage.
+        if(gameState!=='playing')return;
       }else{
         const rem = Math.max(1, Math.ceil(remMs / 1000));
         if(w.tagEl && w.tagEl.textContent !== `★ ${rem}`) w.tagEl.textContent = `★ ${rem}`;
@@ -5299,7 +5312,7 @@ if(state === "landed"){
         hideBossBubble();
         showStage5Timer(false);
 
-        await showStageClearScreen(stage);
+        if(!await showStageClearScreen(stage)) return;
         try{ requestCloudCheckpointSave("stage-clear"); }catch(_){/* ignore */}
         onVictory();
       })();
@@ -5594,7 +5607,8 @@ if(state === "landed"){
         const wasMuted = !!bgm.muted;
         const wasVol = Number.isFinite(bgm.volume) ? bgm.volume : 1;
         try{ bgm.muted = true; }catch(_){/* ignore */}
-        try{ bgm.play(); }catch(_){/* ignore */}
+        // The immediate pause() always aborts this priming play(); swallow that rejection.
+        try{ const primed = bgm.play(); if(primed && typeof primed.catch === "function") primed.catch(()=>{}); }catch(_){/* ignore */}
         try{ bgm.pause(); }catch(_){/* ignore */}
         try{ bgm.currentTime = t; }catch(_){/* ignore */}
         try{ bgm.muted = wasMuted; }catch(_){/* ignore */}
@@ -5963,8 +5977,13 @@ function storyIncomingDamage(key,fallback){
     return true;
   }
 
+  // Resolves true when the player continues, false when Reset/Mode Select cancelled the
+  // flow. Callers must stop on false; otherwise a stale clear could launch the next
+  // stage or a Victory screen on top of Mode Select.
   function showStageClearScreen(stage){
+    const token = uiFlowToken;
     return new Promise((resolve) => {
+      if(!isUiFlow(token)) return resolve(false);
       gameState = "stageclear";
       setInputsEnabled(false);
 
@@ -5983,15 +6002,20 @@ function storyIncomingDamage(key,fallback){
       const minShowT = setTimeout(() => { allowSkip = true; }, 450);
 
       let done = false;
-      const finish = () => {
+      let removeCancel = () => {};
+      const finish = (ok = true) => {
         if(done) return;
         done = true;
+        removeCancel();
+        clearTimeout(autoT);
         cleanup();
-        showOverlay(false);
-        resolve();
+        // A cancelled flow has already shown Mode Select; leave that overlay alone.
+        if(ok) showOverlay(false);
+        resolve(ok && isUiFlow(token));
       };
 
       const autoT = setTimeout(() => { allowSkip = true; finish(); }, 2200);
+      removeCancel = addUiFlowCleanup(() => finish(false));
 
       const onKey = (e) => {
         if(e.key === "Enter"){
@@ -6391,13 +6415,13 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
       const clearedStage = STAGES[stageIndex];
       const isFinal = (stageIndex === STAGES.length - 1);
       if(currentMode === "story"){
-        await showStageClearScreen(clearedStage);
+        if(!await showStageClearScreen(clearedStage)) return;
         await completeStoryStage(storySelectedStage,damageTakenThisStage);
         return;
       }
       try{ window.RPG_REWARDS?.stageClear(); }catch(_){}
 
-      await showStageClearScreen(clearedStage);
+      if(!await showStageClearScreen(clearedStage)) return;
       try{ requestCloudCheckpointSave("stage-clear"); }catch(_){/* ignore */}
 
       try{ checkChallengeAchievementsAfterStageClear(); }catch(_){/* ignore */}
@@ -6594,7 +6618,7 @@ if(gameState === "paused"){
         window.__adventureChallengeClearing = true;
         gameState = "stageClearing";
         setInputsEnabled(false);
-        (async()=>{ await showStageClearScreen(stage); onVictory(); })();
+        (async()=>{ if(await showStageClearScreen(stage)) onVictory(); })();
         scheduleTick(true);
         return;
       }
@@ -6786,13 +6810,13 @@ if(gameState === "paused"){
         for(const id of challengeCometImpactIds){
           const w = wordsOnField.find(x => x && x.id === id);
           if(w) challengeHandleCometLanding(w);
-          if(storySquad.enabled&&gameState!=='playing'){scheduleTick(true);return;}
+          if(gameState!=='playing'){scheduleTick(true);return;}
         }
       }
 
       stage5UpdateFrost();
       ex1UpdatePermafrost();
-      if(storySquad.enabled&&gameState!=='playing'){scheduleTick(true);return;}
+      if(gameState!=='playing'){scheduleTick(true);return;}
 
 
       if(needsRestack) restackLanded();

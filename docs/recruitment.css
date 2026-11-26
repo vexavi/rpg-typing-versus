@@ -36,3 +36,10 @@
 @media(max-width:600px){.featured-operator-art{width:128%;max-width:none;left:-24%;height:90%;bottom:11%}.featured-operator-name{font-size:9px;margin-bottom:9px}}
 
 .art-guide[hidden]{display:none!important}
+
+/* v109 — Workshop is discoverable without scrolling to the bottom of Recruitment. */
+.top-workshop-link{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 12px;
+ border:1px solid #fff200;background:#fff200;color:#202222;text-decoration:none;font:900 11px system-ui,sans-serif;
+ letter-spacing:.025em;white-space:nowrap;position:relative;z-index:10}
+.top-workshop-link:hover{background:#fff7a4}
+@media(max-width:600px){.top-workshop-link{order:2;min-height:30px;padding:5px 7px;font-size:10px}.top-bar .close{order:2}.wallet{order:3}}

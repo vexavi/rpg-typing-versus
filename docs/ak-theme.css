@@ -1,0 +1,1065 @@
+/* ==========================================================================
+   RPG Typing Versus — "Tactical Terminal" theme (v1)
+   An original dark, tactical UI layer for the main game page (adventure.html).
+   Loaded last; remove the ak-theme.css / ak-theme.js lines in adventure.html
+   (and class="ak-theme" on <html>) to return to the previous look.
+
+   Specificity notes
+   - Static chrome (menus, overlays, HUD panels) is scoped with
+     :root.ak-theme body.adventure-client … so it wins over student-ui.css.
+   - Falling words, the word lane, input and HP fills use :where(:root.ak-theme)
+     so they keep the SAME specificity as the rules they replace. Operator and
+     hazard highlights (Wrath, Prey, Hacked, Rift…) therefore still win.
+   ========================================================================== */
+
+@font-face{
+  font-family:"AK Display";
+  src:url("assets/fonts/ak-roboto-var.woff2") format("woff2");
+  font-weight:100 900;font-stretch:75% 100%;font-style:normal;font-display:swap;
+}
+
+:root.ak-theme{
+  --ak-void:#0b0c0e;--ak-ink:#111215;--ak-coal:#17181b;--ak-slate:#1f2125;--ak-steel:#2a2d32;--ak-iron:#3a3e45;
+  --ak-line:rgba(255,255,255,.10);--ak-line-2:rgba(255,255,255,.2);--ak-line-3:rgba(255,255,255,.38);
+  --ak-text:#eceef0;--ak-dim:#9aa0a7;--ak-faint:#626870;
+  --ak-yellow:#ffcf1f;--ak-yellow-2:#ffe46b;--ak-cyan:#2cc5f6;--ak-cyan-2:#0b8cc0;
+  --ak-red:#ff4b3e;--ak-red-2:#b8231a;--ak-orange:#ff9124;--ak-paper:#e9e9e5;
+  --ak-display:"AK Display","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --ak-sans:"AK Display",system-ui,"Segoe UI","Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+  --ak-jp:system-ui,"Hiragino Sans","Noto Sans JP","Yu Gothic","Meiryo",sans-serif;
+  --ak-mono:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --ak-hazard:repeating-linear-gradient(-45deg,var(--ak-yellow) 0 6px,#121212 6px 12px);
+  --ak-grid:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px) 0 0/48px 48px,
+            linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px) 0 0/48px 48px;
+  --ak-cut:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);
+  --ak-cut-sm:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,0 100%);
+  --ak-arrow-btn:polygon(0 0,calc(100% - 12px) 0,100% 50%,calc(100% - 12px) 100%,0 100%);
+  color-scheme:dark;
+}
+
+/* ---------- Base ---------------------------------------------------------- */
+:root.ak-theme body.adventure-client{
+  --signal:var(--ak-yellow);--gold:var(--ak-yellow);
+  background:var(--ak-void);color:var(--ak-text);font-family:var(--ak-sans);
+}
+:root.ak-theme body.adventure-client :is(button,select,a)[class]:focus-visible{outline:2px solid var(--ak-yellow);outline-offset:2px}
+:root.ak-theme body.adventure-client .frame{background:var(--ak-ink);border-color:transparent;box-shadow:none}
+:root.ak-theme #v66Startup{background:var(--ak-void)!important;color:var(--ak-text)!important;font-family:var(--ak-display)!important;letter-spacing:.3em}
+
+/* ---------- Top bar ------------------------------------------------------- */
+:root.ak-theme body.adventure-client .adventure-topbar{
+  position:relative;background:linear-gradient(90deg,#08090a 0%,#15171a 45%,#08090a 100%);
+  border:0;border-bottom:1px solid var(--ak-line-2);color:var(--ak-text);
+}
+:root.ak-theme body.adventure-client .adventure-topbar::after{
+  content:"";position:absolute;left:0;bottom:-1px;width:min(220px,30%);height:2px;background:var(--ak-yellow);pointer-events:none;
+}
+:root.ak-theme body.adventure-client .adventure-topbar .adventure-brand{
+  background:none;-webkit-text-fill-color:currentColor;color:var(--ak-text);
+  font:800 13px/1 var(--ak-display);font-stretch:75%;letter-spacing:.26em;
+  padding-left:10px;border-left:4px solid var(--ak-yellow);
+}
+:root.ak-theme body.adventure-client .adventure-mode-tag,
+:root.ak-theme body.adventure-client .adventure-mode-tag *{
+  font-family:var(--ak-display);font-stretch:85%;letter-spacing:.16em;color:var(--ak-dim);
+}
+:root.ak-theme body.adventure-client .adventure-mode-tag #stageName,
+:root.ak-theme body.adventure-client .adventure-mode-tag #bossName{color:var(--ak-text);font-weight:800}
+
+/* ---------- Battlefield --------------------------------------------------- */
+:root.ak-theme body.adventure-client .battlefield{
+  background:radial-gradient(120% 95% at 72% 38%,#22262c 0%,#121418 58%,#090a0c 100%);border:0;
+}
+:root.ak-theme body.adventure-client .bgFallback{
+  background:var(--ak-grid),radial-gradient(70% 70% at 72% 45%,rgba(44,197,246,.07),transparent 70%),#0f1114;
+}
+:where(:root.ak-theme) body.adventure-client .wordLane{
+  background:
+    linear-gradient(var(--ak-yellow),var(--ak-yellow)) top left/22px 2px no-repeat,
+    linear-gradient(var(--ak-yellow),var(--ak-yellow)) top left/2px 22px no-repeat,
+    linear-gradient(var(--ak-line-3),var(--ak-line-3)) bottom right/22px 2px no-repeat,
+    linear-gradient(var(--ak-line-3),var(--ak-line-3)) bottom right/2px 22px no-repeat,
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px) 0 0/100% 34px,
+    linear-gradient(180deg,rgba(15,17,20,.9),rgba(9,10,12,.94));
+  border:1px solid var(--ak-line-2);
+  box-shadow:0 22px 46px rgba(0,0,0,.5),inset 0 0 0 1px rgba(0,0,0,.6);
+  backdrop-filter:blur(4px);
+}
+:root.ak-theme body.adventure-client .laneLabel{
+  background:var(--ak-yellow);color:#111;border:0;box-shadow:none;text-shadow:none;
+  font:800 11px/1 var(--ak-display);font-stretch:80%;letter-spacing:.28em;text-transform:uppercase;
+  padding:5px 16px 5px 9px;clip-path:polygon(0 0,100% 0,calc(100% - 9px) 100%,0 100%);
+}
+:where(:root.ak-theme) body.adventure-client .word{
+  background:linear-gradient(90deg,rgba(43,47,54,.97),rgba(27,29,34,.97));
+  border:1px solid rgba(255,255,255,.15);border-left:3px solid var(--ak-cyan);
+  color:#f6f7f8;box-shadow:0 6px 16px rgba(0,0,0,.45);border-radius:0;
+}
+:where(:root.ak-theme) body.adventure-client .word .prompt{font-family:var(--ak-jp);font-weight:800;letter-spacing:.01em}
+:where(:root.ak-theme) body.adventure-client .word .answer{font-family:var(--ak-mono);color:var(--ak-dim)}
+
+:root.ak-theme body.adventure-client .inputBar{
+  background:linear-gradient(90deg,rgba(8,9,11,.96),rgba(18,20,23,.94));
+  border:1px solid var(--ak-line-2);border-bottom:2px solid var(--ak-yellow);
+  box-shadow:0 12px 26px rgba(0,0,0,.45);
+}
+:root.ak-theme body.adventure-client .inputBar:focus-within{
+  border-color:rgba(44,197,246,.65);border-bottom-color:var(--ak-cyan);
+  box-shadow:0 0 0 1px rgba(44,197,246,.25) inset,0 0 26px rgba(44,197,246,.18),0 12px 26px rgba(0,0,0,.45);
+}
+:root.ak-theme body.adventure-client .promptChar{
+  display:grid;place-items:center;flex:0 0 auto;width:24px;height:24px;
+  background:var(--ak-yellow);color:transparent;font-size:0;
+  clip-path:polygon(15% 0,100% 50%,15% 100%,0 100%,0 0);
+}
+:root.ak-theme body.adventure-client #answerInput{
+  font:600 clamp(17px,1.6vw,21px)/1 var(--ak-mono);letter-spacing:.05em;color:#fff;caret-color:var(--ak-yellow);
+}
+:root.ak-theme body.adventure-client #answerInput::placeholder{
+  color:var(--ak-faint);font-family:var(--ak-display);font-stretch:80%;font-weight:700;letter-spacing:.28em;
+}
+
+/* Boss / target */
+:root.ak-theme body.adventure-client .bossFallback{
+  font-family:var(--ak-display);font-stretch:75%;font-weight:900;letter-spacing:.12em;text-transform:uppercase;
+  color:#f1f2f3;text-shadow:0 2px 0 #000,0 0 30px rgba(0,0,0,.6);
+}
+:root.ak-theme body.adventure-client .bossBubble{
+  background:rgba(12,13,15,.92);color:var(--ak-text);border:1px solid var(--ak-line-2);border-left:3px solid var(--ak-red);
+  border-radius:0;font-family:var(--ak-jp);box-shadow:0 10px 26px rgba(0,0,0,.5);
+}
+:root.ak-theme body.adventure-client .stage5Timer{
+  background:rgba(10,11,13,.92);border:1px solid var(--ak-red);color:#ffd9d4;border-radius:0;
+  font-family:var(--ak-display);font-stretch:80%;font-weight:800;letter-spacing:.14em;
+}
+:root.ak-theme body.adventure-client .overflowBadge{
+  background:var(--ak-red);color:#fff;border:0;border-radius:0;font-family:var(--ak-display);font-stretch:80%;
+  font-weight:900;letter-spacing:.16em;clip-path:var(--ak-cut-sm);box-shadow:none;
+}
+
+/* ---------- Bottom HUD ---------------------------------------------------- */
+:root.ak-theme body.adventure-client .uiRow{
+  background:linear-gradient(180deg,#111215,#0a0b0d);border:0;border-top:1px solid var(--ak-line-2);box-shadow:none;
+}
+:root.ak-theme body.adventure-client .uiRow>.panel{
+  position:relative;background:linear-gradient(180deg,rgba(33,35,40,.96),rgba(22,23,27,.96));color:var(--ak-text);
+  border:1px solid var(--ak-line);border-top:1px solid var(--ak-line-2);box-shadow:none;border-radius:0;
+}
+:root.ak-theme body.adventure-client .uiRow>.panel::before{
+  content:"";position:absolute;left:-1px;top:-1px;width:26px;height:2px;background:var(--ak-yellow);pointer-events:none;
+}
+:root.ak-theme body.adventure-client .uiRow .panelHeader{
+  color:var(--ak-dim);border-bottom:1px solid var(--ak-line);
+  font-family:var(--ak-display);font-stretch:85%;font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+}
+:root.ak-theme body.adventure-client .uiRow .panelHeader b,
+:root.ak-theme body.adventure-client .uiRow .panelHeader strong{color:var(--ak-text)}
+:root.ak-theme body.adventure-client .uiRow #playerLabel{
+  font-family:var(--ak-display);font-stretch:80%;font-weight:800;letter-spacing:.04em;color:#fff;
+}
+:root.ak-theme body.adventure-client .uiRow .playerLevel{color:var(--ak-yellow);font-family:var(--ak-display);font-weight:700}
+:root.ak-theme body.adventure-client .uiRow .playerExp{
+  background:transparent;color:var(--ak-dim);border:1px solid var(--ak-line-2);border-radius:0;
+  font-family:var(--ak-display);font-stretch:85%;letter-spacing:.1em;
+}
+:root.ak-theme body.adventure-client .uiRow .playerIcon{
+  border-radius:0;border:1px solid var(--ak-line-3);background:#0d0e10;
+  box-shadow:inset 0 0 0 1px #000,-3px -3px 0 -1px var(--ak-yellow);
+}
+:root.ak-theme body.adventure-client .uiRow .menuItem{
+  background:rgba(255,255,255,.03);color:var(--ak-text);border:1px solid var(--ak-line);border-radius:0;
+  font-family:var(--ak-display);font-stretch:85%;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+}
+:root.ak-theme body.adventure-client .uiRow .menuItem:hover:not(:disabled){
+  background:rgba(255,207,31,.1);border-color:rgba(255,207,31,.55);color:#fff;
+}
+:root.ak-theme body.adventure-client .uiRow .menuItem .arrow{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .uiRow .menuItem:disabled{opacity:.42}
+:root.ak-theme body.adventure-client .uiRow .small,
+:root.ak-theme body.adventure-client .uiRow .statusList>.small{color:var(--ak-dim);font-family:var(--ak-display);font-stretch:90%;letter-spacing:.05em}
+:root.ak-theme body.adventure-client .uiRow .small b{color:var(--ak-text);font-variant-numeric:tabular-nums}
+:root.ak-theme body.adventure-client .uiRow .statRow .name{
+  font-family:var(--ak-display);font-stretch:75%;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--ak-text);
+}
+:root.ak-theme body.adventure-client .uiRow .barLine{color:var(--ak-faint);font-family:var(--ak-display);letter-spacing:.1em}
+:root.ak-theme body.adventure-client .uiRow .barLine b{color:var(--ak-text);font-variant-numeric:tabular-nums}
+:root.ak-theme body.adventure-client .uiRow .meter{
+  position:relative;background:rgba(255,255,255,.05);border:1px solid var(--ak-line-2);box-shadow:none;border-radius:0;
+  transform:skewX(-20deg);
+}
+:root.ak-theme body.adventure-client .uiRow .meter::after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(90deg,transparent 0 10px,rgba(0,0,0,.42) 10px 12px);
+}
+:where(:root.ak-theme) body.adventure-client .fillHP{background:linear-gradient(90deg,#0a86c4,#2cc5f6 70%,#8be6ff)}
+:where(:root.ak-theme) body.adventure-client .fillBoss{background:linear-gradient(90deg,#9b1c14,#ff4b3e 70%,#ff9a5e)}
+:root.ak-theme body.adventure-client .bgmBtn{
+  background:transparent;color:var(--ak-text);border:1px solid var(--ak-line-2);border-radius:0;
+  font-family:var(--ak-display);font-weight:700;letter-spacing:.1em;
+}
+:root.ak-theme body.adventure-client input[type=range]{accent-color:var(--ak-yellow)}
+
+/* Story squad side panel */
+:root.ak-theme body.adventure-client .storySquadVisual{
+  background:linear-gradient(180deg,rgba(18,19,22,.94),rgba(10,11,13,.94));border:1px solid var(--ak-line-2);border-radius:0;box-shadow:0 18px 40px rgba(0,0,0,.45);
+}
+:root.ak-theme body.adventure-client .storySquadHeading{
+  font-family:var(--ak-display);font-stretch:80%;font-weight:800;letter-spacing:.24em;color:var(--ak-dim);border-bottom:1px solid var(--ak-line);
+}
+:root.ak-theme body.adventure-client .storySquadHeroName{font-family:var(--ak-display);font-stretch:80%;font-weight:900;letter-spacing:.06em;color:#fff}
+
+/* ---------- Overlays: shared panel ---------------------------------------- */
+:root.ak-theme body.adventure-client .overlay{background:radial-gradient(ellipse at center,rgba(6,7,9,.6),rgba(4,5,6,.9))}
+:root.ak-theme body.adventure-client .overlayBox{
+  background:linear-gradient(180deg,rgba(28,30,34,.98),rgba(17,18,21,.98));color:var(--ak-text);
+  border:1px solid var(--ak-line-2);border-top:0;border-radius:0;box-shadow:0 30px 80px rgba(0,0,0,.7);
+  padding:22px 24px 20px;clip-path:var(--ak-cut);
+  background-image:linear-gradient(90deg,var(--ak-yellow) 0 64px,var(--ak-line-2) 64px) ,linear-gradient(180deg,rgba(28,30,34,.98),rgba(17,18,21,.98));
+  background-size:100% 2px,100% 100%;background-repeat:no-repeat;
+}
+:root.ak-theme body.adventure-client .overlayBox h2{
+  font:900 clamp(22px,2.4vw,30px)/1.05 var(--ak-display);font-stretch:75%;letter-spacing:.05em;text-transform:uppercase;color:#fff;margin:0 0 8px;
+}
+:root.ak-theme body.adventure-client .overlayBox p,
+:root.ak-theme body.adventure-client .overlayBox .muted{color:var(--ak-dim)}
+:root.ak-theme body.adventure-client #overlayDesc{font-family:var(--ak-jp);color:#d7dadd}
+:root.ak-theme body.adventure-client #overlayHint{
+  color:var(--ak-faint);font-family:var(--ak-display);font-stretch:85%;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+}
+:root.ak-theme body.adventure-client .overlayBox .countdown{
+  color:var(--ak-yellow);font:900 clamp(56px,8vw,110px)/1 var(--ak-display);font-stretch:75%;font-variant-numeric:tabular-nums;
+}
+:root.ak-theme body.adventure-client .overlayBox .choiceBtn,
+:root.ak-theme body.adventure-client .overlayBox .uiBtn{
+  position:relative;background:rgba(255,255,255,.04);color:var(--ak-text);
+  border:1px solid var(--ak-line-2);border-left:3px solid var(--ak-iron);border-radius:0;box-shadow:none;
+  font-family:var(--ak-display);font-stretch:85%;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+  transition:background .14s ease,border-color .14s ease,transform .14s ease;
+}
+:root.ak-theme body.adventure-client .overlayBox .choiceBtn:hover:not(:disabled),
+:root.ak-theme body.adventure-client .overlayBox .uiBtn:hover:not(:disabled){
+  background:rgba(255,207,31,.1);border-color:rgba(255,207,31,.6);border-left-color:var(--ak-yellow);
+}
+:root.ak-theme body.adventure-client .overlayBox .choiceBtn .title{font:inherit;letter-spacing:inherit;color:inherit}
+:root.ak-theme body.adventure-client .overlayBox .uiBtn.primary,
+:root.ak-theme body.adventure-client .overlayBox .choiceBtn.victory-continue{
+  background:var(--ak-yellow);color:#111;border-color:var(--ak-yellow);clip-path:var(--ak-arrow-btn);padding-right:26px;
+}
+:root.ak-theme body.adventure-client .overlayBox .choiceBtn:disabled{opacity:.45;cursor:not-allowed}
+:root.ak-theme body.adventure-client .overlayBox input{
+  background:#0c0d0f;color:#fff;border:1px solid var(--ak-line-2);border-radius:0;
+}
+
+/* ---------- Overlay state: wide "band" screens ----------------------------- */
+/* Countdown, pause, stage clear and victory span the screen as a horizontal band. */
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]):not(.mode-select-active):not(.defeat-active){
+  place-items:center stretch;padding:0 0 var(--ak-hud-h,0px);
+}
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]):not(.mode-select-active):not(.defeat-active) .overlayBox{
+  width:100%;max-width:none;clip-path:none;overflow:visible;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:clamp(18px,4vw,64px);align-items:center;
+  padding:clamp(22px,4.2vh,44px) max(6vw,24px);
+  border:0;border-top:1px solid var(--ak-line-2);border-bottom:1px solid var(--ak-line-2);
+  background:
+    linear-gradient(90deg,var(--ak-yellow) 0 18%,transparent 18%) top/100% 3px no-repeat,
+    linear-gradient(90deg,transparent 0 82%,var(--ak-line-3) 82%) bottom/100% 1px no-repeat,
+    linear-gradient(90deg,rgba(10,11,13,.55) 0%,rgba(14,15,18,.97) 14%,rgba(14,15,18,.97) 86%,rgba(10,11,13,.55) 100%);
+  box-shadow:0 0 0 100vmax rgba(0,0,0,.28);
+}
+:root.ak-theme body.adventure-client :where(#overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]):not(.mode-select-active):not(.defeat-active)) .overlayBox>*{grid-column:1}
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]):not(.mode-select-active):not(.defeat-active) .overlayBox::before{
+  content:"// OPERATION STATUS";grid-column:1;justify-self:start;margin-bottom:6px;
+  font:700 11px/1 var(--ak-display);letter-spacing:.32em;color:var(--ak-yellow);
+}
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]):not(.mode-select-active):not(.defeat-active) h2{
+  font-size:clamp(40px,7vw,96px);line-height:.92;margin:0;letter-spacing:.02em;
+}
+:root.ak-theme body.adventure-client #overlay[data-state="countdown"] .overlayBox::before{content:"// STANDBY"}
+:root.ak-theme body.adventure-client #overlay[data-state="paused"] .overlayBox::before{content:"// OPERATION SUSPENDED"}
+:root.ak-theme body.adventure-client #overlay[data-state="stageclear"] .overlayBox::before{content:"// STAGE REPORT"}
+:root.ak-theme body.adventure-client #overlay[data-state="victory"] .overlayBox::before{content:"// OPERATION COMPLETE"}
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]):not(.defeat-active) #overlayDesc{
+  margin:10px 0 0;font-size:clamp(14px,1.3vw,17px);color:var(--ak-dim);
+}
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"]):not(.defeat-active) .countdown{
+  grid-column:2;grid-row:1 / span 5;margin:0;min-width:1ch;text-align:right;
+  font-size:clamp(84px,13vw,170px);text-shadow:0 0 40px rgba(255,207,31,.25);
+}
+:root.ak-theme body.adventure-client #overlay[data-state="countdown"] .countdown:not(:empty){animation:ak-count-pop .9s ease-out both}
+:root.ak-theme body.adventure-client #overlay[data-state="paused"]:not(.defeat-active) .overlayChoices{
+  grid-column:2;grid-row:1 / span 5;display:grid;gap:10px;margin:0;min-width:min(320px,40vw);
+}
+:root.ak-theme body.adventure-client #overlay[data-state="paused"] .overlayChoices .choiceBtn{min-height:54px;font-size:15px;clip-path:var(--ak-arrow-btn);padding-right:28px;text-align:left}
+:root.ak-theme body.adventure-client #overlay[data-state="paused"] .overlayChoices .choiceBtn[data-act="resume"]{background:var(--ak-yellow);color:#111;border-color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #overlay[data-state="paused"] #overlayHint{margin-top:12px}
+:root.ak-theme body.adventure-client #overlay[data-state="paused"] .countdown:not(:empty){position:absolute;right:max(6vw,24px);background:rgba(14,15,18,.97);padding-left:24px}
+
+:root.ak-theme body.adventure-client #overlay[data-state="stageclear"]:not(.mode-select-active):not(.defeat-active) .overlayBox,
+:root.ak-theme body.adventure-client #overlay[data-state="victory"]:not(.mode-select-active):not(.defeat-active) .overlayBox{
+  background:
+    var(--ak-hazard) top/100% 6px no-repeat,
+    var(--ak-hazard) bottom/100% 6px no-repeat,
+    linear-gradient(90deg,rgba(10,11,13,.6) 0%,rgba(14,15,18,.97) 14%,rgba(14,15,18,.97) 86%,rgba(10,11,13,.6) 100%);
+  border-color:transparent;
+}
+:root.ak-theme body.adventure-client #overlay:is([data-state="stageclear"],[data-state="victory"]) h2{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #overlay[data-state="stageclear"] h2 .stageClearSlide{font:inherit;letter-spacing:inherit;color:inherit;display:inline-block;animation:ak-slide-in .45s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay[data-state="victory"] .overlayChoices{
+  grid-column:2;grid-row:1 / span 5;display:grid;gap:10px;margin:0;min-width:min(300px,38vw);
+}
+:root.ak-theme body.adventure-client #overlay[data-state="victory"] .overlayChoices .choiceBtn{min-height:56px;font-size:16px}
+:root.ak-theme body.adventure-client #overlay[data-state="victory"] .guild-result{
+  font-family:var(--ak-display);font-stretch:85%;font-weight:800;letter-spacing:.12em;color:var(--ak-yellow-2);
+  border-left:3px solid var(--ak-yellow);padding:6px 10px;background:rgba(255,207,31,.06);
+}
+
+/* ---------- Overlay state: boss dialogue (cinematic lower third) ---------- */
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"]:not(.mode-select-active):not(.defeat-active){
+  place-items:end center;padding:0 0 calc(var(--ak-hud-h,0px) + max(3vh,14px));
+  background:linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.6) calc(var(--ak-hud-h,0px) + 120px),rgba(0,0,0,.06) 75%);
+}
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"]:not(.mode-select-active):not(.defeat-active) .overlayBox{
+  width:min(1120px,calc(100% - 32px));clip-path:none;overflow:visible;
+  padding:26px clamp(20px,3vw,40px) 18px;
+  background:linear-gradient(90deg,rgba(10,11,13,.86),rgba(14,15,18,.72));
+  border:0;border-top:1px solid var(--ak-line-2);box-shadow:none;
+}
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"] h2{
+  position:absolute;left:clamp(20px,3vw,40px);top:0;transform:translateY(-58%);
+  margin:0;padding:6px 22px 6px 12px;background:#f2f2ef;color:#111;
+  font-size:clamp(17px,1.7vw,22px);letter-spacing:.08em;
+  clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%);box-shadow:-4px 0 0 var(--ak-yellow);
+}
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"] #overlayDesc{
+  margin:4px 0 0;color:#f4f5f6;font-size:clamp(17px,1.6vw,22px);line-height:1.65;font-weight:600;
+}
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"] #overlayHint{
+  text-align:right;margin-top:8px;color:var(--ak-dim);
+}
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"] #overlayHint::after{
+  content:"";display:inline-block;width:0;height:0;margin-left:10px;vertical-align:middle;
+  border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--ak-yellow);
+  animation:ak-blink 1s steps(2,start) infinite;
+}
+
+/* ---------- Overlay state: defeat / continue ------------------------------ */
+:root.ak-theme body.adventure-client #overlay.defeat-active{
+  background:radial-gradient(ellipse at center,rgba(70,10,8,.35),rgba(5,5,6,.94) 70%),#08090a;
+  place-items:center stretch;padding:0;
+}
+:root.ak-theme body.adventure-client #overlay.defeat-active .overlayBox.defeat-card{
+  width:100%;max-width:none;clip-path:none;text-align:center;color:var(--ak-text);
+  padding:clamp(26px,5vh,54px) max(6vw,20px);border:0;
+  background:
+    linear-gradient(90deg,transparent 0 30%,var(--ak-red) 30% 70%,transparent 70%) top/100% 3px no-repeat,
+    linear-gradient(90deg,rgba(14,8,8,.4) 0%,rgba(22,12,12,.97) 18%,rgba(22,12,12,.97) 82%,rgba(14,8,8,.4) 100%);
+  box-shadow:none;
+}
+:root.ak-theme body.adventure-client #overlay.defeat-active .overlayBox.defeat-card::before{
+  content:"// SIGNAL LOST";display:block;margin-bottom:10px;
+  font:700 11px/1 var(--ak-display);letter-spacing:.34em;color:#ff8a80;
+}
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-card h2{
+  color:#fff;font:900 clamp(44px,8vw,104px)/.95 var(--ak-display);font-stretch:75%;letter-spacing:.04em;
+  text-shadow:0 0 34px rgba(255,75,62,.35);
+}
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-card .overlayChoices{
+  width:min(560px,100%);margin-left:auto;margin-right:auto;
+}
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-okay,
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-answer{
+  background:rgba(255,255,255,.04);color:#fff;border:1px solid var(--ak-line-3);border-radius:0;
+  font:900 clamp(20px,2.6vw,28px)/1 var(--ak-display);font-stretch:80%;letter-spacing:.2em;min-height:64px;
+}
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-answer[data-act="yes"]{background:var(--ak-yellow);color:#111;border-color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-okay:hover,
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-answer:hover{border-color:var(--ak-yellow);filter:brightness(1.08)}
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-card .countdown{
+  color:var(--ak-red);font:900 clamp(50px,7vw,84px)/1 var(--ak-display);font-stretch:75%;
+}
+:root.ak-theme body.adventure-client #overlay.defeat-active .defeat-heart svg{filter:drop-shadow(0 0 12px rgba(255,75,62,.35))}
+:root.ak-theme body.adventure-client #overlay.defeat-active #overlayHint{color:var(--ak-dim)}
+
+/* ---------- Rankings / achievements panels -------------------------------- */
+:root.ak-theme body.adventure-client .overlayBox.rankings-card{width:min(820px,calc(100vw - 28px))}
+:root.ak-theme body.adventure-client .ranking-grade,
+:root.ak-theme body.adventure-client .ranking-action{
+  background:rgba(255,255,255,.04);color:var(--ak-text);border:1px solid var(--ak-line-2);border-radius:0;
+  font-family:var(--ak-display);font-stretch:85%;font-weight:800;letter-spacing:.12em;
+}
+:root.ak-theme body.adventure-client .ranking-grade.active,
+:root.ak-theme body.adventure-client .ranking-action.primary{background:var(--ak-yellow);color:#111;border-color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .ranking-meta,
+:root.ak-theme body.adventure-client .ranking-notice{color:var(--ak-dim)}
+:root.ak-theme body.adventure-client .ranking-row,
+:root.ak-theme body.adventure-client .ranking-own{
+  background:rgba(255,255,255,.035);color:var(--ak-text);border:1px solid var(--ak-line);border-radius:0;
+}
+:root.ak-theme body.adventure-client .ranking-own{border-left:3px solid var(--ak-yellow);background:rgba(255,207,31,.07)}
+:root.ak-theme body.adventure-client .ranking-place,
+:root.ak-theme body.adventure-client .ranking-points{font-family:var(--ak-display);font-stretch:80%;font-weight:900;font-variant-numeric:tabular-nums;color:#fff}
+:root.ak-theme body.adventure-client .ranking-name{color:var(--ak-text)}
+:root.ak-theme body.adventure-client .ranking-avatar{border-radius:0;border:1px solid var(--ak-line-2)}
+:root.ak-theme body.adventure-client .achList>*{background:rgba(255,255,255,.035);border:1px solid var(--ak-line);color:var(--ak-text);border-radius:0}
+
+/* ==========================================================================
+   MODE SELECT — "home terminal": operator on the left, operation tiles right
+   ========================================================================== */
+:root.ak-theme body.adventure-client #overlay.mode-select-active{
+  padding:0;place-items:stretch;
+  background:
+    linear-gradient(112deg,transparent 0 36%,rgba(255,255,255,.022) 36% 58%,transparent 58%),
+    radial-gradient(55% 75% at 22% 62%,rgba(255,207,31,.085),transparent 62%),
+    radial-gradient(60% 60% at 85% 10%,rgba(44,197,246,.06),transparent 60%),
+    var(--ak-grid),#0c0d0f;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu{
+  width:100vw;height:100dvh;max-height:100dvh;padding:0;border:0;clip-path:none;box-shadow:none;background:transparent;
+  display:grid;grid-template-columns:minmax(0,41fr) minmax(0,59fr);
+  grid-template-rows:auto auto minmax(0,1fr);column-gap:0;overflow:hidden;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu::before{
+  content:"";grid-column:2;grid-row:2 / 4;z-index:0;pointer-events:none;border:0;box-shadow:none;
+  background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,0) 40%);
+  border-left:1px solid var(--ak-line);
+}
+
+/* Top status bar (built by ak-theme.js) */
+:root.ak-theme body.adventure-client .ak-home-hud{display:none}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-home-hud{
+  grid-column:1 / -1;grid-row:1;z-index:2;display:flex;align-items:center;gap:clamp(10px,1.6vw,22px);
+  min-height:58px;padding:8px clamp(14px,2vw,28px);box-sizing:border-box;
+  background:linear-gradient(180deg,rgba(0,0,0,.65),rgba(0,0,0,.15));border-bottom:1px solid var(--ak-line);
+  font-family:var(--ak-display);color:var(--ak-text);
+}
+.ak-home-hud .ak-hud-brand{display:flex;flex-direction:column;gap:3px;padding-right:clamp(10px,1.6vw,22px);border-right:1px solid var(--ak-line)}
+.ak-home-hud .ak-hud-brand b{font:900 17px/1 var(--ak-display);font-stretch:75%;letter-spacing:.16em}
+.ak-home-hud .ak-hud-brand small{font:700 9px/1 var(--ak-display);letter-spacing:.34em;color:var(--ak-yellow)}
+.ak-home-hud .ak-hud-player{display:flex;align-items:center;gap:10px;min-width:0}
+.ak-home-hud .ak-hud-avatar{width:38px;height:38px;object-fit:cover;background:#0d0e10;border:1px solid var(--ak-line-3);box-shadow:-3px -3px 0 -1px var(--ak-yellow);flex:0 0 auto}
+.ak-home-hud .ak-hud-id{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ak-home-hud .ak-hud-name{font:800 17px/1 var(--ak-display);font-stretch:80%;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22vw}
+.ak-home-hud .ak-hud-lv{color:var(--ak-yellow);margin-left:8px;font-weight:800;font-stretch:85%}
+.ak-home-hud .ak-hud-exp{display:flex;align-items:center;gap:8px;font:700 10px/1 var(--ak-display);letter-spacing:.14em;color:var(--ak-dim)}
+.ak-home-hud .ak-hud-exp i{display:block;width:clamp(70px,9vw,140px);height:4px;background:rgba(255,255,255,.12);position:relative;overflow:hidden}
+.ak-home-hud .ak-hud-exp i::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--ak-exp,0%);background:var(--ak-yellow)}
+.ak-home-hud .ak-hud-spacer{flex:1 1 auto}
+.ak-home-hud .ak-hud-link{
+  display:flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--ak-line-2);
+  font:800 10px/1 var(--ak-display);letter-spacing:.24em;color:var(--ak-text);white-space:nowrap;
+}
+.ak-home-hud .ak-hud-link::before{content:"";width:7px;height:7px;background:#38d996;box-shadow:0 0 8px #38d996}
+.ak-home-hud .ak-hud-link.is-local::before{background:var(--ak-orange);box-shadow:0 0 8px var(--ak-orange)}
+.ak-home-hud .ak-hud-clock{display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding-left:clamp(10px,1.6vw,22px);border-left:1px solid var(--ak-line)}
+.ak-home-hud .ak-hud-clock b{font:800 22px/1 var(--ak-display);font-stretch:75%;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.ak-home-hud .ak-hud-clock small{font:700 9px/1 var(--ak-display);letter-spacing:.24em;color:var(--ak-dim)}
+
+/* Operator showcase */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>.operator-showcase{
+  grid-column:1;grid-row:2 / 4;position:relative;z-index:1;min-height:0;min-width:0;overflow:hidden;
+  display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
+  justify-items:stretch;gap:0;padding:0;text-align:left;color:var(--ak-text);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-showcase::before{
+  content:attr(data-ak-name);position:absolute;left:-1vw;bottom:6%;z-index:0;pointer-events:none;
+  font:900 clamp(80px,13vw,210px)/.8 var(--ak-display);font-stretch:75%;text-transform:uppercase;letter-spacing:-.01em;
+  color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.07);white-space:nowrap;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-showcase::after{
+  content:"";position:absolute;left:clamp(16px,2.2vw,30px);top:clamp(84px,12vh,120px);bottom:110px;width:1px;z-index:0;
+  background:linear-gradient(180deg,var(--ak-line-3),transparent);pointer-events:none;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-heading{
+  grid-row:1;grid-column:1;position:relative;z-index:2;align-items:flex-start;min-height:0;gap:6px;
+  padding:clamp(16px,2.6vh,26px) clamp(16px,2.2vw,30px) 0;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-kicker{
+  font:700 10px/1 var(--ak-display);letter-spacing:.34em;color:var(--ak-yellow);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-name{
+  font:900 clamp(30px,4.2vw,58px)/.9 var(--ak-display);font-stretch:75%;text-transform:uppercase;letter-spacing:.02em;color:#fff;
+  text-shadow:0 2px 18px rgba(0,0,0,.6);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-rarity{
+  font-size:15px;letter-spacing:.22em;color:var(--ak-yellow);text-shadow:0 0 10px rgba(255,207,31,.4);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-art{
+  grid-row:1 / 4;grid-column:1;z-index:1;align-self:stretch;justify-self:stretch;
+  display:flex;align-items:flex-end;justify-content:center;padding:clamp(70px,11vh,110px) 0 0;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-art img{
+  object-position:center bottom;transform-origin:center bottom;
+  filter:drop-shadow(0 18px 30px rgba(0,0,0,.6));
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-art img.operator-art-visible{animation:ak-art-in .55s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-footer{
+  grid-row:3;grid-column:1;position:relative;z-index:2;width:auto;align-items:stretch;gap:8px;align-self:end;
+  padding:0 clamp(16px,2.2vw,30px) clamp(16px,2.6vh,26px);max-width:360px;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-passive{
+  position:relative;padding:9px 12px 9px 12px;background:rgba(10,11,13,.82);border:1px solid var(--ak-line-2);border-left:3px solid var(--ak-cyan);
+  font:700 13px/1.3 var(--ak-sans);color:#e9f7ff;text-wrap:balance;backdrop-filter:blur(3px);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-passive::before{
+  content:"PASSIVE";display:block;margin-bottom:4px;font:700 9px/1 var(--ak-display);letter-spacing:.3em;color:var(--ak-cyan);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-change{
+  min-height:44px;background:var(--ak-yellow);color:#111;border:0;clip-path:var(--ak-arrow-btn);
+  font:900 13px/1 var(--ak-display);font-stretch:85%;letter-spacing:.2em;text-align:left;padding:10px 30px 10px 14px;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-change:hover{background:var(--ak-yellow-2);border:0}
+
+/* Section heading */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>h2{
+  grid-column:2;grid-row:2;z-index:1;display:flex;align-items:baseline;gap:14px;margin:0;
+  padding:clamp(14px,2.4vh,24px) clamp(16px,2.4vw,32px) clamp(8px,1.4vh,14px);
+  background:transparent;border:0;color:#fff;
+  font:900 clamp(24px,2.6vw,36px)/1 var(--ak-display);font-stretch:75%;letter-spacing:.06em;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>h2::before{
+  content:"";align-self:center;width:10px;height:10px;background:var(--ak-yellow);flex:0 0 auto;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>h2::after{
+  content:"OPERATIONS / 作戦選択";font:700 10px/1 var(--ak-display);letter-spacing:.3em;color:var(--ak-dim);
+  flex:1 1 auto;border-bottom:1px solid var(--ak-line);padding-bottom:6px;white-space:nowrap;overflow:hidden;
+}
+
+/* Tile grid */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>.overlayChoices{
+  grid-column:2;grid-row:3;z-index:1;margin:0;min-height:0;min-width:0;overflow:auto;
+  display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+  grid-template-rows:minmax(118px,1.55fr) repeat(3,minmax(78px,1fr)) auto;gap:10px;
+  padding:4px clamp(16px,2.4vw,32px) clamp(16px,2.6vh,28px);
+  scrollbar-width:thin;scrollbar-color:var(--ak-iron) transparent;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card{
+  --tile-accent:var(--ak-iron);
+  position:relative;isolation:isolate;overflow:hidden;min-height:0;margin:0;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr) auto auto;
+  align-items:end;text-align:left;padding:12px 14px 12px 16px;cursor:pointer;
+  background:linear-gradient(155deg,#2b2e34 0%,#1d1f23 62%,#17181b 100%);color:var(--ak-text);
+  border:1px solid rgba(255,255,255,.11);border-radius:0;box-shadow:0 10px 24px rgba(0,0,0,.35);
+  clip-path:var(--ak-cut);
+  transition:transform .16s cubic-bezier(.2,.8,.2,1),background .16s ease,border-color .16s ease;
+  animation:ak-tile-in .42s cubic-bezier(.2,.8,.2,1) both;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--tile-accent);z-index:1;transition:width .16s ease;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card::after{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.07) 45%,transparent 60%);
+  transform:translateX(-60%);transition:opacity .2s ease,transform .5s ease;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:not(:disabled):hover,
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:not(:disabled):focus-visible{
+  transform:translateY(-2px);border-color:rgba(255,207,31,.55);
+  background:linear-gradient(155deg,#33373e 0%,#212328 62%,#191a1e 100%);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:not(:disabled):hover::before,
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:not(:disabled):focus-visible::before{width:6px;background:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:not(:disabled):hover::after{opacity:1;transform:translateX(60%)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:not(:disabled):active{transform:translateY(0) scale(.99)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:focus-visible{outline:2px solid var(--ak-yellow);outline-offset:-2px}
+
+/* Tile parts */
+.ak-theme .student-mode-card .ak-tile-code{
+  grid-column:1;grid-row:1;align-self:start;display:flex;align-items:center;gap:8px;
+  font:800 11px/1 var(--ak-display);letter-spacing:.24em;color:var(--ak-dim);
+}
+.ak-theme .student-mode-card .ak-tile-code::after{content:"";width:22px;height:1px;background:currentColor;opacity:.6}
+.ak-theme .student-mode-card .ak-tile-icon{
+  grid-column:2;grid-row:1 / 3;align-self:start;justify-self:end;width:28px;height:28px;color:var(--ak-dim);opacity:.9;
+}
+.ak-theme .student-mode-card .ak-tile-icon svg{display:block;width:100%;height:100%}
+.ak-theme .student-mode-card .ak-tile-mark{
+  position:absolute;right:-4%;bottom:-18%;width:clamp(90px,46%,190px);aspect-ratio:1;color:#fff;opacity:.045;z-index:-1;pointer-events:none;
+}
+.ak-theme .student-mode-card .ak-tile-mark svg{width:100%;height:100%;display:block}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card .title{
+  grid-column:1 / -1;grid-row:3;margin:0;color:#fff;text-transform:uppercase;
+  font:900 clamp(17px,1.65vw,26px)/1 var(--ak-display);font-stretch:75%;letter-spacing:.04em;
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;
+}
+.ak-theme .student-mode-card .ak-tile-sub{
+  grid-column:1 / -1;grid-row:4;margin-top:6px;display:flex;align-items:baseline;gap:9px;min-width:0;white-space:nowrap;overflow:hidden;
+}
+.ak-theme .student-mode-card .ak-tile-sub b{font:800 12px/1.1 var(--ak-jp);color:#d9dcdf}
+.ak-theme .student-mode-card .ak-tile-sub small{font:700 9px/1 var(--ak-display);letter-spacing:.24em;color:var(--ak-faint);overflow:hidden;text-overflow:ellipsis}
+.ak-theme .student-mode-card .ak-tile-lock{
+  grid-column:1 / -1;grid-row:1;align-self:start;justify-self:end;display:none;align-items:center;gap:6px;
+  padding:4px 8px;background:rgba(0,0,0,.45);border:1px solid var(--ak-line-2);
+  font:700 10px/1.2 var(--ak-display);letter-spacing:.12em;color:var(--ak-dim);white-space:normal;text-align:left;
+  max-width:calc(100% - 52px);box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ak-theme .student-mode-card .ak-tile-lock svg{width:11px;height:11px;flex:0 0 auto}
+
+/* Primary and special tiles */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="conquest"]{
+  --tile-accent:var(--ak-yellow);
+  background:
+    var(--ak-hazard) top right/112px 5px no-repeat,
+    radial-gradient(90% 120% at 100% 100%,rgba(255,207,31,.13),transparent 60%),
+    linear-gradient(155deg,#30333a 0%,#1f2126 60%,#17181b 100%);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="normal"]{
+  --tile-accent:var(--ak-cyan);
+  background:radial-gradient(90% 120% at 100% 100%,rgba(44,197,246,.14),transparent 60%),linear-gradient(155deg,#2c3036 0%,#1d1f24 60%,#16171a 100%);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card:is([data-ak-tile="conquest"],[data-ak-tile="normal"]) .title{font-size:clamp(26px,2.7vw,44px)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card:is([data-ak-tile="conquest"],[data-ak-tile="normal"]) .ak-tile-icon{width:36px;height:36px}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="conquest"] .ak-tile-icon{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="normal"] .ak-tile-icon{color:var(--ak-cyan)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card:is([data-ak-tile="challenge"],[data-ak-tile="shared"]){--tile-accent:var(--ak-red)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="practice"]{--tile-accent:#38d996}
+/* Recruitment: the one light tile, like a featured banner */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]:not(:disabled){
+  --tile-accent:var(--ak-yellow);color:#15161a;border-color:rgba(255,255,255,.6);
+  background:
+    linear-gradient(90deg,transparent 0 62%,rgba(255,207,31,.55) 62% 63%,transparent 63%),
+    repeating-linear-gradient(-45deg,rgba(0,0,0,.035) 0 2px,transparent 2px 9px),
+    linear-gradient(155deg,#f4f4f1 0%,#dedfdb 100%);
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]:not(:disabled):hover{background:linear-gradient(155deg,#fff 0%,#e8e9e5 100%)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]:not(:disabled) .title{color:#111}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]:not(:disabled) :is(.ak-tile-code,.ak-tile-icon){color:#4b4f55}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]:not(:disabled) .ak-tile-sub b{color:#2a2c30}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]:not(:disabled) .ak-tile-sub small{color:#6d7177}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"] .ak-tile-mark{color:#000;opacity:.06}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="aura"]{--tile-accent:#b98cff}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="reconnect"]{--tile-accent:var(--ak-orange)}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="reconnect"] .ak-tile-icon{color:var(--ak-orange)}
+
+/* Locked tiles */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:disabled{
+  cursor:not-allowed;opacity:1;filter:none;color:var(--ak-faint);
+  background:repeating-linear-gradient(-45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 10px),linear-gradient(155deg,#1a1b1f,#141518);
+  border-color:rgba(255,255,255,.06);box-shadow:none;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:disabled::before{background:#34373c}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:disabled .title{color:#6c7178}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:disabled :is(.ak-tile-icon,.ak-tile-code){color:#4b4f55}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:disabled .ak-tile-sub b{color:#5f646b}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:disabled .ak-tile-lock{display:inline-flex}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card:disabled .ak-tile-icon{display:none}
+
+/* Desktop / tablet placement */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="conquest"]{grid-column:1 / 8;grid-row:1}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="normal"]{grid-column:8 / 13;grid-row:1}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="practice"]{grid-column:1 / 5;grid-row:2}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="challenge"]{grid-column:5 / 9;grid-row:2}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="shared"]{grid-column:9 / 13;grid-row:2}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="recruit"]{grid-column:1 / 8;grid-row:3}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="aura"]{grid-column:8 / 13;grid-row:3}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="rankings"]{grid-column:1 / 5;grid-row:4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="tournament"]{grid-column:5 / 9;grid-row:4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card[data-ak-tile="reconnect"]{grid-column:9 / 13;grid-row:4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-no-reconnect .student-mode-card[data-ak-tile="rankings"]{grid-column:1 / 7}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-no-reconnect .student-mode-card[data-ak-tile="tournament"]{grid-column:7 / 13}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card:not([data-ak-tile]){grid-column:span 4}
+:root.ak-theme body.adventure-client #overlay.mode-select-active #localPracticeNotice{
+  grid-column:1 / -1;margin:0!important;padding:8px 12px!important;
+  background:var(--ak-hazard) left/6px 100% no-repeat,rgba(255,145,36,.1)!important;
+  color:#ffd1a6!important;border:1px solid rgba(255,145,36,.35);padding-left:18px!important;
+  font:800 11px/1.3 var(--ak-display)!important;letter-spacing:.2em;
+}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu :is(#overlayDesc,#overlayHint,#countdownText){display:none}
+
+/* Staggered tile entrance */
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(1){animation-delay:.02s}
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(2){animation-delay:.05s}
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(3){animation-delay:.08s}
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(4){animation-delay:.11s}
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(5){animation-delay:.14s}
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(6){animation-delay:.17s}
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(7){animation-delay:.2s}
+.ak-theme #overlay.mode-select-active .student-mode-card:nth-child(n+8){animation-delay:.23s}
+
+/* Operator selection dialog */
+:root.ak-theme body.adventure-client #overlay .operator-selection-backdrop{background:rgba(6,7,9,.9)}
+:root.ak-theme body.adventure-client .operator-selection-dialog{
+  background:linear-gradient(180deg,#1b1d21,#121316);color:var(--ak-text);border-top:0;
+  box-shadow:0 30px 80px #000c;clip-path:var(--ak-cut);
+  background-image:linear-gradient(90deg,var(--ak-yellow) 0 80px,var(--ak-line-2) 80px),linear-gradient(180deg,#1b1d21,#121316);
+  background-size:100% 2px,100% 100%;background-repeat:no-repeat;
+}
+:root.ak-theme body.adventure-client .operator-selection-header{border-bottom:1px solid var(--ak-line)}
+:root.ak-theme body.adventure-client .operator-selection-header h3{font:900 24px/1 var(--ak-display);font-stretch:75%;letter-spacing:.08em;color:#fff}
+:root.ak-theme body.adventure-client .operator-selection-close{background:transparent;color:var(--ak-text);border:1px solid var(--ak-line-2);border-radius:0}
+:root.ak-theme body.adventure-client .operator-selection-list{border-right:1px solid var(--ak-line)}
+:root.ak-theme body.adventure-client .operator-selection-item{
+  background:rgba(255,255,255,.035);color:var(--ak-text);border:1px solid var(--ak-line);border-left:3px solid var(--ak-iron);border-radius:0;
+}
+:root.ak-theme body.adventure-client .operator-selection-item:hover{border-color:var(--ak-line-3)}
+:root.ak-theme body.adventure-client .operator-selection-item.selected{background:rgba(255,207,31,.09);border-left-color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .operator-selection-item img{background:#0d0e10;border:1px solid var(--ak-line)}
+:root.ak-theme body.adventure-client .operator-selection-item-labels strong{font-family:var(--ak-display);font-stretch:80%;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+:root.ak-theme body.adventure-client .operator-selection-item-labels small{color:var(--ak-dim)}
+:root.ak-theme body.adventure-client .operator-detail-art{background:radial-gradient(60% 60% at 50% 70%,rgba(255,207,31,.08),transparent 70%)}
+:root.ak-theme body.adventure-client .operator-detail-name{font:900 30px/1 var(--ak-display);font-stretch:75%;text-transform:uppercase;letter-spacing:.04em;color:#fff}
+:root.ak-theme body.adventure-client .operator-detail-rarity{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .operator-detail-passive{color:var(--ak-cyan);font-family:var(--ak-display);letter-spacing:.06em}
+:root.ak-theme body.adventure-client .operator-selection-detail .operator-detail-description{color:var(--ak-dim)}
+:root.ak-theme body.adventure-client .operator-selection-equip{
+  background:var(--ak-yellow);color:#111;border:0;clip-path:var(--ak-arrow-btn);
+  font:900 14px/1 var(--ak-display);font-stretch:85%;letter-spacing:.2em;
+}
+:root.ak-theme body.adventure-client .operator-selection-equip:hover{background:var(--ak-yellow-2)}
+
+/* ==========================================================================
+   Sign-in gate and intro start screen
+   ========================================================================== */
+:root.ak-theme body.adventure-client #adventureGate{background:var(--ak-void);color:var(--ak-text);font-family:var(--ak-sans)}
+:root.ak-theme body.adventure-client #adventureGate .ag-background{
+  background:linear-gradient(112deg,transparent 0 40%,rgba(255,255,255,.025) 40% 60%,transparent 60%),var(--ak-grid),radial-gradient(ellipse at 50% 40%,#1c1f24 0%,#0b0c0e 75%);
+}
+:root.ak-theme body.adventure-client #adventureGate .ag-mc{filter:grayscale(1) brightness(1.4) contrast(1.1);opacity:.1}
+:root.ak-theme body.adventure-client #adventureGate .ag-line{height:6px;background:var(--ak-hazard);opacity:.9}
+:root.ak-theme body.adventure-client #adventureGate .ag-brand span{color:var(--ak-yellow);font-family:var(--ak-display)}
+:root.ak-theme body.adventure-client #adventureGate .ag-brand strong{font-family:var(--ak-display);font-stretch:75%;font-weight:900;letter-spacing:.08em;color:#fff}
+:root.ak-theme body.adventure-client #adventureGate .ag-card{
+  background:linear-gradient(180deg,rgba(28,30,34,.96),rgba(17,18,21,.96))!important;color:var(--ak-text);
+  border:1px solid var(--ak-line-2)!important;border-top:2px solid var(--ak-yellow)!important;border-radius:0;
+  box-shadow:0 30px 80px rgba(0,0,0,.7)!important;clip-path:var(--ak-cut);
+}
+:root.ak-theme body.adventure-client #adventureGate p{color:#ff9a90!important}
+:root.ak-theme body.adventure-client #adventureGate .ag-card::before{width:4px;background:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #adventureGate .ag-card::after{
+  content:"ID-SCAN // TERMINAL";position:absolute;right:26px;top:14px;font:700 9px/1 var(--ak-display);letter-spacing:.3em;color:var(--ak-faint);
+}
+:root.ak-theme body.adventure-client #adventureGate .ag-kicker{color:var(--ak-yellow);font-family:var(--ak-display);letter-spacing:.32em}
+:root.ak-theme body.adventure-client #adventureGate h1{font:900 34px/1 var(--ak-display)!important;font-stretch:75%!important;letter-spacing:.06em!important;text-transform:uppercase;color:#fff!important}
+:root.ak-theme body.adventure-client #adventureGate .ag-message:not(:empty){border-left:2px solid rgba(255,154,144,.5);padding-left:10px}
+:root.ak-theme body.adventure-client #adventureGate label{color:var(--ak-dim)!important;font-family:var(--ak-display);letter-spacing:.24em}
+:root.ak-theme body.adventure-client #adventureGate input,
+:root.ak-theme body.adventure-client #adventureGate select{
+  background:#0b0c0e!important;color:#fff!important;border:1px solid var(--ak-line-2)!important;border-bottom:2px solid var(--ak-iron)!important;border-radius:0;
+  font-family:var(--ak-mono);letter-spacing:.08em;
+}
+:root.ak-theme body.adventure-client #adventureGate input:focus,
+:root.ak-theme body.adventure-client #adventureGate select:focus{outline:0!important;border-color:rgba(44,197,246,.6)!important;border-bottom-color:var(--ak-cyan)!important;box-shadow:0 0 18px rgba(44,197,246,.18)}
+:root.ak-theme body.adventure-client #adventureGate .ag-primary{
+  background:var(--ak-yellow);color:#111;clip-path:var(--ak-arrow-btn);padding-right:30px;
+  font-family:var(--ak-display);font-stretch:85%;font-weight:900;letter-spacing:.24em;text-transform:uppercase;
+}
+:root.ak-theme body.adventure-client #adventureGate .ag-secondary{background:transparent;color:var(--ak-text);border:1px solid var(--ak-line-3);font-family:var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client #adventureGate .ag-footer{color:var(--ak-faint);font-family:var(--ak-display);letter-spacing:.3em}
+:root.ak-theme body.adventure-client #adventureGate .ag-footer span{color:var(--ak-yellow)}
+
+/* Intro (title) screen */
+:root.ak-theme body.adventure-client .introOverlay{background:#0b0c0e;color:var(--ak-text)}
+:where(:root.ak-theme) .introBlackout{background:rgba(0,0,0,.25)}
+:where(:root.ak-theme) .introBg{background:radial-gradient(70% 60% at 50% 30%,#1c2026,#0b0c0e 75%)}
+:where(:root.ak-theme) .introBg::before{background:repeating-linear-gradient(180deg,rgba(255,255,255,.025) 0 1px,transparent 1px 4px)}
+:root.ak-theme body.adventure-client .introOverlay .introBg{filter:brightness(.42) saturate(.85)}
+:root.ak-theme body.adventure-client .introOverlay .introShade{
+  background:linear-gradient(90deg,rgba(6,7,9,.92) 0%,rgba(6,7,9,.35) 55%,rgba(6,7,9,.75) 100%),var(--ak-grid);
+}
+:root.ak-theme body.adventure-client .introOverlay .introGhostMark{opacity:.25}
+:root.ak-theme body.adventure-client .introOverlay .introCross{filter:brightness(1.6)}
+:where(:root.ak-theme) .introCharacterFigure{filter:brightness(0) invert(1);mix-blend-mode:screen;opacity:.09}
+:root.ak-theme body.adventure-client .introOverlay .introSmallBrand{color:var(--ak-yellow);font-family:var(--ak-display);letter-spacing:.5em}
+:root.ak-theme body.adventure-client .introOverlay .introBadge{
+  font-family:var(--ak-display);font-stretch:75%;font-weight:900;letter-spacing:.04em;
+  color:#fff;background:transparent;border:0;-webkit-text-fill-color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.6);
+}
+:root.ak-theme body.adventure-client .introOverlay .introYellowBar{background:var(--ak-hazard);height:8px;opacity:.95}
+:root.ak-theme body.adventure-client .introStartBtn{
+  background:var(--ak-yellow);color:#111;border:0;border-radius:0;clip-path:var(--ak-arrow-btn);padding-right:34px;
+  font-family:var(--ak-display);font-stretch:80%;font-weight:900;letter-spacing:.26em;text-transform:uppercase;box-shadow:none;
+}
+:root.ak-theme body.adventure-client .introStartBtn:hover{background:var(--ak-yellow-2)}
+:root.ak-theme body.adventure-client .introStartArrow{background:#111;color:var(--ak-yellow);border-radius:0}
+:root.ak-theme body.adventure-client .introSwitchPlayer{
+  background:rgba(10,11,13,.8);color:var(--ak-text);border:1px solid var(--ak-line-3);border-radius:0;
+  font-family:var(--ak-display);font-weight:800;letter-spacing:.22em;
+}
+:root.ak-theme body.adventure-client .introNote{color:var(--ak-orange);font-family:var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client .introProfileCard{
+  background:linear-gradient(180deg,rgba(28,30,34,.95),rgba(15,16,19,.95));border:1px solid var(--ak-line-2);border-left:3px solid var(--ak-yellow);
+  border-radius:0;box-shadow:0 18px 40px rgba(0,0,0,.55);color:var(--ak-text);
+}
+:root.ak-theme body.adventure-client .introProfileIcon{border-radius:0;border:1px solid var(--ak-line-3);background:#0d0e10}
+:root.ak-theme body.adventure-client .introProfileName{font-family:var(--ak-display);font-stretch:80%;font-weight:900;color:#fff;letter-spacing:.04em}
+:root.ak-theme body.adventure-client .introProfileLevel{color:var(--ak-yellow);font-family:var(--ak-display);font-weight:800}
+:root.ak-theme body.adventure-client :is(.introProfileExp,.introProfileSelected){color:var(--ak-dim);font-family:var(--ak-display);letter-spacing:.1em}
+
+/* ==========================================================================
+   CONQUEST — territory hall, stage list and reward screen
+   ========================================================================== */
+:root.ak-theme body.adventure-client #storyRoot{background:var(--ak-void)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall{
+  background:linear-gradient(112deg,transparent 0 40%,rgba(255,255,255,.02) 40% 60%,transparent 60%),var(--ak-grid),#0c0d0f;
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .story-world-top{
+  position:relative;background:linear-gradient(90deg,#08090a,#16181b 45%,#08090a);border-bottom:1px solid var(--ak-line-2);
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .story-world-top::after{
+  content:"";position:absolute;left:0;bottom:-1px;width:min(260px,35%);height:2px;background:var(--ak-yellow);pointer-events:none;
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall button.story-map-back{
+  background:transparent;color:var(--ak-text);border:0;border-right:1px solid var(--ak-line-2);border-radius:0;
+  font-family:var(--ak-display);
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall button.story-map-back:hover:not(:disabled){background:rgba(255,207,31,.1);color:#fff}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .story-map-back span{letter-spacing:.24em;font-family:var(--ak-display);font-weight:800}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .story-map-title{
+  background:transparent;color:#fff;padding:0 4px;
+  font:900 clamp(20px,2.4vw,30px)/1 var(--ak-display);font-stretch:75%;letter-spacing:.08em;text-transform:uppercase;
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-progress{color:var(--ak-dim);font:700 11px var(--ak-display);letter-spacing:.24em}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-progress strong{color:var(--ak-yellow);font:900 22px var(--ak-display);font-stretch:75%;letter-spacing:.04em}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-map-panel{border-color:var(--ak-line);background:rgba(255,255,255,.012)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-hall-heading{
+  font:900 22px/1 var(--ak-display);font-stretch:75%;letter-spacing:.12em;color:#fff;border-bottom-color:var(--ak-line);
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-hall-heading::before{
+  content:"";display:inline-block;width:9px;height:9px;margin-right:12px;background:var(--ak-yellow);vertical-align:middle;
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall button.cq-banner{
+  background:linear-gradient(180deg,#1f2125,#141518);border:1px solid var(--ak-line);border-bottom:3px solid var(--ak-iron);border-radius:0;
+  clip-path:var(--ak-cut);transition:transform .16s cubic-bezier(.2,.8,.2,1),border-color .16s ease,background .16s ease;
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall button.cq-banner:hover:not(:disabled){transform:translateY(-3px);border-color:var(--ak-line-3);background:linear-gradient(180deg,#26292e,#17181b)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall button.cq-banner.selected{
+  border-color:var(--ak-yellow);border-bottom-color:var(--ak-yellow);
+  background:radial-gradient(80% 60% at 50% 40%,rgba(255,207,31,.1),transparent 70%),linear-gradient(180deg,#24272b,#16171a);
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-banner-name{font:900 clamp(14px,1.6vw,22px)/1.1 var(--ak-display);font-stretch:75%;letter-spacing:.08em;text-transform:uppercase}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-banner-state{font-family:var(--ak-display);letter-spacing:.24em;font-size:10px}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-banner.available .cq-banner-state{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-banner-row>button{background:rgba(255,255,255,.04);color:var(--ak-text);border:1px solid var(--ak-line-2);border-radius:0}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-map-footer{background:rgba(0,0,0,.35);border-top:1px solid var(--ak-line)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall :is(.cq-page,.cq-jump){color:var(--ak-dim);font-family:var(--ak-display);letter-spacing:.16em}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-jump select{background:#0b0c0e;color:var(--ak-text);border:1px solid var(--ak-line-2);border-radius:0}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-side{
+  background:linear-gradient(180deg,rgba(27,29,33,.97),rgba(16,17,20,.97));color:var(--ak-text);
+  border:1px solid var(--ak-line-2);border-top:2px solid var(--ak-yellow);box-shadow:0 20px 50px rgba(0,0,0,.45);
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-side-head{background:rgba(255,255,255,.035);border:1px solid var(--ak-line);border-left:3px solid var(--territory,var(--ak-yellow))}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-side-status{color:var(--territory,var(--ak-yellow));font:700 10px var(--ak-display);letter-spacing:.3em}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-side h2{color:#fff;font:900 clamp(26px,3vw,42px)/1 var(--ak-display);font-stretch:75%;letter-spacing:.04em}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-side-head p{color:var(--ak-dim)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-stage-progress{background:rgba(255,255,255,.03);border:1px solid var(--ak-line);color:var(--ak-dim);font-family:var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-stage-progress strong{color:#fff;font:900 22px var(--ak-display);font-stretch:75%;letter-spacing:.04em}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-stage-meter{background:rgba(255,255,255,.1);border:0;transform:skewX(-20deg)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-stage-meter i{background:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-summary span{background:rgba(255,255,255,.03);border:1px solid var(--ak-line);color:var(--ak-dim);font-family:var(--ak-display)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-summary b{color:#fff}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-encounters{scrollbar-color:var(--ak-iron) transparent}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-encounters h3{color:var(--ak-dim);font:700 10px var(--ak-display);letter-spacing:.3em;border-bottom:1px solid var(--ak-line)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter{
+  background:rgba(255,255,255,.03);color:var(--ak-text);border:1px solid var(--ak-line);border-left:3px solid var(--ak-iron);
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter b{color:var(--ak-dim);font-family:var(--ak-display);font-weight:900;font-size:15px}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter strong{color:var(--ak-text);font-family:var(--ak-display)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter .cq-stage-name{font-weight:800}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter .cq-stage-status{font-family:var(--ak-display);letter-spacing:.2em;font-size:9px;color:var(--ak-faint)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter.cq-stage-current{background:linear-gradient(90deg,rgba(255,207,31,.14),rgba(255,207,31,.03));border-left-color:var(--ak-yellow);border-color:rgba(255,207,31,.35)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter.cq-stage-current .cq-stage-status{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter.cq-stage-locked{background:repeating-linear-gradient(-45deg,rgba(255,255,255,.02) 0 2px,transparent 2px 9px);color:var(--ak-faint)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter:has(small){background:rgba(255,75,62,.08);border-left-color:var(--ak-red)}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .conquest-encounter small{color:#ff9a90}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-actions button.story-start,
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result button{
+  background:var(--ak-yellow);color:#111;border:0;clip-path:var(--ak-arrow-btn);padding-right:34px;
+  font:900 18px var(--ak-display);font-stretch:80%;letter-spacing:.2em;text-transform:uppercase;
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-actions button.story-start:hover:not(:disabled),
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result button:hover:not(:disabled){background:var(--ak-yellow-2);color:#111}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-actions button.story-start:disabled{background:#26282c;color:var(--ak-faint)}
+/* Encounter result / reward */
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result{
+  background:linear-gradient(180deg,#1b1d21,#111215);color:var(--ak-text);border:1px solid var(--ak-line-2);border-top:0;
+  box-shadow:0 30px 80px #000c;clip-path:var(--ak-cut);
+  background-image:var(--ak-hazard),linear-gradient(180deg,#1b1d21,#111215);background-size:100% 5px,100% 100%;background-repeat:no-repeat;
+}
+:root.ak-theme body.adventure-client #storyRoot .cq-result-banner{background:radial-gradient(70% 60% at 50% 50%,rgba(255,207,31,.08),transparent 70%),#0d0e10}
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result .story-result-label{color:var(--ak-yellow);font:700 11px var(--ak-display);letter-spacing:.32em}
+:root.ak-theme body.adventure-client #storyRoot .cq-result-info h2{color:#fff;font:900 clamp(26px,3.2vw,40px)/1 var(--ak-display);font-stretch:75%;letter-spacing:.04em;text-transform:uppercase}
+:root.ak-theme body.adventure-client #storyRoot .cq-result-count{color:var(--ak-yellow);font:900 clamp(40px,6vw,72px)/1 var(--ak-display);font-stretch:75%}
+:root.ak-theme body.adventure-client #storyRoot .cq-result-meter{background:rgba(255,255,255,.1);border:0;transform:skewX(-20deg)}
+:root.ak-theme body.adventure-client #storyRoot .cq-result-meter i{background:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #storyRoot .cq-reward-box{background:rgba(255,255,255,.04);border:1px solid var(--ak-line);border-left:3px solid var(--ak-yellow)}
+:root.ak-theme body.adventure-client #storyRoot .cq-reward-box h2{color:#fff}
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result .conquest-rarity{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result .conquest-reward-stat{color:#fff;font-family:var(--ak-display);font-stretch:80%}
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result p{color:var(--ak-dim)}
+@media(max-width:700px){
+  :root.ak-theme body.adventure-client #storyRoot .cq-hall .story-world-top{background:linear-gradient(90deg,#08090a,#16181b 45%,#08090a)}
+}
+
+/* Squad assembly (Conquest pre-battle) */
+:root.ak-theme body.adventure-client .storySquadSelectScreen{background:linear-gradient(112deg,transparent 0 40%,rgba(255,255,255,.02) 40% 60%,transparent 60%),var(--ak-grid),#0c0d0f;color:var(--ak-text);font-family:var(--ak-sans)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSelectShell{background:transparent;border:0;box-shadow:none;animation:ak-fade-up .35s ease both}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSelectHeader{border-bottom:1px solid var(--ak-line-2);position:relative}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSelectHeader::after{content:"";position:absolute;left:0;bottom:-1px;width:min(220px,30%);height:2px;background:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSelectEyebrow{color:var(--ak-yellow);font:700 10px var(--ak-display);letter-spacing:.34em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSelectHeader h1{color:#fff;font:900 clamp(24px,2.8vw,38px)/1 var(--ak-display);font-stretch:75%;letter-spacing:.06em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .squadGuideCoach{background:rgba(255,207,31,.08);color:var(--ak-text);border:1px solid rgba(255,207,31,.35);border-left:3px solid var(--ak-yellow);border-radius:0;box-shadow:none}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .squadGuideStep{color:var(--ak-yellow);font-family:var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .squadGuideText{color:#fff}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .squadGuideButton{background:transparent;color:var(--ak-text);border:1px solid var(--ak-line-3);border-radius:0;font-family:var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen :is(.storySquadPickerStage,.storySquadPickerRoster){background:linear-gradient(180deg,rgba(27,29,33,.95),rgba(16,17,20,.95));border:1px solid var(--ak-line-2);border-top:1px solid var(--ak-line-3)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadPickerStage{animation:ak-slide-in .42s .05s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadPickerRoster{animation:ak-slide-in-r .42s .1s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadPickerLegend{border-bottom:1px solid var(--ak-line);color:var(--ak-dim);font:700 10px var(--ak-display);letter-spacing:.26em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadEyebrow{color:var(--ak-text)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSubhead{color:var(--ak-yellow);font:700 10px var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSlot{background:#16171a;border:1px solid var(--ak-line-2);clip-path:var(--ak-cut)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSlot:hover:not(:disabled){border-color:var(--ak-line-3);background:#1c1e22}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.empty .storySquadSlot{background:repeating-linear-gradient(-45deg,rgba(255,255,255,.025) 0 2px,transparent 2px 10px),#121316;border:1px dashed rgba(255,255,255,.16)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.locked.empty .storySquadSlot{background:repeating-linear-gradient(-45deg,rgba(255,255,255,.02) 0 2px,transparent 2px 10px),#0f1012;border:1px dashed rgba(255,255,255,.08)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.selected .storySquadSlot,
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.selected.empty .storySquadSlot{border:2px solid var(--ak-yellow);box-shadow:inset 0 0 0 1px rgba(255,207,31,.2),0 0 24px rgba(255,207,31,.12)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.selected.empty .storySquadSlot{background:radial-gradient(60% 50% at 50% 60%,rgba(255,207,31,.08),transparent 70%),#17181b}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.confirmed .storySquadSlot{border:1px solid var(--ak-cyan)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.confirmed .storySquadSlot::after{background:var(--ak-cyan);color:#081016}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSlotNumber{font:900 clamp(22px,2.4vw,34px)/1 var(--ak-display);font-stretch:75%;color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.empty .storySquadSlotNumber{color:#4b4f55}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.selected.empty .storySquadSlotNumber{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSlotLabel{background:linear-gradient(transparent,rgba(8,9,11,.88) 35%,rgba(8,9,11,.97))}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.empty .storySquadSlotName{color:#5b6067;font-family:var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadStage.selected.empty .storySquadSlotName{color:#fff}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSlotName{font-family:var(--ak-display);font-stretch:80%;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSlotStars{color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSlotState{color:var(--ak-dim);font:700 9px var(--ak-display);letter-spacing:.24em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadReadyBtn{background:var(--ak-yellow);color:#111;border:0;clip-path:var(--ak-arrow-btn);font:900 18px var(--ak-display);font-stretch:80%;letter-spacing:.24em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadReadyBtn:hover:not(:disabled){background:var(--ak-yellow-2)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadReadyBtn:disabled{background:#202226;color:var(--ak-faint);border:0}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterHeading,:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterHeading strong{color:#fff;font:900 16px var(--ak-display);font-stretch:80%;letter-spacing:.16em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSearch{background:#0b0c0e;color:#fff;border:1px solid var(--ak-line-2);border-bottom:2px solid var(--ak-iron)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSearch:focus{outline:0;border-bottom-color:var(--ak-cyan)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadSearch::placeholder{color:var(--ak-faint)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadFilter{background:rgba(255,255,255,.04);color:var(--ak-dim);border:1px solid var(--ak-line-2);font-family:var(--ak-display);letter-spacing:.12em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadFilter.active{background:var(--ak-yellow);color:#111;border-color:var(--ak-yellow)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterCard{background:linear-gradient(180deg,#24262b,#17181b);color:var(--ak-text);border:1px solid var(--ak-line);border-bottom:2px solid var(--ak-iron)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterCard:hover{background:linear-gradient(180deg,#2c2f35,#1b1c20);border-color:var(--ak-line-3)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterCard.inSquad{background:linear-gradient(180deg,#1f2a30,#131a1e);border-color:rgba(44,197,246,.5);border-bottom-color:var(--ak-cyan)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterCard.highlighted{outline:2px solid var(--ak-yellow)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterCard img{border:1px solid var(--ak-line);background:#0d0e10}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterName{color:#fff;font-family:var(--ak-display);font-stretch:85%;letter-spacing:.04em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadRosterBadge{color:var(--ak-yellow);font-family:var(--ak-display)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadPickerActions{border-top:1px solid var(--ak-line)}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadPickerError{color:#ff9a90}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadAction.secondary{background:transparent;color:var(--ak-text);border:1px solid var(--ak-line-3);font:800 12px var(--ak-display);letter-spacing:.2em}
+:root.ak-theme body.adventure-client .storySquadSelectScreen .storySquadAction.secondary:hover{background:rgba(255,255,255,.06)}
+
+/* ==========================================================================
+   TRANSITIONS — diagonal shutter between screens + staged entrances
+   ========================================================================== */
+.ak-shutter{position:fixed;inset:0;z-index:2147483000;pointer-events:none;overflow:hidden;display:none}
+.ak-shutter.is-on{display:block}
+.ak-shutter i{position:absolute;top:-10%;bottom:-10%;left:-25%;width:150%;transform:translateX(0) skewX(-18deg);will-change:transform}
+.ak-shutter .ak-sh-main{background:linear-gradient(90deg,#0b0c0e 0%,#16181b 60%,#0b0c0e 100%)}
+.ak-shutter .ak-sh-main::before{content:"";position:absolute;inset:0;background:var(--ak-grid);opacity:.8}
+.ak-shutter .ak-sh-edge{background:var(--ak-yellow);width:14px;left:calc(125% - 14px)}
+.ak-shutter .ak-sh-line{background:rgba(255,255,255,.55);width:2px;left:calc(125% + 16px)}
+.ak-shutter .ak-sh-label{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:14px;
+  font:900 15px/1 var(--ak-display);font-stretch:80%;letter-spacing:.5em;color:#fff;white-space:nowrap;
+}
+.ak-shutter .ak-sh-label::before{content:"";width:34px;height:4px;background:var(--ak-hazard)}
+.ak-shutter.is-on .ak-sh-main{animation:ak-sh-main var(--ak-sh-ms,520ms) cubic-bezier(.65,0,.35,1) both}
+.ak-shutter.is-on .ak-sh-edge{animation:ak-sh-edge var(--ak-sh-ms,520ms) cubic-bezier(.65,0,.35,1) both}
+.ak-shutter.is-on .ak-sh-line{animation:ak-sh-line var(--ak-sh-ms,520ms) cubic-bezier(.65,0,.35,1) both}
+.ak-shutter.is-on .ak-sh-label{animation:ak-sh-label var(--ak-sh-ms,520ms) ease both}
+/* Covers instantly (the new screen is already behind it), holds a beat, then sweeps away left. */
+@keyframes ak-sh-main{0%,26%{transform:translateX(0) skewX(-18deg)}100%{transform:translateX(-175vw) skewX(-18deg)}}
+@keyframes ak-sh-edge{0%,26%{transform:translateX(0) skewX(-18deg)}100%{transform:translateX(-175vw) skewX(-18deg)}}
+@keyframes ak-sh-line{0%,20%{transform:translateX(0) skewX(-18deg);opacity:1}100%{transform:translateX(-182vw) skewX(-18deg);opacity:.25}}
+@keyframes ak-sh-label{0%{opacity:0;transform:translate(-40%,-50%)}12%,30%{opacity:1;transform:translate(-50%,-50%)}55%,100%{opacity:0;transform:translate(-65%,-50%)}}
+
+/* Banner screens: the band opens from its centre line, then content slides in */
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]).show:not(.defeat-active):not(.mode-select-active) .overlayBox{
+  animation:ak-band-open .34s cubic-bezier(.2,.8,.2,1) both;
+}
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]).show:not(.defeat-active):not(.mode-select-active) h2{animation:ak-slide-in .42s .08s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="stageclear"],[data-state="victory"]).show:not(.defeat-active):not(.mode-select-active) :is(#overlayDesc,#overlayHint){animation:ak-fade-up .4s .16s ease both}
+:root.ak-theme body.adventure-client #overlay:is([data-state="paused"],[data-state="victory"]).show:not(.defeat-active) .overlayChoices{animation:ak-slide-in-r .42s .12s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay.defeat-active.show .overlayBox.defeat-card{animation:ak-band-open .4s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay.defeat-active.show .defeat-card h2{animation:ak-glitch-in .5s .1s steps(1,end) both}
+:root.ak-theme body.adventure-client #overlay.defeat-active.show .defeat-card .overlayChoices{animation:ak-fade-up .35s .25s ease both}
+/* Dialogue lower-third rises; the name plate slides in after it */
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"].show:not(.defeat-active):not(.mode-select-active) .overlayBox{animation:ak-rise .38s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"].show h2{animation:ak-plate-in .4s .1s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay[data-state="dialogue"].show #overlayDesc{animation:ak-type-in .5s .16s ease both}
+/* Mode Select: status bar drops, heading wipes in */
+:root.ak-theme body.adventure-client #overlay.mode-select-active .ak-home-hud{animation:ak-drop .4s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>h2{animation:ak-slide-in-r .42s .04s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-heading{animation:ak-slide-in .45s .1s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-footer{animation:ak-fade-up .4s .22s ease both}
+/* Operator picker slides in from the right */
+:root.ak-theme body.adventure-client .operator-selection-dialog{animation:ak-slide-in-r .36s cubic-bezier(.2,.8,.2,1) both}
+/* Conquest: top bar drops, map from the left, briefing panel from the right */
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .story-world-top{animation:ak-drop .38s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-map-panel{animation:ak-slide-in .45s .06s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #storyRoot .cq-hall .cq-side{animation:ak-slide-in-r .45s .12s cubic-bezier(.2,.8,.2,1) both}
+:root.ak-theme body.adventure-client #storyRoot .cq-banner-result{animation:ak-band-open .4s cubic-bezier(.2,.8,.2,1) both}
+/* Battle HUD panels settle in when a run starts */
+:root.ak-theme body.adventure-client .uiRow>.panel{animation:ak-fade-up .35s ease both}
+/* Tap feedback */
+:root.ak-theme body.adventure-client :is(.choiceBtn,.uiBtn,.menuItem,.operator-hero-change,.operator-selection-equip,.introStartBtn,.story-start,.cq-banner):active:not(:disabled){filter:brightness(1.25)}
+
+@keyframes ak-band-open{from{clip-path:inset(50% 0 50% 0);opacity:.4}to{clip-path:inset(0 0 0 0);opacity:1}}
+@keyframes ak-slide-in-r{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
+@keyframes ak-fade-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes ak-rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+@keyframes ak-plate-in{from{opacity:0;transform:translate(-24px,-58%)}to{opacity:1;transform:translate(0,-58%)}}
+@keyframes ak-type-in{from{opacity:0;clip-path:inset(0 100% 0 0)}to{opacity:1;clip-path:inset(0 0 0 0)}}
+@keyframes ak-drop{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+@keyframes ak-glitch-in{0%{opacity:0}10%{opacity:1;transform:translateX(-6px);text-shadow:4px 0 var(--ak-red),-4px 0 var(--ak-cyan)}20%{transform:translateX(5px)}30%{transform:none;text-shadow:0 0 34px rgba(255,75,62,.35)}100%{opacity:1}}
+
+/* ==========================================================================
+   Phone / narrow screens
+   ========================================================================== */
+@media (max-width:900px){
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu{
+    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(190px,34dvh) auto minmax(0,1fr);overflow:hidden;
+  }
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu::before{grid-column:1;grid-row:3 / 5;border-left:0;border-top:1px solid var(--ak-line)}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>.operator-showcase{grid-column:1;grid-row:2}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-art{padding-top:8px;justify-content:flex-end;padding-right:4vw}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-art img{width:62%}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-footer{max-width:56%;padding-bottom:12px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-passive{font-size:12px;padding:7px 9px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-change{min-height:38px;font-size:11px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .operator-showcase::after{display:none}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>h2{grid-column:1;grid-row:3;padding:12px 14px 6px;font-size:24px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu>.overlayChoices{
+    grid-column:1;grid-row:4;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:auto;align-content:start;
+    gap:8px;padding:4px 12px 16px;
+  }
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayChoices .student-mode-card[data-ak-tile]{grid-column:auto!important;grid-row:auto!important}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .overlayChoices .student-mode-card{order:3;min-height:94px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .overlayChoices .student-mode-card:is([data-ak-tile="conquest"],[data-ak-tile="normal"]){order:1;min-height:106px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active #localPracticeNotice{order:9}
+  .ak-theme .student-mode-card .ak-tile-mark{display:none}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card{padding:10px 10px 10px 13px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu .student-mode-card .title{font-size:18px}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .student-mode-card:is([data-ak-tile="conquest"],[data-ak-tile="normal"]) .title{font-size:25px}
+  .ak-theme .student-mode-card .ak-tile-sub small{display:none}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .ak-home-hud{min-height:50px;gap:10px}
+  .ak-home-hud .ak-hud-brand,.ak-home-hud .ak-hud-exp i{display:none}
+  .ak-home-hud .ak-hud-name{max-width:40vw}
+  :root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="victory"]):not(.defeat-active) .overlayBox{grid-template-columns:minmax(0,1fr)}
+  :root.ak-theme body.adventure-client #overlay:is([data-state="countdown"],[data-state="paused"],[data-state="victory"]):not(.defeat-active) :is(.countdown,.overlayChoices){grid-column:1;grid-row:auto;margin-top:14px;text-align:left}
+  :root.ak-theme body.adventure-client #overlay[data-state="paused"] .countdown:not(:empty){position:static;padding:0}
+}
+@media (max-width:520px){
+  .ak-home-hud .ak-hud-clock small,.ak-home-hud .ak-hud-link{display:none}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .overlayBox.modeSelectMenu{grid-template-rows:auto minmax(170px,30dvh) auto minmax(0,1fr)}
+  :root.ak-theme body.adventure-client #overlay.mode-select-active .operator-hero-name{font-size:30px}
+}
+
+/* ---------- Motion -------------------------------------------------------- */
+@keyframes ak-tile-in{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes ak-art-in{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:none}}
+@keyframes ak-slide-in{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
+@keyframes ak-count-pop{0%{opacity:0;transform:scale(1.35)}35%{opacity:1;transform:scale(1)}100%{opacity:1}}
+@keyframes ak-blink{to{visibility:hidden}}
+@media (prefers-reduced-motion:reduce){
+  .ak-theme #overlay *,.ak-theme #overlay *::before,.ak-theme #overlay *::after,
+  .ak-theme #storyRoot *,.ak-theme .uiRow>.panel{animation:none!important;transition:none!important}
+  .ak-theme .ak-shutter{display:none!important}
+}

@@ -135,7 +135,10 @@ async function onlineReady(){
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
    if(!connected)throw Error('Online Firebase connection required.');
- })();}
+ })();
+  // A failed import/handshake must not poison every later attempt (e.g. a second
+  // "Ready" press on the registration form after Wi-Fi returns).
+  const attempt=readyPromise;attempt.catch(()=>{if(readyPromise===attempt)readyPromise=null;});}
  // Prevent a broken RTDB handshake from blocking an already-verified card indefinitely.
  let timer;try{return await Promise.race([readyPromise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Firebase connection timeout')),9000);})]);}finally{clearTimeout(timer);}
 }

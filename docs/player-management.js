@@ -2,7 +2,7 @@ import {googleTeacher,currentTeacher,teacherSignOut,errorMessage} from './cloud-
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getFirestore,doc,collection,getDocFromServer,getDocsFromServer} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 import {combineProgress} from './conquest-progress.mjs?v=132.0';
-import './conquest-map.js?v=131.0';
+import './conquest-map.js?v=135.0';
 const $=id=>document.getElementById(id),db=getFirestore(getApp()),uid='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';let teacher=null,busy=false;
 const status=x=>$('status').textContent=x;
 function lock(){const ok=teacher?.uid===uid;$('login').hidden=!!teacher;$('logout').hidden=!teacher;$('load').disabled=!ok||busy;$('player').disabled=busy;$('logout').disabled=busy;}
