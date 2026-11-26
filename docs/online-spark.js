@@ -5,7 +5,7 @@
 import {ensureStudent,googleTeacher,currentTeacher} from './cloud-api.js?v=86.30';
 import {combineProgress,validateDelta,planTerritorySave,progressResponse,validStageId,territoryOf,hasClear} from './conquest-progress.mjs?v=132.0';
 import {modeRevision,balanceScopes} from './dashboard-revisions.mjs?v=147.0';
-import {makePull,getJstDate} from './recruitment-core.mjs';
+import {makePull,getJstDate} from './recruitment-core.mjs?v=148.6';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
 import {getFirestore,doc,collection,getDocFromServer,getDocsFromServer,query,where,orderBy,limit,onSnapshot,setDoc,updateDoc,serverTimestamp,runTransaction,deleteDoc,writeBatch} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
@@ -266,7 +266,18 @@ async function guildClaim(b){
  return {...result,provisional:true,spendingEnabled:false};
 }
 // Aura currency is separate from Guild Coins, so existing unverified earnings never turn into shards.
-const AURA_TOTALS=[0,10,30,70,150];
+// v148.6: shards are kept per rarity (4★ = recruitment.shards, 5★ = shards5, 6★ = shards6) and only
+// buy auras for operators of that rarity. Tier costs scale with how hard each rarity is to duplicate.
+const AURA_COSTS={4:[0,3,6,12,24],5:[0,1,2,2,3],6:[0,1,1,1,2]};
+const SHARD_FIELDS={4:'shards',5:'shards5',6:'shards6'};
+const shardCount=v=>Math.max(0,Math.trunc(Number(v)||0));
+const shardWallet=r=>({shards:shardCount(r?.shards),shards5:shardCount(r?.shards5),shards6:shardCount(r?.shards6)});
+let rosterCache=null;
+async function rosterCatalog(){
+ if(!rosterCache)rosterCache=fetch('gacha_catalog.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error('Operator catalog unavailable.');return r.json();}).catch(e=>{rosterCache=null;throw e;});
+ return rosterCache;
+}
+async function operatorRarity(id){const c=(await rosterCatalog()).characters||[];const r=Number(c.find(x=>x.id===id)?.rarity);return [4,5,6].includes(r)?r:4;}
 const RETIRED_OPERATORS=new Set(['crimson_knight','silver_knight']); // Legacy IDs are excluded from the active roster.
 function allowedOperatorIDs(d){return new Set(['mc',...Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id))]);}
 function safeShowcase(list,allowed){
@@ -284,6 +295,7 @@ const auraId=id=>typeof id==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(id);
 const auraOwned=(d,id)=>id!=='mc'&&allowedOperatorIDs(d).has(id);
 async function auraChange(b){
  const p=await currentPlayer(b),id=String(b.character_id||''),action=String(b.action||'');
+ const rarity=auraId(id)?await operatorRarity(id):4,field=SHARD_FIELDS[rarity];
  if(!auraId(id)||!['upgrade','equip'].includes(action))err('Unknown operator or action.');
  if(!auraOwned(p.player,id))err('You do not own that operator.');
  const target=Number(b.target);
@@ -292,15 +304,15 @@ async function auraChange(b){
   const snap=await tx.get(p.playerRef);
   if(!snap.exists()||snap.data().disabled)err('Player card not active.');
   const d=snap.data();if(!auraOwned(d,id))err('You do not own that operator.');
-  const shards=Number(d.recruitment?.shards??0),auras=d.recruitment?.auras||{};
+  const shards=Number(d.recruitment?.[field]??0),auras=d.recruitment?.auras||{};
   if(!Number.isSafeInteger(shards)||shards<0||shards>100000000)err('Invalid shard balance.');
   const before=auras[id]||{level:0,equipped:0};
   if(!Number.isInteger(before.level)||!Number.isInteger(before.equipped)||before.level<0||before.level>4||before.equipped<0||before.equipped>before.level)err('Aura record is invalid.');
   let after,cost=0;
   if(action==='upgrade'){
    if(before.level>=4)err('Gold Aura already unlocked.');
-   const level=before.level+1;cost=AURA_TOTALS[level]-AURA_TOTALS[before.level];
-   if(shards<cost)err(`Need ${cost-shards} more shards.`);
+   const level=before.level+1;cost=AURA_COSTS[rarity][level];
+   if(shards<cost)err(`Need ${cost-shards} more ${rarity}★ shard${cost-shards===1?'':'s'}.`);
    after={level,equipped:level};
   }else{
    if(target>before.level)err('That aura has not been unlocked.');
@@ -308,17 +320,15 @@ async function auraChange(b){
    after={level:before.level,equipped:target};
   }
   // One transaction: spend shards and upgrade the *one* owned character.
-  tx.update(p.playerRef,{
-   'recruitment.shards':shards-cost,
-   [`recruitment.auras.${id}`]:after,
-   'recruitment.lastAuraCharacter':id,
-   'recruitment.lastAuraAt':serverTimestamp()
-  });
-  return {ok:true,shards:shards-cost,auras:{...auras,[id]:after},level:after.level,equipped:after.equipped,spent:cost};
+  const change={[`recruitment.auras.${id}`]:after,'recruitment.lastAuraCharacter':id,'recruitment.lastAuraAt':serverTimestamp()};
+  if(cost>0)change[`recruitment.${field}`]=shards-cost;
+  tx.update(p.playerRef,change);
+  const wallet={...shardWallet(d.recruitment),[field]:shards-cost};
+  return {ok:true,...wallet,rarity,auras:{...auras,[id]:after},level:after.level,equipped:after.equipped,spent:cost};
  });return result;
 }
 async function profile(b,verifiedPlayer=null){const p=verifiedPlayer||await currentPlayer(b),d=p.player;const owned=Object.keys(d.recruitment?.owned||{}).filter(id=>auraId(id)&&!RETIRED_OPERATORS.has(id));const safe=sanitizedCosmetics(d);
- return {ok:true,public_id:p.id,name:d.username,selected_character:safe.featured,cosmetics:safe,adventure:activeAdventure(d.adventure),tournament:d.tournament||{},collection:{owned:['mc',...owned],available:['mc',...owned]},recruitment:{coins:Math.max(0,Math.trunc(Number(d.recruitment?.coins)||0)),permits:0,pity_six:Math.max(0,Number(d.recruitment?.pity_six)||0),pity_five:Math.max(0,Number(d.recruitment?.pity_five)||0),featured_guarantee:!!d.recruitment?.featured_guarantee,status:'classroom-browser-reported',daily_claimed:d.recruitment?.lastDailyDate===getJstDate(),shards:Math.max(0,Math.trunc(Number(d.recruitment?.shards)||0)),auras:d.recruitment?.auras||{},owned:Object.fromEntries(Object.entries(d.recruitment?.owned||{}).filter(([id])=>!RETIRED_OPERATORS.has(id)))},tutorial:d.tutorial||{version:1,step:5}};}
+ return {ok:true,public_id:p.id,name:d.username,selected_character:safe.featured,cosmetics:safe,adventure:activeAdventure(d.adventure),tournament:d.tournament||{},collection:{owned:['mc',...owned],available:['mc',...owned]},recruitment:{coins:Math.max(0,Math.trunc(Number(d.recruitment?.coins)||0)),permits:0,pity_six:Math.max(0,Number(d.recruitment?.pity_six)||0),pity_five:Math.max(0,Number(d.recruitment?.pity_five)||0),featured_guarantee:!!d.recruitment?.featured_guarantee,status:'classroom-browser-reported',daily_claimed:d.recruitment?.lastDailyDate===getJstDate(),...shardWallet(d.recruitment),auras:d.recruitment?.auras||{},owned:Object.fromEntries(Object.entries(d.recruitment?.owned||{}).filter(([id])=>!RETIRED_OPERATORS.has(id)))},tutorial:d.tutorial||{version:1,step:5}};}
 
 
 // Share one freshly verified account snapshot only within this login request.
@@ -367,7 +377,7 @@ async function recruitmentState(b={}){
  if(typeof last==='string'&&last.startsWith(p.id+'__')){
   try{const claim=await read('guildClaims',last);const ts=claim?.createdAt?.toDate?.();eligible=!!ts&&getJstDate(ts)===date;}catch(_){}
  }
- return {ok:true,coins:Math.max(0,Math.trunc(Number(r.coins)||0)),shards:Math.max(0,Math.trunc(Number(r.shards)||0)),pity_six:Number(r.pity_six)||0,pity_five:Number(r.pity_five)||0,featured_guarantee:!!r.featured_guarantee,
+ return {ok:true,coins:Math.max(0,Math.trunc(Number(r.coins)||0)),...shardWallet(r),pity_six:Number(r.pity_six)||0,pity_five:Number(r.pity_five)||0,featured_guarantee:!!r.featured_guarantee,
    dailyClaimed:r.lastDailyDate===date,dailyEligible:eligible, tutorialClaimed:!!r.tutorialClaimed,
    lastDrawId:r.lastDrawId||null,lastDrawMode:r.lastDrawMode||null,lastDrawResults:r.lastDrawResults||[]};
 }
@@ -376,7 +386,7 @@ async function recruitmentPull(b={}){
  const count=Number(b.count);if(![1,10].includes(count))err('Use single or ten pulls.');
  const mode=String(b.mode||'paid');if(!['paid','daily','tutorial'].includes(mode))err('Unknown recruitment mode.');
  if(mode!=='paid'&&count!==10)err('Only ten-pulls are free.');
- const roster=await fetch('gacha_catalog.json',{cache:'no-cache'}).then(r=>r.json());
+ const roster=await rosterCatalog();
  const pool=(roster.characters||[]).filter(c=>[4,5,6].includes(c.rarity)&&/^[a-z][a-z0-9_]{0,39}$/.test(c.id));
  const config=await recruitmentBanners();
  const featured=String(config.banners?.[0]?.featured_character_id||roster.featured_character_id||'tavi');
@@ -395,7 +405,7 @@ async function recruitmentPull(b={}){
    const saved=prior.data();
    // A reused request ID must never silently return a different pull or another player's receipt.
    if(saved.publicId!==p.id||saved.mode!==mode||saved.count!==count)err('This request belongs to another recruitment. Please retry the original pull.');
-   return {ok:true,replayed:true,results:saved.results||[],coins:r.coins,pity_six:r.pity_six,shards:r.shards,drawId:receiptId};
+   return {ok:true,replayed:true,results:saved.results||[],coins:r.coins,pity_six:r.pity_six,...shardWallet(r),drawId:receiptId};
   }
   let guildClaim=null;
   if(mode==='daily'&&typeof r.lastClaimId==='string'&&r.lastClaimId.startsWith(p.id+'__')){
@@ -410,13 +420,13 @@ async function recruitmentPull(b={}){
   const roll=makePull({count,owned:r.owned||{},pitySix:r.pity_six,pityFive:r.pity_five,featuredGuarantee:r.featured_guarantee,featuredId:featured,catalog:pool});
   const results=roll.results.map(x=>({id:x.id,rarity:x.rarity,duplicate:x.duplicate,shards:x.shards,featured:x.featured}));
   const next={...r,coins:coins-spent,owned:roll.owned,pity_six:roll.pitySix,pity_five:roll.pityFive,featured_guarantee:roll.featuredGuarantee,
-   shards:Math.max(0,Math.trunc(Number(r.shards)||0))+roll.shardsEarned,lastDrawId:receiptId,lastDrawMode:mode,lastDrawResults:results,lastDrawAt:serverTimestamp(),
+   shards:shardCount(r.shards)+roll.shardsByRarity[4],shards5:shardCount(r.shards5)+roll.shardsByRarity[5],shards6:shardCount(r.shards6)+roll.shardsByRarity[6],lastDrawId:receiptId,lastDrawMode:mode,lastDrawResults:results,lastDrawAt:serverTimestamp(),
    recent:[...results,...(r.recent||[])].slice(0,10)};
   if(mode!=='paid')next.lastDailyDate=date;
   if(mode==='tutorial')next.tutorialClaimed=true;
   tx.update(p.playerRef,{recruitment:next});
-  tx.set(receiptRef,{publicId:p.id,mode,count,spent,coinsBefore:coins,coinsAfter:next.coins,results,shardsEarned:roll.shardsEarned,featuredId:featured,dateJst:date,createdAt:serverTimestamp()});
-  return {ok:true,replayed:false,results,coins:next.coins,pity_six:next.pity_six,shards:next.shards,drawId:receiptId};
+  tx.set(receiptRef,{publicId:p.id,mode,count,spent,coinsBefore:coins,coinsAfter:next.coins,results,shardsEarned:roll.shardsByRarity[4],shardsEarned5:roll.shardsByRarity[5],shardsEarned6:roll.shardsByRarity[6],featuredId:featured,dateJst:date,createdAt:serverTimestamp()});
+  return {ok:true,replayed:false,results,coins:next.coins,pity_six:next.pity_six,...shardWallet(next),drawId:receiptId};
  });
  // Merge display metadata from versioned roster, never from user content.
  return {...out,results:(out.results||[]).map(x=>({...x,...(pool.find(c=>c.id===x.id)||{})}))};

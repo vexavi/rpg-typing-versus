@@ -1,5 +1,5 @@
 /* Teacher-only UI; permissions enforced in online-spark.js + Firestore rules. */
-import './online-spark.js?v=148.4';
+import './online-spark.js?v=148.6';
 const $=id=>document.getElementById(id);
 const utils=window.RPG_RECRUITMENT_BANNERS;
 let banners=[],revision=0,busy=false;

@@ -44,7 +44,7 @@
  function stars(r){return Array.from({length:r},(_,i)=>`<i style="--s:${i}">★</i>`).join('');}
  function rewardTag(op){
   if(!session.real)return '<span class="rv-tag rv-tag-preview">PREVIEW</span>';
-  return op.duplicate?`<span class="rv-tag rv-tag-dup">+${Math.max(0,op.shards|0)} SHARDS</span>`:'<span class="rv-tag rv-tag-new">NEW</span>';
+  return op.duplicate?`<span class="rv-tag rv-tag-dup">+${Math.max(0,op.shards|0)} ${op.rarity}★ SHARD${(op.shards|0)===1?'':'S'}</span>`:'<span class="rv-tag rv-tag-new">NEW</span>';
  }
 
  // ---- Frame ---------------------------------------------------------------
@@ -116,7 +116,7 @@
     <div class="rv-hint">${replay?'TAP TO RETURN':'TAP TO CONTINUE'} <span aria-hidden="true">▸</span></div>
     ${pips}
    </section>`;
-  live(`${op.name}, ${r} stars${session.real?(op.duplicate?`, duplicate, +${op.shards} shards`:', new recruit'):''}.`);
+  live(`${op.name}, ${r} stars${session.real?(op.duplicate?`, duplicate, +${op.shards} ${r}-star shard${op.shards===1?'':'s'}`:', new recruit'):''}.`);
   later(()=>{session.stepDone=true;view()?.querySelector('.rv-reveal')?.classList.add('is-done');},revealMs[r]||1000);
  }
  function advance(){

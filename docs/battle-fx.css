@@ -428,3 +428,10 @@
   .fx-boss-reticle,.fx-lane::before{animation:none!important}
   @keyframes fx-fade-rm{0%,80%{opacity:1}100%{opacity:0}}
 }
+
+/* Equipped aura (Aura Workshop): a ring in the aura colour on every strike; higher tiers add motes and a halo. */
+.fx-aura-burst{width:170px;height:170px;translate:-50% -50%;border-radius:50%;border:2px solid var(--ac);box-shadow:0 0 14px var(--ac),inset 0 0 14px var(--ac);animation:fx-ring .7s ease-out .05s both}
+.fx-aura-burst.t3,.fx-aura-burst.t4{border-style:dashed;border-width:3px}
+.fx-aura-burst.t4{width:220px;height:220px;background:repeating-conic-gradient(color-mix(in srgb,var(--ac) 45%,transparent) 0 4deg,transparent 4deg 18deg);
+  -webkit-mask:radial-gradient(circle,transparent 30%,#000 32%);mask:radial-gradient(circle,transparent 30%,#000 32%)}
+.fx-aura-mote{width:7px;height:7px;translate:-50% -50%;rotate:var(--a);background:var(--c1);box-shadow:0 0 8px var(--c1);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);animation:fx-ember .9s cubic-bezier(.2,.8,.3,1) both}

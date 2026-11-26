@@ -81,7 +81,7 @@
  }
  function dismiss(){$('modalRoot').innerHTML='';}
  function showDetails(){const b=banners[0],featured=catalog.find(x=>x.id===b.featured_character_id&&x.rarity===6);modal({eyebrow:'RECRUITMENT DETAILS',title:b.title,body:`<p>${esc(b.description)}</p><p><strong>Featured 6★:</strong> ${esc(featured?.name||'Not selected')}</p><p><strong>Operators in current roster:</strong> ${catalog.length}</p><div class="dialog-notice">Recruitment results are saved to the player's collection.</div>`});}
- function showRates(){modal({eyebrow:'PROBABILITY INFORMATION',title:'RECRUITMENT RATES',body:`<p>4★ <strong>91.2%</strong> · 5★ <strong>8%</strong> · 6★ <strong>0.8%</strong> before pity.</p><p>Guaranteed 5★ or higher every 10 pulls. 6★ probability starts increasing on pull 66 (+5 percentage points each pull), with a guaranteed 6★ by pull 80.</p><p>When a 6★ appears: featured 6★ 50% / other 6★ 50%. Losing that 50/50 guarantees featured on the next 6★. Single and ten-pulls share all counters.</p><p>Duplicated characters award shards: 4★ +1, 5★ +3, 6★ +8.</p><div class="dialog-notice">Classroom-grade implementation: outcomes are generated in the browser and are not cheat-proof.</div>`});}
+ function showRates(){modal({eyebrow:'PROBABILITY INFORMATION',title:'RECRUITMENT RATES',body:`<p>4★ <strong>91.2%</strong> · 5★ <strong>8%</strong> · 6★ <strong>0.8%</strong> before pity.</p><p>Guaranteed 5★ or higher every 10 pulls. 6★ probability starts increasing on pull 66 (+5 percentage points each pull), with a guaranteed 6★ by pull 80.</p><p>When a 6★ appears: featured 6★ 50% / other 6★ 50%. Losing that 50/50 guarantees featured on the next 6★. Single and ten-pulls share all counters.</p><p>Each duplicate gives 1 shard of its own rarity (4★, 5★ or 6★). Shards only unlock Auras for operators of the same rarity; rarer auras cost fewer shards.</p><div class="dialog-notice">Classroom-grade implementation: outcomes are generated in the browser and are not cheat-proof.</div>`});}
  function updateWallet(){
   if(!playerState)return;
   $('walletPermits').textContent='—';$('walletCoins').textContent=Number(playerState.coins||0).toLocaleString();$('walletPity').textContent=Number(playerState.pity_six||0);
@@ -255,6 +255,7 @@
     playerCode=context.card_code;
     const data=await cloud.call('/api/profile',{card_code:playerCode});
     displayName=data.name||'';
+    window.RPG_AURA?.setPlayer(data); // show equipped auras on operators you pull again
     playerState=await cloud.call('/api/recruitment/state',{card_code:playerCode});
     updateWallet();
    }

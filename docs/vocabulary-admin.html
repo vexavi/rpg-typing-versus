@@ -15,7 +15,7 @@
 <section class="panel"><h2>Import vocabulary from CSV</h2><p class="hint">Accepts <code>japanese,english,active</code> or <code>prompt,answer,active</code>. The active column is optional. Maximum 1,000 words per import. English answers must be unique within a group.</p><div class="actions"><input id="csv-file" type="file" accept=".csv,text/csv"><select id="importMethod" aria-label="Import mode"><option value="append">Append new words</option><option value="replace">Replace all words in this group</option></select><button id="import" class="primary" type="button">Import CSV</button></div><p class="hint">Replacing permanently deletes the selected group's existing list. This operation cannot be undone without a database backup.</p></section>
 <section class="panel"><p class="hint" style="margin:0"><strong>Ranking fairness:</strong> Every actual vocabulary edit increments this group's ruleset revision. In-progress runs keep their original words; if the list changes before a score is submitted, the old run will not enter the new ranking. All Grades edits affect only the shared challenge. Standard grades and the combined B group remain independent.</p></section>
 </main><script type="module">
-await import("./online-spark.js?v=148.4");
+await import("./online-spark.js?v=148.6");
 'use strict';
 const $=id=>document.getElementById(id);
 const qs=s=>document.querySelector(s);

@@ -245,9 +245,17 @@
       shakeBoss(o.crit||th.tier===6?3:th.tier===5?2:1);
       if(o.crit){life(node('fx-critflash',layer,{x:to.x,y:to.y,...colors(th)}),520);shakeField(2);}
       showNumber();
+      auraBurst(to,o.operatorId);
     },travel);
   }
 
+  // The operator's equipped aura (Aura Workshop) adds its colour to every strike.
+  function auraBurst(at,id){
+    const lv=window.RPG_AURA?.level?.(id)||0;if(!lv||!layer)return;
+    const c=window.RPG_AURA.color(lv);
+    life(node(`fx-aura-burst t${lv}`,layer,{x:at.x,y:at.y,ac:c}),900);
+    if(lv>=2)radial('fx-aura-mote',at,lv*3,{tier:4,c1:c,c2:'#fff',c3:'#000'},70+lv*14,900);
+  }
   // Operator clears a word on its own (Seraphine, Cassian, Aveline in survival stages).
   function autoClear(el,operatorId){
     if(!ensure()||!el||busy())return;

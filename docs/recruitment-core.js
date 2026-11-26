@@ -50,7 +50,7 @@
    }
    const previousCount=Number(state.owned[id])||0;
    const duplicate=previousCount>0;
-   const earned=duplicate?({4:1,5:3,6:8})[rarity]:0;
+   const earned=duplicate?1:0; // v148.6: one shard per duplicate, kept per rarity by the server
    state.shards+=earned;
    state.owned[id]=previousCount+1;
    results.push({id,rarity,duplicate,shards:earned});

@@ -1,13 +1,28 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>RPG Typing Versus — Aura Workshop</title><link rel="stylesheet" href="auras.css?v=109"><link rel="stylesheet" href="student-pages-v86.css?v=86"></head><body class="workshop-client">
-<div id="v66Startup" class="startup"><div>CONNECTING TO FIREBASE…<p>An online connection is required to access your collection.</p></div></div>
-<div class="workshop" id="workshop">
- <header class="workshop-top"><div class="brand"><strong>RPG TYPING VERSUS</strong><span>AURA WORKSHOP</span></div><nav class="student-workshop-nav" aria-label="Student navigation"><a href="adventure.html" data-return-modes="1">← MODE SELECT</a><a href="recruitment.html">RECRUITMENT</a><a href="auras.html" class="current" aria-current="page">AURA WORKSHOP</a></nav><div class="bank"><small>CHARACTER SHARDS</small><strong id="shards">—</strong></div></header>
- <section class="workshop-intro"><div><small class="eyebrow">OPERATOR COSMETICS</small><h1>AURA <em>WORKSHOP</em></h1><p>Unlock new colors for your character's silhouette. All effects are cosmetic.</p></div><a class="back-recruit" href="recruitment.html">RECRUITMENT ↗</a></section>
- <div class="workshop-main">
- <nav class="roster" aria-label="Owned operators"><div class="section-label">OWNED OPERATORS</div><div id="characterList"></div></nav>
- <section class="operator-stage" aria-label="Character aura preview"><div class="stage-top"><span id="rarity">CHARACTER</span><span id="previewTag">PREVIEW</span></div><div class="character-stand"><div class="aura-backdrop" id="auraBackdrop"></div><img id="characterArt" src="assets/characters/mc.webp" alt="Selected character" /><div class="no-art" id="noArt" hidden>CHARACTER ART<br>COMING SOON</div><div class="floor-ring" id="floorRing"></div></div><div class="nameplate"><h2 id="characterName">SELECT OPERATOR</h2><small id="equippedName">NO AURA EQUIPPED</small></div></section>
- <section class="upgrade-panel" aria-label="Aura upgrades"><div class="section-label">AURA PROGRESSION</div><p class="upgrade-hint">Choose a tier to preview. Only unlocked tiers can be equipped.</p><div class="tier-list" id="tierList"></div><div class="tier-progress"><span id="progressText">0 / 150 SHARDS SPENT ON THIS CHARACTER</span><div class="progress-track"><div id="progressFill"></div></div></div><div class="cost-box"><span id="actionHint">SELECT AN AURA</span><strong id="actionCost"></strong></div><button type="button" id="auraAction" class="aura-action" disabled>SELECT AN OPERATOR</button><div id="message" role="status" aria-live="polite"></div><small class="policy">Character Shards come from duplicate recruitment results. Auras are cosmetic and have no gameplay effect. Teacher test grants can be issued from the teacher's Aura Admin page.</small></section>
- </div>
+<!doctype html><html lang="en" class="aw-theme"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>RPG Typing Versus — Aura Workshop</title>
+<link rel="preload" href="assets/fonts/ak-roboto-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="auras.css?v=109"><link rel="stylesheet" href="aura-fx.css?v=1"><link rel="stylesheet" href="aura-workshop.css?v=1"></head><body class="aura-client">
+<div id="v66Startup" class="startup"><div>CONNECTING…<p>An online connection is required to change auras.</p></div></div>
+<div class="aw-app" id="workshop">
+ <header class="aw-top">
+  <nav class="student-workshop-nav aw-nav" aria-label="Student navigation"><a href="adventure.html" data-return-modes="1" class="aw-back">‹ MODE SELECT</a><a href="recruitment.html">RECRUITMENT</a><a href="auras.html" class="current" aria-current="page">AURA WORKSHOP</a></nav>
+  <div class="aw-title"><small>OPERATOR COSMETICS // オーラ工房</small><h1>AURA WORKSHOP</h1></div>
+  <div class="aw-bank"><small>CHARACTER SHARDS</small><div id="shards" class="aw-pools">—</div></div>
+ </header>
+ <main class="aw-main">
+  <section class="aw-roster" aria-label="Your operators"><div class="aw-label"><b>01</b> CHOOSE AN OPERATOR <span id="rosterCount"></span></div><div id="characterList" class="aw-list" data-aura-icon></div></section>
+  <section class="aw-stage" aria-label="Aura preview">
+   <div class="aw-stage-art" id="stageArt" data-aura-art><img id="characterArt" alt="" decoding="async"></div>
+   <div class="aw-noart" id="noArt" hidden>RECRUIT AN OPERATOR<br>TO USE AURAS<a href="recruitment.html">GO TO RECRUITMENT ›</a></div>
+   <div class="aw-stage-meta"><span id="rarity" class="aw-rarity"></span><h2 id="characterName">—</h2><span id="equippedName" class="aw-equipped"></span></div>
+   <span id="previewTag" class="aw-preview" hidden>PREVIEW</span>
+  </section>
+  <section class="aw-panel" aria-label="Choose an aura">
+   <div class="aw-label"><b>02</b> CHOOSE AN AURA</div>
+   <div id="tierList" class="aw-tiers"></div>
+   <div class="aw-action"><button type="button" id="auraAction" disabled>SELECT AN OPERATOR</button><div id="message" class="aw-msg" role="status" aria-live="polite"></div></div>
+   <div class="aw-help"><p><b>GET SHARDS</b> Every duplicate recruit gives 1 shard of its rarity. 4★ shards unlock 4★ auras, 5★ shards 5★ auras, 6★ shards 6★ auras. <a href="recruitment.html">RECRUIT ›</a></p><p><b>COST</b> 4★ 3 · 6 · 12 · 24 &nbsp;|&nbsp; 5★ 1 · 2 · 2 · 3 &nbsp;|&nbsp; 6★ 1 · 1 · 1 · 2</p><p><b>SHOWN ON</b> Mode Select · Squad Assembly · Conquest battles · skill cut-ins · attacks · Recruitment</p><p class="aw-note">Auras are cosmetic. Equipping is free and can be changed at any time.</p></div>
+  </section>
+ </main>
 </div>
-<script src="student-links-v86.js?v=86" defer></script><script src="aura-core.js?v=74"></script><script type="module">await import('./online-spark.js?v=148.4');const s=document.createElement('script');s.src='auras.js?v=86.39';document.body.append(s);</script>
-<script>if(new URLSearchParams(location.search).get('teacherPreview')==='1'){const a=document.createElement('a');a.href='teacher-dashboard.html';a.textContent='← Teacher Dashboard';a.style.cssText='font-weight:700';document.querySelector('.student-workshop-nav').prepend(a);}</script></body></html>
+<script src="student-links-v86.js?v=86" defer></script><script src="gacha-catalog.js?v=106.0"></script><script src="aura-core.js?v=148.6"></script><script src="aura-fx.js?v=1"></script><script type="module">await import('./online-spark.js?v=148.6');const s=document.createElement('script');s.src='auras.js?v=148.6';document.body.append(s);</script>
+<script>if(new URLSearchParams(location.search).get('teacherPreview')==='1'){const a=document.createElement('a');a.href='teacher-dashboard.html';a.textContent='← Teacher Dashboard';document.querySelector('.student-workshop-nav').prepend(a);}</script></body></html>
