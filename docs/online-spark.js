@@ -25,13 +25,30 @@ const codeInfo=async(code)=>{code=cleanCode(code);if(!cardPattern.test(code))err
 // (or depends on a just-written value) clears it first and afterwards, so writes and
 // transactions always verify against fresh server data.
 const PLAYER_SNAPSHOT_MS=20000;
-let playerSnapshot=null;
+// v148.9 quota saver: "which card is this browser signed in as" (cardSessions + cloudCards)
+// rarely changes, so it is verified once per 5 minutes per tab (kept across page changes
+// in sessionStorage). The player document is still re-read after every write.
+// Firestore rules re-check identity on every write, so this only saves reads.
+const IDENTITY_MS=5*60*1000,IDENTITY_KEY='rpgSparkIdentity';
+let playerSnapshot=null,identity=null;
 const forgetPlayer=()=>{playerSnapshot=null;};
+const forgetIdentity=()=>{identity=null;try{sessionStorage.removeItem(IDENTITY_KEY);}catch(_){}};
+function cachedIdentity(owner){
+ if(!identity){try{const v=JSON.parse(sessionStorage.getItem(IDENTITY_KEY)||'null');if(v)identity=v;}catch(_){}}
+ return identity&&identity.uid===owner&&Date.now()-identity.at>=0&&Date.now()-identity.at<IDENTITY_MS?identity:null;
+}
 async function verifyPlayer(){
- const s=await read('cardSessions',uid());
- if(!s||!s.code||!s.publicId)err('Scan your Adventure Card first.');
- const [c,p]=await Promise.all([read('cloudCards',s.code),read('players',s.publicId)]);
- if(!c||c.disabled||c.deleted||c.publicId!==s.publicId||!p||p.disabled)err('Card session expired, disabled, or missing.');
+ const owner=uid();let known=cachedIdentity(owner),s,c;
+ if(known){s=known.session;c=known.card;}
+ else{
+  s=await read('cardSessions',owner);
+  if(!s||!s.code||!s.publicId)err('Scan your Adventure Card first.');
+  c=await read('cloudCards',s.code);
+ }
+ if(!c||c.disabled||c.deleted||c.publicId!==s.publicId){forgetIdentity();err('Card session expired, disabled, or missing.');}
+ const p=await read('players',s.publicId);
+ if(!p||p.disabled){forgetIdentity();err('Card session expired, disabled, or missing.');}
+ if(!known){identity={uid:owner,at:Date.now(),session:{code:s.code,publicId:s.publicId},card:c};try{sessionStorage.setItem(IDENTITY_KEY,JSON.stringify(identity));}catch(_){}}
  return {session:s,card:c,player:p,id:s.publicId,playerRef:ref('players',s.publicId)};
 }
 async function currentPlayer(body={}){
@@ -75,16 +92,25 @@ async function openCard(b){
   c.username=n;c.grade=grade;
  }
  // The QR code is a bearer credential. Auth UID sessions can be re-established on another Chromebook.
- await setDoc(ref('cardSessions',uid()),{code,publicId:c.publicId,linkedAt:serverTimestamp()});
+ await setDoc(ref('cardSessions',uid()),{code,publicId:c.publicId,linkedAt:serverTimestamp()});forgetIdentity();forgetPlayer();
  if(!await read('players',c.publicId)){
   try{await setDoc(ref('players',c.publicId),defaultPlayer(c));}
   catch(e){if(!await read('players',c.publicId))throw e;}
  }
  return {ok:true,public_id:c.publicId,name:c.username,grade:c.grade||null,card_code:code,online:true,cloud:true};
 }
-async function currentConfig(mode){const data=await read('systemConfig','current');if(!data)err('Firebase setup incomplete. Teacher: open Firebase setup on the Teacher Dashboard.');return modeRevision(data,mode);}
+// v148.9 quota saver: word lists and the settings record are shared by a whole run
+// (load words → start → rankings), so one read serves 60 seconds on this page.
+// Ranked writes are still checked against the live revisions by the Firestore rules;
+// if a teacher edit lands inside the window, the write is refused and retried fresh.
+const META_MS=60000,metaCache=new Map();
+function sharedRead(c,id,fresh=false){const key=c+'/'+id,hit=metaCache.get(key);
+ if(!fresh&&hit&&Date.now()-hit.at<META_MS)return hit.promise;
+ const entry={at:Date.now(),promise:read(c,id)};metaCache.set(key,entry);entry.promise.catch(()=>{if(metaCache.get(key)===entry)metaCache.delete(key);});return entry.promise;}
+const forgetMeta=()=>metaCache.clear();
+async function currentConfig(mode,fresh=false){const data=await sharedRead('systemConfig','current',fresh);if(!data)err('Firebase setup incomplete. Teacher: open Firebase setup on the Teacher Dashboard.');return modeRevision(data,mode);}
 async function vocab(b,verifiedPlayer=null){const p=verifiedPlayer||await currentPlayer(b);const shared=b.mode==='shared';const g=shared?'all':p.player.grade;if(!g)err('Teacher must assign your class before playing.');
- const pool=shared?'all':poolOf(g),data=await read('vocabPools',pool);if(!data||!Array.isArray(data.words))err('Vocabulary pool not installed. Teacher: run Spark setup.');
+ const pool=shared?'all':poolOf(g),data=await sharedRead('vocabPools',pool);if(!data||!Array.isArray(data.words))err('Vocabulary pool not installed. Teacher: run Spark setup.');
  return {ok:true,pool,grade:shared?'all':g[0],rank_grade:g,revision:Number(data.revision)||1,group:pool==='b'?'b':'standard',words:data.words.filter(x=>x.active!==false),ruleset:shared?`v65-shared-r${data.revision}-fixed-120s`:null};
 }
 const wordCheck=w=>{const prompt=String(w?.prompt||'').trim().slice(0,160),answer=String(w?.answer||'').trim().replace(/\s+/g,' ').slice(0,80);
@@ -105,13 +131,17 @@ async function vocabAdmin(b){await teacher();const pool=b.pool;if(!pools.include
  return {ok:true,pool,revision:old.revision+(changed?1:0),words,active_count:words.filter(w=>w.active).length};
 }
 // One read when Recruitment opens; no listener and no periodic polling.
+// v148.9: the banner changes rarely; keep it 10 minutes on this Chromebook.
+const BANNER_KEY='rpgSparkBanner',BANNER_MS=10*60*1000;
 async function recruitmentBanners(){
- const data=await read('recruitmentConfig','banners');
+ let data;try{const c=JSON.parse(localStorage.getItem(BANNER_KEY)||'null');if(c&&Date.now()-c.at>=0&&Date.now()-c.at<BANNER_MS)data=c.data;}catch(_){}
+ if(data===undefined){data=await read('recruitmentConfig','banners');try{localStorage.setItem(BANNER_KEY,JSON.stringify({at:Date.now(),data}));}catch(_){}}
  return {ok:true,revision:Number(data?.revision)||0,banners:Array.isArray(data?.banners)?data.banners.filter(b=>b?.id==='featured').slice(0,1):[]};
 }
 async function recruitmentBannersAdmin(body={}){
  await teacher();
  const action=body.action||'load';
+ try{localStorage.removeItem(BANNER_KEY);}catch(_){} // the editor always sees and saves live data
  if(action==='load')return recruitmentBanners();
  if(action!=='save')err('Unknown banner editor action.');
  const expected=Number(body.expected_revision);
@@ -178,36 +208,64 @@ async function rankIcon(b){const p=await currentPlayer(b);if(b.action==='set'){c
 let currentRun=null;
 async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','shared'].includes(mode))err(mode==='challenge'?'Challenge Mode has been retired.':'Invalid ranking mode.');
  const grade=mode==='shared'?'all':p.player.grade;if(!grade)err('Assign class before playing.');
- const [v,configVersion]=await Promise.all([read('vocabPools',mode==='shared'?'all':poolOf(grade)),currentConfig(mode)]);if(!v)err('Vocabulary is missing.');
- const revision=Number(v.revision)||1,token=crypto.randomUUID();
- const record={uid:uid(),publicId:p.id,mode,grade,pool:mode==='shared'?'all':poolOf(grade),vocabRevision:revision,configRevision:configVersion,token,status:'active',startedAt:serverTimestamp()};
- await setDoc(ref('sparkRuns',uid()),record);currentRun={...record,startedMs:Date.now()};
+ const pool=mode==='shared'?'all':poolOf(grade);
+ let record=null;
+ for(let attempt=0;attempt<2&&!record;attempt++){
+  const fresh=attempt>0;
+  const [v,configVersion]=await Promise.all([sharedRead('vocabPools',pool,fresh),currentConfig(mode,fresh)]);if(!v)err('Vocabulary is missing.');
+  const next={uid:uid(),publicId:p.id,mode,grade,pool,vocabRevision:Number(v.revision)||1,configRevision:configVersion,token:crypto.randomUUID(),status:'active',startedAt:serverTimestamp()};
+  try{await setDoc(ref('sparkRuns',uid()),next);record=next;}
+  catch(e){if(fresh||!/permission|insufficient/i.test(String(e?.code||'')+String(e?.message||'')))throw e;forgetMeta();}
+ }
+ // A teacher changed words or difficulty seconds ago: the settings already applied are
+ // older than the record. Ask for a restart instead of ranking mismatched settings.
+ if(window.RPG_V66_PREPARED_REVISION!=null&&mode!=='shared'&&record.configRevision!==window.RPG_V66_PREPARED_REVISION)err('Difficulty settings just changed. Start the run again.');
+ const revision=record.vocabRevision,token=record.token,configVersion=record.configRevision;currentRun={...record,startedMs:Date.now()};
  return {ok:true,token,revision,configVersion,grade,pool:record.pool,ruleset:`spark-${mode}-${grade}-v${revision}-c${configVersion}`};
 }
 function rankQuery(mode,grade,revision,configRevision,n=20){return query(collection(db,'rankEntries'),where('mode','==',mode),where('grade','==',grade),where('vocabRevision','==',revision),where('configRevision','==',configRevision),orderBy('score','desc'),limit(n));}
+// v148.9: a leaderboard is kept for 60 s in this tab (switching tabs or reopening the
+// screen costs nothing); it is dropped as soon as this player submits a score.
+const RANK_CACHE_MS=60000,RANK_CACHE_KEY='rpgSparkRankings';
+function forgetRankings(){try{sessionStorage.removeItem(RANK_CACHE_KEY);}catch(_){}}
+function rankCache(){try{return JSON.parse(sessionStorage.getItem(RANK_CACHE_KEY)||'{}')||{};}catch(_){return {};}}
 async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',grade=mode==='shared'?'all':b.grade||p.player.grade;
+ const cacheKey=`${p.id}|${mode}|${grade}|${Math.min(20,Number(b.limit)||20)}`,cached=rankCache()[cacheKey];
+ if(cached&&Date.now()-cached.at>=0&&Date.now()-cached.at<RANK_CACHE_MS)return cached.data;
+ const out=await rankingFresh(b,p,mode,grade);
+ try{const all=rankCache();for(const k of Object.keys(all))if(Date.now()-all[k].at>RANK_CACHE_MS)delete all[k];all[cacheKey]={at:Date.now(),data:out};sessionStorage.setItem(RANK_CACHE_KEY,JSON.stringify(all));}catch(_){}
+ return out;
+}
+async function rankingFresh(b,p,mode,grade){
  if(!['normal','challenge','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
- const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([read('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
+ const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([sharedRead('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
  const revision=Number(v.revision)||1,rule=`spark-${mode}-${grade}-v${revision}-c${c}`;
  const d=await getDocsFromServer(rankQuery(mode,grade,revision,c,Math.min(20,Number(b.limit)||20)));
  const rows=d.docs.map(s=>s.data());const entries=rows.map((row,i)=>({...row,rank:i&&row.score===rows[i-1].score?rows.findIndex(x=>x.score===row.score)+1:i+1}));const mine=entries.find(x=>x.public_id===p.id)||{public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',rank:null,score:0};
  return {ok:true,mode,grade,assigned_grade:p.player.grade,entries,current:mine,total:entries.length,ruleset:rule,expected_ruleset:rule,source:'firebase-spark-unverified',completed_only:true,vocab_revision:revision,config_revision:c};
 }
 async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Number.isInteger(b.score)||b.score<=0||b.score>2000000)err('Invalid score.');
- const snap=await getDocFromServer(ref('sparkRuns',uid()));const run=snap.data();if(!run||!['normal','challenge','shared'].includes(run.mode)||run.status!=='active'||run.token!==b.run_token)err('Run missing or already completed.');
- if(b.mode!==run.mode||b.grade!==run.grade||b.vocab_pool!==run.pool||b.vocab_revision!==run.vocabRevision)err('Run config mismatch.');
- if(!run.startedAt||Date.now()-run.startedAt.toMillis()<(['shared','challenge'].includes(run.mode)?115000:15000))err('Run completed too quickly.');
- const [c,v]=await Promise.all([currentConfig(run.mode),read('vocabPools',run.pool)]);
- if(c!==run.configRevision||v?.revision!==run.vocabRevision)err('Difficulty or vocabulary changed. Run not ranked.');
- const id=p.id+'_'+run.mode,scoreRef=ref('rankEntries',id),runRef=ref('sparkRuns',uid());
- await runTransaction(db,async tx=>{const [r,prior]=await Promise.all([tx.get(runRef),tx.get(scoreRef)]);
-  if(!r.exists()||r.data().token!==run.token||r.data().status!=='active')err('Run already submitted.');
+ // v148.9: the run record is read once, inside the transaction. Unchanged words and
+ // difficulty are enforced by the Firestore rules (vocabRevision/configRevision), so the
+ // two extra pre-checks are only made if the save is refused, to explain why.
+ if(!['normal','challenge','shared'].includes(b.mode))err('Run missing or already completed.');
+ const id=p.id+'_'+b.mode,scoreRef=ref('rankEntries',id),runRef=ref('sparkRuns',uid());let run=null;
+ try{await runTransaction(db,async tx=>{const [r,prior]=await Promise.all([tx.get(runRef),tx.get(scoreRef)]);
+  run=r.data();
+  if(!r.exists()||!run||!['normal','challenge','shared'].includes(run.mode)||run.mode!==b.mode||run.status!=='active'||run.token!==b.run_token)err('Run missing or already completed.');
+  if(b.grade!==run.grade||b.vocab_pool!==run.pool||b.vocab_revision!==run.vocabRevision)err('Run config mismatch.');
+  if(!run.startedAt||Date.now()-run.startedAt.toMillis()<(['shared','challenge'].includes(run.mode)?115000:15000))err('Run completed too quickly.');
   const old=prior.exists()?prior.data():null;
   const fields={uid:uid(),public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',mode:run.mode,grade:run.grade,score:b.score,
    vocabRevision:run.vocabRevision,configRevision:run.configRevision,updatedAt:serverTimestamp()};
   tx.update(runRef,{status:'submitted',score:b.score,finishedAt:serverTimestamp()});
   if(!old||old.vocabRevision!==fields.vocabRevision||old.configRevision!==fields.configRevision||old.grade!==fields.grade||b.score>old.score)tx.set(scoreRef,fields);
- });currentRun=null;return {ok:true,mode:run.mode,grade:run.grade,ruleset:`spark-${run.mode}-${run.grade}-v${run.vocabRevision}-c${run.configRevision}`};
+ });}catch(e){
+  if(run&&/permission|insufficient/i.test(String(e?.code||'')+String(e?.message||''))){forgetMeta();
+   const [c,v]=await Promise.all([currentConfig(run.mode),sharedRead('vocabPools',run.pool)]); // fresh: forgetMeta() above
+   if(c!==run.configRevision||v?.revision!==run.vocabRevision)err('Difficulty or vocabulary changed. Run not ranked.');}
+  throw e;}
+ currentRun=null;forgetRankings();return {ok:true,mode:run.mode,grade:run.grade,ruleset:`spark-${run.mode}-${run.grade}-v${run.vocabRevision}-c${run.configRevision}`};
 }
 /* v73 Guild Coins: client-reported completion claims stored transactionally.
  * Important: Firestore cannot confirm real gameplay. PULLS STAY DISABLED.
@@ -223,9 +281,7 @@ async function guildClaim(b){
  let claimKey='',stageId='',runToken=null,attemptId=null,preRank=null;
  if(mode==='normal'){
   runToken=String(b.run_token||'');if(!guildUUID(runToken))err('Invalid ranked token.');
-  preRank=await getDocFromServer(ref('sparkRuns',uid()));
-  const rank=preRank.data();
-  if(!rank||rank.status!=='submitted'||rank.mode!==mode||rank.token!==runToken||rank.publicId!==p.id)err('Complete and submit the full ranked run before claiming Guild Coins.');
+  // v148.9: the submitted run is verified once, inside the transaction below.
   claimKey=mode+'-'+runToken;
  }else{
   stageId=String(b.stage_id||'');attemptId=String(b.attempt_id||'');
@@ -250,7 +306,7 @@ async function guildClaim(b){
   }else{
    // Recheck the actual submitted run inside the transaction (not only before it).
    const run=await tx.get(ref('sparkRuns',uid()));
-   if(!run.exists()||run.data().status!=='submitted'||run.data().token!==runToken||run.data().mode!==mode||run.data().publicId!==p.id)err('Ranked run is no longer eligible.');
+   if(!run.exists()||run.data().status!=='submitted'||run.data().token!==runToken||run.data().mode!==mode||run.data().publicId!==p.id)err('Complete and submit the full ranked run before claiming Guild Coins.');
    const accurate=correct*10>=9*(correct+incorrect);
    amount=10+(accurate?5:0);
   }
@@ -613,6 +669,9 @@ window.addEventListener('online',()=>{if(blocked&&!window.RPG_ADVENTURE_READY)me
 const ready=check();
 // Practice/Story teacher settings: at most one verified fetch per scope set / 15 minutes.
 const soloBalanceSyncs=new Map();
+const BALANCE_KEY='rpgSparkBalance',SOLO_BALANCE_MS=30*60*1000;
+function balanceStore(){try{const v=JSON.parse(localStorage.getItem(BALANCE_KEY)||'{}');return v&&typeof v==='object'?v:{};}catch(_){return {};}}
+function saveBalanceStore(v){try{localStorage.setItem(BALANCE_KEY,JSON.stringify(v));}catch(_){}}
 window.RPG_V68_CONNECTION={get connected(){return bootReady&&!blocked&&navigator.onLine;},get blocked(){return blocked;}};
 window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await teacher();return auth.currentUser.getIdToken();},
  async fetchSoloBalance(mode,stageIds=[],chapterId=null){
@@ -620,24 +679,34 @@ window.RPG_V66={ready,call,ping:()=>call('ping'),teacherToken:async()=>{await te
   const scopes=balanceScopes(mode,stageIds,chapterId);
   const key=scopes.join('|');
   if(Date.now()-(soloBalanceSyncs.get(key)||0)<15*60*1000)return true;
+  // v148.9: unranked settings are kept on this Chromebook for 30 minutes (across pages).
+  const saved=balanceStore().solo?.[key];
+  if(saved&&Date.now()-saved.at>=0&&Date.now()-saved.at<SOLO_BALANCE_MS){scopes.forEach((scope,i)=>window.RPG_BALANCE?.apply(scope,saved.configs[i]||{},'server'));soloBalanceSyncs.set(key,saved.at);return true;}
   // Failure is not fatal: the runtime uses locally cached/built-in values for unranked play.
   const configs=await Promise.all(scopes.map(scope=>read('gameBalance',scope)));
   for(let i=0;i<scopes.length;i++)window.RPG_BALANCE?.apply(scopes[i],configs[i]||{},'server');
-  soloBalanceSyncs.set(key,Date.now());return true;
+  soloBalanceSyncs.set(key,Date.now());
+  const store=balanceStore();store.solo={...(store.solo||{}),[key]:{at:Date.now(),configs:configs.map(c=>c||{})}};
+  for(const k of Object.keys(store.solo))if(Date.now()-store.solo[k].at>SOLO_BALANCE_MS)delete store.solo[k];saveBalanceStore(store);
+  return true;
  },
+ // v148.9: ranked difficulty only changes when the teacher publishes, which always bumps
+ // the mode's settings revision. Keep the published values per revision on this
+ // Chromebook: a run start costs one settings read instead of eight.
  async prepareBalanceRun(mode,stageIds=[],chapterId=null){if(blocked)err('Connection required.');const before=await currentConfig(mode);
- const scopes=balanceScopes(mode,stageIds,chapterId);
+ const scopes=balanceScopes(mode,stageIds,chapterId),store=balanceStore(),hit=store.ranked?.[mode];
+ if(hit&&hit.revision===before&&scopes.every(scope=>scope in (hit.scopes||{}))){
+  for(const scope of scopes)window.RPG_BALANCE?.apply(scope,hit.scopes[scope]||{},'server');
+  window.RPG_V66_PREPARED_REVISION=before;return before;
+ }
  const settings=await Promise.all(scopes.map(scope=>read('gameBalance',scope)));
  for(let i=0;i<scopes.length;i++)window.RPG_BALANCE?.apply(scopes[i],settings[i]||{},'server');
- const after=await currentConfig(mode);if(before!==after)err('Difficulty settings changed during run setup.');window.RPG_V66_PREPARED_REVISION=after;return after;},
- watchRankings(mode,grade,update,verified=null){let disposed=false,stop=null,lastSignature=null;
- const known=Number.isInteger(verified?.vocab_revision)&&Number.isInteger(verified?.config_revision);
- const versions=known?Promise.resolve([{revision:verified.vocab_revision},verified.config_revision]):Promise.all([read('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig(mode)]);
- versions.then(([v,c])=>{
- if(disposed||!v)return;return onSnapshot(rankQuery(mode,grade,Number(v.revision)||1,c,20),{includeMetadataChanges:true},snap=>{
- if(disposed||snap.metadata.fromCache)return;const entries=snap.docs.map(s=>s.data()),signature=JSON.stringify(entries);
- if(signature===lastSignature)return;lastSignature=signature;update({ruleset:`spark-${mode}-${grade}-v${v.revision}-c${c}`,entries});
- },e=>console.warn('Rankings live-update unavailable:',e?.message||e));}).then(unsub=>{if(disposed)unsub?.();else stop=unsub;}).catch(e=>console.warn('Rankings',e));
- return ()=>{disposed=true;stop?.();stop=null;};}
+ const after=await currentConfig(mode,true);if(before!==after)err('Difficulty settings changed during run setup.');
+ store.ranked={...(store.ranked||{}),[mode]:{revision:after,scopes:Object.fromEntries(scopes.map((scope,i)=>[scope,settings[i]||{}]))}};saveBalanceStore(store);
+ window.RPG_V66_PREPARED_REVISION=after;return after;},
+ // v148.9 quota saver: no live listener. Opening the leaderboard already downloads the
+ // top 20 once; a listener downloaded them all again and re-sent every change while open.
+ // Students see new scores the next time they open Rankings (and their own run at once).
+ watchRankings(){return ()=>{};}
 };
 // No periodic connection polling; ranked operations verify current server state.

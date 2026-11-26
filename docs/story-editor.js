@@ -51,7 +51,7 @@ async function connectFirebase(){
 const currentTeacher=async()=> (await connectFirebase()).api.currentTeacher();
 const googleTeacher=async()=> (await connectFirebase()).api.googleTeacher();
 const teacherSignOut=async()=> (await connectFirebase()).api.teacherSignOut();
-const loadPublishedStory=async()=> (await connectFirebase()).story.loadPublishedStory();
+const loadPublishedStory=async()=> (await connectFirebase()).story.loadPublishedStory({fresh:true});
 function cloudMethod(name,...args){if(!cloud)throw Error('Firebase is not connected. Use Reload Published to reconnect.');return cloud.firestore[name](...args);}
 const doc=(...args)=>cloudMethod('doc',...args);
 const getDocFromServer=(...args)=>cloudMethod('getDocFromServer',...args);
@@ -757,7 +757,8 @@ async function publish(){
    tx.set(reference,{...payload,revision:next,retiredStageIds:stageIds,retiredChapterIds:chapterIds,updatedAt:serverTimestamp()});
   });
   loadedRevision=next;publishedOrder=currentOrder();dirty=false;clearTimeout(draftTimer);try{localStorage.removeItem(DRAFT_KEY);}catch{}
-  status(`Published revision ${next}. Students receive it when they next open Conquest.`,false,true);
+  try{localStorage.removeItem('rpgStoryPublished');}catch{}
+  status(`Published revision ${next}. Students receive it within 10 minutes (the next time they open Conquest after that).`,false,true);
  }catch(e){status('Publish failed: '+errorMessage(e),true)}finally{busy=false;updateAuth();}
 }
 function exportFile(){try{const payload=cleanStory({chapters});const output={...payload,revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};const blob=new Blob([JSON.stringify(output,null,2)+'\n'],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='conquest-backup.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1500);status('JSON exported.',false,true);}catch(e){status(e.message,true);}}

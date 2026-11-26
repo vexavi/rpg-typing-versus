@@ -68,7 +68,7 @@ function normalizeManifest(raw){
 async function loadManifest(refresh=false){
  if(chapters&&!refresh)return chapters;
  // Do not silently revert to stale static chapters if a Firestore read fails.
- const {loadEffectiveStory}=await import('./story-content-cloud.js?v=87.0');
+ const {loadEffectiveStory}=await import('./story-content-cloud.js?v=148.9');
  const {manifest}=await loadEffectiveStory();
  chapters=normalizeManifest(manifest);
  retiredTerritoryIds=new Set((manifest.retiredChapterIds||[]).map(String));
