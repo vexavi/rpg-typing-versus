@@ -841,7 +841,7 @@ let normalCleared = loadNormalCleared();
 
 function setMode(mode){
 
-  currentMode = ["normal","practice","challenge","story","shared"].includes(mode) ? mode : "normal";
+  currentMode = ["normal","practice","story","shared"].includes(mode) ? mode : "normal"; // retired: challenge
   STAGES = currentMode === "story" ? (storyBattleStage ? [storyBattleStage] : [STAGES_NORMAL[0]])
     : currentMode === "practice" ? STAGES_PRACTICE
     : currentMode === "challenge" ? STAGES_CHALLENGE
@@ -1714,7 +1714,7 @@ const achOverlay = document.getElementById("achOverlay");
     return `<span class="ranking-identity"><img class="ranking-avatar" data-rank-icon src="${escapeHtml(rankingIconSrc(row.icon_id))}" alt="" loading="lazy"><span class="ranking-name">${escapeHtml(row.name||'Player')}${own?'<span class="ranking-you">YOU</span>':''}</span></span>`;
   }
   function rankingsView(mode,grade,data=null,message=''){
-    rankingMode=mode==='challenge'?'challenge':mode==='shared'?'shared':'normal';
+    rankingMode=mode==='shared'?'shared':'normal';
     rankingGrade=visibleRankingGrade(grade);
     if(rankingGrade!=='all')lastStandardRankingGrade=rankingGrade;
     gameState='rankings';setInputsEnabled(false);showOverlay(true);
@@ -1737,7 +1737,6 @@ const achOverlay = document.getElementById("achOverlay");
     const description=rankingGrade==='all'?'ALL GRADES · IDENTICAL VOCAB & SETTINGS':(rankingGrade.endsWith('b')?'CLASS '+rankingGrade.toUpperCase():'GRADE '+rankingGrade)+' · COMPLETED RUNS ONLY';
     overlayChoices.innerHTML=`<div class="ranking-tabs">
        <button class="ranking-tab${rankingMode==='normal'?' active':''}" aria-pressed="${rankingMode==='normal'}" data-mode="normal" type="button">NORMAL</button>
-       <button class="ranking-tab${rankingMode==='challenge'?' active':''}" aria-pressed="${rankingMode==='challenge'}" data-mode="challenge" type="button">CHALLENGE</button>
       </div>
       <div class="ranking-grades">${PUBLIC_RANKING_GRADES.map(y=>`<button type="button" class="ranking-grade${rankingGrade===y?' active':''}" aria-pressed="${rankingGrade===y}" data-grade="${y}">${y==='all'?'ALL GRADES':y+'年生'}</button>`).join('')}</div>
       <div class="ranking-meta">${description}${data?.ruleset?' · RULESET '+escapeHtml(data.ruleset.slice(-8)):''}</div>
@@ -1755,7 +1754,7 @@ const achOverlay = document.getElementById("achOverlay");
   }
   async function openRankings(mode='normal',grade=assignedRankGrade||cleanClassYear(profile?.classYear)){
     grade=visibleRankingGrade(grade);
-    mode=grade==='all'?'shared':mode==='challenge'?'challenge':'normal';
+    mode=grade==='all'?'shared':'normal';
     if(stopLiveRankings){stopLiveRankings();stopLiveRankings=null;}
     const req=++rankingRequest;rankingsView(mode,grade,null,'LOADING…');
     if(!rankIconInitialized)void initializeRankIcon();
@@ -3126,10 +3125,7 @@ function showModeSelectScreen(){
   addMode('Normal Mode', {onClick:()=>{
     setMode('normal');showOverlay(false);startGame();
   }});
-  addMode('Challenge Mode', {disabled:!normalCleared||!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
-    lockedReason:!normalCleared?'Clear Normal Mode to unlock':'Online Firebase required',onClick:()=>{
-      setMode('challenge');showOverlay(false);startGame();
-    }});
+  // v148.9: Challenge Mode retired (like Extra in v147). All Grades Challenge stays.
   addMode('All Grades Challenge', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     setMode('shared');showOverlay(false);startGame();
   }});
@@ -3423,12 +3419,9 @@ function showModeSelectScreen(){
     grid.appendChild(btn);
   };
 
-  // Buttons: Normal and Challenge
+  // Buttons: Normal (Challenge Mode retired in v148.9)
   for(let i=0;i<STAGES_NORMAL.length;i++){
     addBtn(`N${i+1}`, "normal", i);
-  }
-  for(let i=0;i<STAGES_CHALLENGE.length;i++){
-    addBtn(`C${i+1}`, "challenge", i);
   }
 }
 

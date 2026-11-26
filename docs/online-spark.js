@@ -176,7 +176,7 @@ async function rankIcon(b){const p=await currentPlayer(b);if(b.action==='set'){c
  return {ok:true,icon_id:icon,updated_at:Date.now()};}
  return {ok:true,icon_id:p.player.rankIconId||'icon01',updated_at:p.player.rankIconUpdatedAt||0};}
 let currentRun=null;
-async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','challenge','shared'].includes(mode))err('Invalid ranking mode.');
+async function rankStart(b){const p=await currentPlayer(b),mode=b.mode;if(!['normal','shared'].includes(mode))err(mode==='challenge'?'Challenge Mode has been retired.':'Invalid ranking mode.');
  const grade=mode==='shared'?'all':p.player.grade;if(!grade)err('Assign class before playing.');
  const [v,configVersion]=await Promise.all([read('vocabPools',mode==='shared'?'all':poolOf(grade)),currentConfig(mode)]);if(!v)err('Vocabulary is missing.');
  const revision=Number(v.revision)||1,token=crypto.randomUUID();
