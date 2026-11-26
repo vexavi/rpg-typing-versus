@@ -40,6 +40,7 @@ function refreshChoices(){
    w.append(l,input);if(f.help)input.title=f.help;grid.appendChild(w);
   }box.appendChild(grid);el('mechanics').appendChild(box);
  }
+ if(!el('mechanics').children.length){const p=document.createElement('p');p.className='muted';p.textContent='No extra word mechanics for this mode. Conquest stage effects are set in the Conquest editor.';el('mechanics').appendChild(p);}
 }
 function initInputs(){
  const dest=el('difficulty');dest.replaceChildren();

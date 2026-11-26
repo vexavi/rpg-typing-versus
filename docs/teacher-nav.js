@@ -2,12 +2,12 @@
 (()=>{
   'use strict';
   const items=[
-    ['cloud-cards.html','Players'],
-    ['vocabulary-admin.html','Vocabulary'],
-    ['game-settings.html','Game Settings'],
+    ['cloud-cards.html','Player cards'],
+    ['vocabulary-admin.html','Word lists'],
+    ['game-settings.html','Difficulty'],
     ['story-editor.html','Conquest Editor'],
-    ['recruitment-admin.html','Featured Banner'],
-    ['setup-spark.html','Firebase Setup'],
+    ['recruitment-admin.html','Recruitment banner'],
+    ['setup-spark.html','Firebase setup'],
     ['traffic-budget.html','Traffic']
   ];
   function init(){
@@ -17,7 +17,7 @@
     bar.className='teacher-hub-nav';bar.setAttribute('aria-label','Teacher tools');
     const inner=document.createElement('div');inner.className='teacher-hub-nav__inner';
     const home=document.createElement('a');home.href='teacher-dashboard.html';home.className='teacher-hub-nav__home';
-    home.textContent='← Teacher Home';
+    home.textContent='← Dashboard';
     if(current==='teacher-dashboard.html')home.setAttribute('aria-current','page');
     const label=document.createElement('span');label.className='teacher-hub-nav__label';label.textContent='Go to';
     const links=document.createElement('div');links.className='teacher-hub-nav__links';

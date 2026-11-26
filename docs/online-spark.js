@@ -537,6 +537,14 @@ function message(s,teacherRequired=false){
  gate.innerHTML='<section style="max-width:500px;text-align:center;background:#25233c;padding:26px;border:3px solid #ddc07a"><h1>CONNECTION REQUIRED</h1><p id="v67status"></p><button id="v67retry" style="padding:12px">RELOAD</button> <button id="v67google" style="padding:12px">TEACHER SIGN IN</button></section>';document.body.append(gate);
  $('v67retry').addEventListener('click',()=>location.reload());$('v67google').addEventListener('click',async()=>{try{await googleTeacher();location.reload();}catch(e){message(String(e.message||e),true)}});}
  $('v67status').textContent=s;$('v67google').style.display=teacherRequired?'inline-block':'none';
+ const h=gate.querySelector('h1');if(h)h.textContent=teacherRequired?'Teacher sign-in':'CONNECTION REQUIRED';
+ if(teacherRequired){ // Teacher tools: a plain light card with one obvious button.
+  Object.assign(gate.style,{background:'#eef1f6',color:'#1a2738'});
+  const box=gate.querySelector('section');if(box)Object.assign(box.style,{background:'#fff',border:'1px solid #d6dde7',borderRadius:'14px',boxShadow:'0 12px 30px #18263822',padding:'30px 34px'});
+  Object.assign($('v67google').style,{background:'#2457c5',color:'#fff',border:'0',borderRadius:'8px',fontWeight:'700',fontSize:'16px',padding:'12px 22px',cursor:'pointer'});
+  $('v67google').textContent='Sign in with Google';$('v67retry').style.display='none';
+ }
+ $('v66Startup')?.remove();
 }
 function lost(reason){
  if(!blocked || bootReady){window.RPG_V66_DISCONNECTED=true;sessionStorage.setItem('rpgV66Interrupted','1');}
@@ -563,8 +571,13 @@ async function check(){
   if(!navigator.onLine||window.RPG_V66_DISCONNECTED)err('Connection interrupted during login.');
   bootReady=true;blocked=false;$('v66OnlineGate')?.remove();$('v66Startup')?.remove();return true;
  }catch(e){
-  // Show the actual setup/auth error instead of blaming RTDB.
-  lost('Firestore initialization failed: '+String(e.message||e).slice(0,230));return false;
+  // Show the actual setup/auth error instead of blaming RTDB. Teacher pages that are
+  // simply signed out get a sign-in button instead of a dead-end connection error.
+  const text=String(e.message||e);
+  if(document.documentElement.dataset.v66Teacher==='required'&&/teacher Google sign-in required|Teacher UID does not match/i.test(text)){
+   blocked=true;message(/UID/.test(text)?'This Google account is not the teacher account for this game. Sign in with the teacher account.':'Sign in with your teacher Google account to use this page.',true);return false;
+  }
+  lost('Firestore initialization failed: '+text.slice(0,230));return false;
  }
 }
 const fetchNative=window.fetch.bind(window);
