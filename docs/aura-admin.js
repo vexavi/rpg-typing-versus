@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id),db=getFirestore(getApp());
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1';
 let authorized=false,busy=false;
 const message=s=>$('status').textContent=s;
-const permit=user=>{authorized=!!(user&&user.uid===TEACHER_UID);$('identity').textContent=authorized?`Teacher: ${user.email||user.name}`:'Teacher Google sign-in required';$('add').disabled=!authorized||busy;if(user&&!authorized)message('This account is not the configured teacher.');};
+const permit=user=>{authorized=!!(user&&user.uid===TEACHER_UID);$('identity').textContent=authorized?`Teacher: ${user.email||user.name}`:'Teacher Google sign-in required';$('add').disabled=!authorized||busy;$('login').hidden=authorized;if(user&&!authorized)message('This account is not the configured teacher.');};
 $('login').onclick=async()=>{try{permit(await googleTeacher())}catch(e){message(errorMessage(e))}};
 $('grant').onsubmit=async e=>{e.preventDefault();if(!authorized||busy)return;
  const playerId=$('playerId').value.trim().toUpperCase(),amount=Number($('amount').value),rarity=Number($('rarity').value),field=({4:'shards',5:'shards5',6:'shards6'})[rarity];
