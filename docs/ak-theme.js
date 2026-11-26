@@ -28,11 +28,10 @@
     'Practice':{key:'practice',code:'03',jp:'練習',en:'TRAINING'},
     'All Grades Challenge':{key:'shared',code:'04',jp:'全学年チャレンジ',en:'SHARED RANKED'},
     'Recruitment':{key:'recruit',code:'05',jp:'採用',en:'RECRUIT OPERATORS'},
-    'Aura Workshop':{key:'aura',code:'06',jp:'オーラ工房',en:'COSMETICS'},
-    'Collection':{key:'collection',code:'07',jp:'図鑑',en:'OPERATOR ARCHIVE'},
-    'Rankings':{key:'rankings',code:'08',jp:'ランキング',en:'LEADERBOARD'},
-    'Tournament':{key:'tournament',code:'09',jp:'大会',en:'QR ENTRY'},
-    'Reconnect':{key:'reconnect',code:'10',jp:'再接続',en:'GO ONLINE'}
+    'Collection':{key:'collection',code:'06',jp:'図鑑',en:'OPERATORS · AURAS'},
+    'Rankings':{key:'rankings',code:'07',jp:'ランキング',en:'LEADERBOARD'},
+    'Tournament':{key:'tournament',code:'08',jp:'大会',en:'QR ENTRY'},
+    'Reconnect':{key:'reconnect',code:'09',jp:'再接続',en:'GO ONLINE'}
   };
   const svg=(name,cls)=>{
     const el=document.createElementNS(NS,'svg');

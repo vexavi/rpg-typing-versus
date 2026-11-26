@@ -18,7 +18,7 @@
   const url=new URL(a.getAttribute('href'),location.href);
   if(url.origin!==location.origin||url.href===location.href)return;
   e.preventDefault();
-  wipe(/auras\.html$/.test(url.pathname)?'AURA WORKSHOP':'MODE SELECT','TRANSFERRING // STAND BY');
+  wipe(/collection\.html$/.test(url.pathname)?'COLLECTION':/auras\.html$/.test(url.pathname)?'AURA WORKSHOP':'MODE SELECT','TRANSFERRING // STAND BY');
   setTimeout(()=>location.assign(url.href),480);
  });
  // Returning with the back button restores the page from cache: drop any old shutter.

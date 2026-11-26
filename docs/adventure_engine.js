@@ -3132,11 +3132,7 @@ function showModeSelectScreen(){
   addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     window.location.assign('recruitment.html');
   }});
-  const auraWorkshopMode=addMode('Aura Workshop', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
-    lockedReason:'Online Firebase required',onClick:()=>{
-      window.location.assign('auras.html');
-    }});
-  auraWorkshopMode.classList.add('aura-mode-card');
+  // v148.9: the Aura Workshop now lives inside Collection (each operator page has an Aura row).
   addMode('Collection', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
     lockedReason:'Online Firebase required',onClick:()=>{
       window.location.assign('collection.html');
