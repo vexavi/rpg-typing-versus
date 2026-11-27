@@ -56,7 +56,7 @@
   spotFrame=requestAnimationFrame(drawRecruitmentSpotlight);
  }
  function startRecruitmentSpotlight(){
-  if(!guided||!spotlightCtx)return;
+  if(!guided||!spotlightCtx||window.RPG_TUTORIAL_GUIDE)return; // v148.9: tutorial-guide.js replaces this veil
   // The HTML canvas is outside main: explicit fixed styles prevent an extra page.
   Object.assign(spotlight.style,{position:'fixed',top:'0',left:'0',right:'0',bottom:'0',width:'100vw',height:'100dvh',display:'block',zIndex:'7000',pointerEvents:'none'});
   spotlight.hidden=false;
@@ -104,7 +104,7 @@
    if(tutorialState.tutorialClaimed){await showSavedTutorialDraw();return;}
    pullBusy=true;
    try{
-    tutorialGuide('Recruiting ten characters…');
+    if(!G())tutorialGuide('Recruiting ten characters…');
     const result=await window.RPG_V66.call('/api/recruitment/pull',{card_code:playerCode,mode:'tutorial',count:10});
     tutorialState={...tutorialState,tutorialClaimed:true,lastDraw:result.results};
     // The draw has already been committed. A follow-up balance read must never
@@ -153,7 +153,45 @@
  }
 
 
+ // v148.9 guided steps on the real Recruitment page (guard rails from tutorial-guide.js).
+ const G=()=>window.RPG_TUTORIAL_GUIDE;
+ const KICK='TUTORIAL · LESSON 04 / 04';
+ function guideCoins(){
+  const g=G();if(!g){tutorialGuide('Select RECRUIT ×10 below. Your first pull costs 0 Guild Coins.');return;}
+  g.show({target:()=>$('walletCoins')?.closest('.wallet-item')||$('walletCoins'),kicker:KICK,title:'Guild Coins',
+   text:'This shows your GUILD COINS. You earn them by playing Normal Mode and Adventure. A ×10 recruit normally costs 1,000 coins.',
+   button:{label:'NEXT ▸',onClick:guidePull}});
+ }
+ function guidePull(){
+  const g=G();if(!g)return;
+  g.show({target:'[data-pull="10"]',kicker:KICK,title:'Recruit ×10',
+   text:'Your first ×10 recruit is FREE. Tap RECRUIT ×10 to get your first ten characters.'});
+ }
+ function guideResults(){
+  const g=G();if(!g)return;g.clear();
+  // Let the reveal play freely; once the result lineup appears, point at the way back.
+  const started=Date.now();
+  const timer=setInterval(()=>{
+   const back=document.querySelector('#revealRoot[data-stage="lineup"] .rv-lu-foot [data-reveal="close"]');
+   if(back){clearInterval(timer);g.show({target:()=>document.querySelector('#revealRoot .rv-lu-foot [data-reveal="close"]'),kicker:KICK,title:'Your new characters!',dim:false,
+    text:'These ten characters are now yours. You can see them any time in COLLECTION. Tap BACK TO RECRUITMENT.'});}
+   else if(!document.getElementById('revealRoot')||Date.now()-started>600000)clearInterval(timer);
+  },250);
+ }
+ function guideExit(){
+  const g=G();if(!g){location.replace('adventure.html');return;}
+  try{sessionStorage.setItem('rpgTutorialJustDone','1');}catch(_){}
+  document.body.classList.add('tutorial-exit'); // reveal the × that the tutorial hid
+  g.show({target:'a.close[data-return-modes]',kicker:KICK,title:'Back to Mode Select',
+   text:'Great job! Tap × at the top right to go back to Mode Select.'});
+ }
  function tutorialGuide(message='Select RECRUIT ×10 to get your first characters.',action='',callback=null){
+  if(G()){
+   // Status / error messages: a centred card. During the reveal no card is shown.
+   if(document.getElementById('revealRoot'))return;
+   G().show({kicker:KICK,title:'Recruitment',text:message,button:action&&callback?{label:action,onClick:()=>{G().clear();callback();}}:null,dim:true});
+   return;
+  }
   let coach=$('recruitmentTutorialGuide');
   if(!coach){coach=document.createElement('section');coach.id='recruitmentTutorialGuide';coach.className='recruitment-tutorial-guide';coach.setAttribute('aria-live','polite');
    document.body.append(coach);}
@@ -177,6 +215,7 @@
   try{
    tutorialGuide('Saving tutorial completion…');
    await window.RPG_V66.call('/api/tutorial/progress',{card_code:playerCode,step:5});
+   if(G()){G().clear();guideExit();return;}
    location.replace('tutorial.html?complete=1');
   }catch(e){tutorialGuide(String(e?.message||e),'RETRY COMPLETION',()=>tutorialFinish());}
  }
@@ -189,8 +228,8 @@
     tutorialState={...tutorialState,lastDraw:saved,tutorialClaimed:true};
    }catch(e){tutorialGuide('Draw saved, but results could not be retrieved: '+String(e?.message||e),'RETRY VIEWING',()=>void showSavedTutorialDraw());return;}
   }
-  tutorialGuide('Your ten characters are saved. View all results to finish.');
-  try{window.RPG_RECRUITMENT_REVEAL.openResults(saved,banners[0]?.title||'FEATURED',{lockUntilResults:true,onComplete:()=>void tutorialFinish()});}
+  if(G())G().clear();else tutorialGuide('Your ten characters are saved. View all results to finish.');
+  try{window.RPG_RECRUITMENT_REVEAL.openResults(saved,banners[0]?.title||'FEATURED',{lockUntilResults:true,onComplete:()=>void tutorialFinish()});guideResults();}
   catch(e){tutorialGuide('Results unavailable: '+String(e?.message||e),'RETRY VIEWING',()=>void showSavedTutorialDraw());}
  }
  async function initGuided(){
@@ -211,7 +250,7 @@
    if(Number(tutorialState.step)!==4){location.replace('tutorial.html');return;}
    if(tutorialState.tutorialClaimed){
     tutorialGuide('Your first pull was already saved. View the results to continue.','VIEW SAVED RESULTS',()=>void showSavedTutorialDraw());
-   }else tutorialGuide('Select RECRUIT ×10 below. Your first pull costs 0 Guild Coins.');
+   }else guideCoins();
   }catch(e){tutorialGuide('Could not load tutorial status: '+String(e?.message||e));}
  }
  async function loadBannerConfig(){

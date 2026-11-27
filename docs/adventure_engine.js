@@ -736,8 +736,8 @@ const STAGES_PRACTICE = [
       infiniteContinues: true,
 
       // Customizable drop-in assets:
-      bgFile: "",
-      bossFile: "",
+      bgFile: "assets/bosses/practice-bg.webp",
+      bossFile: "assets/bosses/practice.webp",
       bossFile2: "",
       playBgmFile: "",
       playBgmLoop: true,

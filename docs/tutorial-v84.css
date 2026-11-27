@@ -143,3 +143,14 @@ body.tutorial-client #tutorialModeOverlay .tutorial-lesson-guide p{
 }
 
 .tutorial-client .word .tag.translation{font-family:Arial,"Noto Sans",sans-serif;color:#fff5b5;font-weight:800;font-size:clamp(15px,1.65vw,21px);letter-spacing:.15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px #000}
+
+/* v148.9: lesson 4 mirrors the real Mode Select tiles (two columns, codes, ??? locks). */
+.tutorial-client #tutorialModeOverlay .overlayBox.modeSelectMenu{width:min(640px,calc(100vw - 20px))}
+.tutorial-client #tutorialModeOverlay .overlayChoices.tutorial-mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tutorial-client .tutorial-mode-grid .choiceBtn{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-height:64px;padding:8px 12px 8px 44px;text-align:left}
+.tutorial-client .tutorial-mode-grid .choiceBtn:last-child:nth-child(odd){grid-column:1/-1}
+.tutorial-client .tutorial-tile-code{position:absolute;left:10px;top:50%;transform:translateY(-50%);font:700 15px/1 ui-monospace,Consolas,monospace;opacity:.7}
+.tutorial-client .tutorial-tile-sub{display:flex;gap:8px;align-items:baseline;font-size:11px;opacity:.75;margin-top:2px}
+.tutorial-client .tutorial-tile-sub small{letter-spacing:.08em}
+.tutorial-client .tutorial-mystery .title{letter-spacing:.3em}
+@media(max-width:520px){.tutorial-client #tutorialModeOverlay .overlayChoices.tutorial-mode-grid{grid-template-columns:1fr}}
