@@ -305,12 +305,60 @@ async function ranking(b){const p=await currentPlayer(b),mode=b.mode||'normal',g
  try{const all=rankCache();for(const k of Object.keys(all))if(Date.now()-all[k].at>RANK_CACHE_MS)delete all[k];all[cacheKey]={at:Date.now(),data:out};sessionStorage.setItem(RANK_CACHE_KEY,JSON.stringify(all));}catch(_){}
  return out;
 }
+// v148.9 quota saver: each leaderboard is one shared snapshot document, rebuilt by the
+// first player who opens it after 4 hours (or after the word list / difficulty changed;
+// the Teacher Dashboard also refreshes stale boards). Opening Rankings costs 1 read.
+// Before the new Firestore rules are published, reading/writing snapshots is refused
+// and Rankings simply uses the live query as before.
+const SNAPSHOT_MS=4*60*60*1000;
+const snapshotId=(mode,grade)=>`${mode}_${grade}`;
+const LOCAL_BEST_KEY='rpgSparkMyBest';
+function rememberMyBest(entry){try{localStorage.setItem(LOCAL_BEST_KEY,JSON.stringify(entry));}catch(_){}}
+function myBest(){try{return JSON.parse(localStorage.getItem(LOCAL_BEST_KEY)||'null');}catch(_){return null;}}
+async function readSnapshot(mode,grade){try{return await read('rankSnapshots',snapshotId(mode,grade));}catch(_){return null;}}
+const snapshotFresh=s=>s&&Array.isArray(s.entries)&&s.builtAt&&typeof s.builtAt.toMillis==='function'&&Date.now()-s.builtAt.toMillis()<SNAPSHOT_MS;
+async function liveBoard(mode,grade,limitCount=20){
+ const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([sharedRead('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
+ const revision=Number(v.revision)||1;
+ const d=await getDocsFromServer(rankQuery(mode,grade,revision,c,limitCount));
+ const rows=d.docs.map(s=>{const x=s.data();return {public_id:x.public_id,name:x.name,icon_id:x.icon_id,score:x.score};});
+ return {rows,revision,config:c};
+}
+async function saveSnapshot(mode,grade,board){
+ try{await setDoc(ref('rankSnapshots',snapshotId(mode,grade)),{mode,grade,vocabRevision:board.revision,configRevision:board.config,entries:board.rows.slice(0,20),builtAt:serverTimestamp()});}
+ catch(_){/* rules not published yet, or someone else just rebuilt it */}
+}
+// Teacher Dashboard backstop: refresh any board whose snapshot is missing or older than 4 h.
+const SNAPSHOT_BOARDS=[['normal','1'],['normal','2'],['normal','3'],['normal','all'],['shared','all']];
+async function rebuildRankings(b={}){
+ await teacher();let rebuilt=0;
+ for(const [mode,grade] of SNAPSHOT_BOARDS){
+  const s=await readSnapshot(mode,grade);if(!b.force&&snapshotFresh(s))continue;
+  try{const board=await liveBoard(mode,grade,20);await setDoc(ref('rankSnapshots',snapshotId(mode,grade)),{mode,grade,vocabRevision:board.revision,configRevision:board.config,entries:board.rows,builtAt:serverTimestamp()});rebuilt++;}catch(_){}
+ }
+ return {ok:true,rebuilt};
+}
 async function rankingFresh(b,p,mode,grade){
  if(!['normal','challenge','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
- const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([sharedRead('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
- const revision=Number(v.revision)||1,rule=`spark-${mode}-${grade}-v${revision}-c${c}`;
- const d=await getDocsFromServer(rankQuery(mode,grade,revision,c,Math.min(20,Number(b.limit)||20)));
- const rows=d.docs.map(s=>s.data());const entries=rows.map((row,i)=>({...row,rank:i&&row.score===rows[i-1].score?rows.findIndex(x=>x.score===row.score)+1:i+1}));const mine=entries.find(x=>x.public_id===p.id)||{public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',rank:null,score:0};
+ let rows,revision,c;
+ const snap=Math.min(20,Number(b.limit)||20)===20&&!b.live?await readSnapshot(mode,grade):null;
+ if(snapshotFresh(snap)){rows=snap.entries.slice(0,20);revision=Number(snap.vocabRevision)||1;c=snap.configRevision;}
+ else{
+  const board=await liveBoard(mode,grade,Math.min(20,Number(b.limit)||20));
+  rows=board.rows;revision=board.revision;c=board.config;
+  // Rebuild the shared snapshot when it is missing, old, or for different words/settings.
+  if(!b.limit||Number(b.limit)>=20)void saveSnapshot(mode,grade,board);
+ }
+ // This player's newest best is shown at once, even if the snapshot is a few hours old.
+ const mine0=myBest();
+ if(mine0&&mine0.public_id===p.id&&mine0.mode===mode&&mine0.grade===grade&&mine0.vocabRevision===revision&&mine0.configRevision===c){
+  const at=rows.findIndex(r=>r.public_id===p.id);
+  if(at<0||rows[at].score<mine0.score){
+   rows=rows.filter(r=>r.public_id!==p.id).concat({public_id:p.id,name:mine0.name,icon_id:mine0.icon_id,score:mine0.score})
+    .sort((x,y)=>y.score-x.score).slice(0,20);
+  }
+ }
+ const rule=`spark-${mode}-${grade}-v${revision}-c${c}`;const entries=rows.map((row,i)=>({...row,rank:i&&row.score===rows[i-1].score?rows.findIndex(x=>x.score===row.score)+1:i+1}));const mine=entries.find(x=>x.public_id===p.id)||{public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',rank:null,score:0};
  return {ok:true,mode,grade,assigned_grade:p.player.grade,entries,current:mine,total:entries.length,ruleset:rule,expected_ruleset:rule,source:'firebase-spark-unverified',completed_only:true,vocab_revision:revision,config_revision:c};
 }
 async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Number.isInteger(b.score)||b.score<=0||b.score>2000000)err('Invalid score.');
@@ -334,6 +382,8 @@ async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Nu
    const [c,v]=await Promise.all([currentConfig(run.mode),sharedRead('vocabPools',run.pool)]); // fresh: forgetMeta() above
    if(c!==run.configRevision||v?.revision!==run.vocabRevision)err('Difficulty or vocabulary changed. Run not ranked.');}
   throw e;}
+ {const prev=myBest(),same=prev&&prev.public_id===p.id&&prev.mode===run.mode&&prev.grade===run.grade&&prev.vocabRevision===run.vocabRevision&&prev.configRevision===run.configRevision;
+  if(!same||b.score>prev.score)rememberMyBest({public_id:p.id,name:p.player.username,icon_id:p.player.rankIconId||'icon01',mode:run.mode,grade:run.grade,vocabRevision:run.vocabRevision,configRevision:run.configRevision,score:b.score});}
  currentRun=null;forgetRankings();return {ok:true,mode:run.mode,grade:run.grade,ruleset:`spark-${run.mode}-${run.grade}-v${run.vocabRevision}-c${run.configRevision}`};
 }
 /* v73 Guild Coins: client-reported completion claims stored transactionally.
@@ -687,6 +737,7 @@ async function route(path,body={}){
  if(path==='/api/rankings/start')return rankStart(body);
  if(path==='/api/rankings/submit')return rankSubmit(body);
  if(path==='/api/rankings')return ranking(body);
+ if(path==='/api/rankings/rebuild')return rebuildRankings(body);
  if(path==='/api/rankings/icon')return rankIcon(body);
  if(path.startsWith('/api/recruitment/')||path.startsWith('/api/rewards/'))err('Cloud rewards and recruitment are disabled on the zero-cost Spark plan.');
  err('This action is unavailable in the Spark edition.');

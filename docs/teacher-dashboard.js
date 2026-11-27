@@ -171,5 +171,7 @@ $('signOut').addEventListener('click',async()=>{await teacherSignOut();location.
  teacher=await currentTeacher();
  $('who').textContent=teacher?`Signed in as ${teacher.name||teacher.email}${teacher.name&&teacher.email?` · ${teacher.email}`:''}`:'Not signed in';
  try{await loadStudents();render();await health();}
+ // v148.9 backstop: quietly refresh leaderboard snapshots older than 4 hours.
+ setTimeout(()=>{try{window.RPG_V66?.call?.('/api/rankings/rebuild',{}).catch(()=>{});}catch(_){}},4000);
  catch(e){$('rows').innerHTML=`<tr><td colspan="7" class="td-empty bad">${esc(errorMessage(e))}</td></tr>`;}
 })();
