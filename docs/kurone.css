@@ -56,3 +56,19 @@
 /* Squad select: Kurone cannot be the 3rd (last) operator. */
 .storySquadRosterCard.kurone-blocked{opacity:.45;filter:grayscale(.7)}
 .storySquadRosterCard.kurone-blocked .storySquadRosterBadge{background:#5a1a33;color:#ffc2dc}
+
+/* Kurone's angry "notification" (squad rule: she must be 1st). */
+.kurone-notify{position:fixed;top:14px;left:50%;z-index:2147483647;display:flex;align-items:center;gap:12px;width:min(430px,92vw);padding:10px 16px 10px 10px;
+  border-radius:18px;background:rgba(24,12,20,.96);border:2px solid #ff2e86;box-shadow:0 14px 40px #000b,0 0 0 4px #ff2e8633;color:#fff;
+  font-family:var(--ak-sans,'Roboto',system-ui,sans-serif);pointer-events:none;opacity:0;transform:translate(-50%,-140%)}
+.kurone-notify.show{animation:kuroneNotify 2.8s cubic-bezier(.2,1.3,.4,1) forwards}
+@keyframes kuroneNotify{0%{opacity:0;transform:translate(-50%,-140%)}12%{opacity:1;transform:translate(-50%,0)}16%{transform:translate(calc(-50% - 7px),0) rotate(-2deg)}20%{transform:translate(calc(-50% + 7px),0) rotate(2deg)}24%{transform:translate(-50%,0)}85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-140%)}}
+.kurone-notify-sticker{width:96px;height:auto;flex:none;filter:drop-shadow(0 4px 8px #0008);animation:kuroneSticker .5s .25s cubic-bezier(.2,1.8,.4,1) both}
+@keyframes kuroneSticker{from{transform:scale(.2) rotate(-25deg)}to{transform:none}}
+.kurone-notify-app{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.06em;color:#d8b7c8}
+.kurone-notify-app img{width:18px;height:18px;border-radius:5px}
+.kurone-notify-app b{color:#fff}
+.kurone-notify-app span{margin-left:auto;color:#9e8594}
+.kurone-notify-text{margin:4px 0 0;font-size:24px;font-weight:900;color:#ff8cc6;letter-spacing:.02em}
+.kurone-notify-sub{margin:2px 0 0;font-size:13px;font-weight:700;color:#f1dfe8}
+@media (prefers-reduced-motion:reduce){.kurone-notify.show{animation:none;opacity:1;transform:translate(-50%,0)}.kurone-notify-sticker{animation:none}}

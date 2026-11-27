@@ -267,6 +267,37 @@ function fakePicker(burst,hype){
  });
 }
 
+
+// Kurone's squad rule, hands-on: try slot 2 -> angry notification -> put her in slot 1.
+function squadRuleDemo(){
+ return new Promise(async done=>{
+  chip('');S.auto=0;
+  const team=[['kurone','Kurone'],['alden','Alden'],['lupa','Lupa']];
+  const slots=['alden',null,null];let active=1,tried=false;
+  const box=document.createElement('div');box.className='wai-squad';box.id='waiSquad';
+  const draw=()=>{
+   box.innerHTML=`<div class="wai-squad-title">SQUAD</div><div class="wai-squad-slots">${slots.map((id,i)=>`<button type="button" class="wai-squad-slot${i===active?' active':''}" data-slot="${i}" id="waiSlot${i+1}"><b>${i+1}</b>${id?`<img alt="" src="assets/profile-icons/${id}.webp"><span>${team.find(t=>t[0]===id)[1]}</span>`:'<span class="empty">?</span>'}</button>`).join('')}</div>
+    <div class="wai-squad-roster">${team.map(([id,n])=>`<button type="button" class="wai-squad-card${slots.includes(id)?' used':''}" data-id="${id}" id="waiCard_${id}"><img alt="" src="assets/profile-icons/${id}.webp"><span>${n}</span></button>`).join('')}</div>`;
+   box.querySelectorAll('.wai-squad-slot').forEach(b=>b.onclick=()=>{active=Number(b.dataset.slot);slots[active]=null;draw();step();});
+   box.querySelectorAll('.wai-squad-card').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.id;
+    if(id==='kurone'&&active!==0){tried=true;window.RPG_KURONE_NOTIFY?.();step();return;}
+    const at=slots.indexOf(id);if(at>=0)slots[at]=null;
+    slots[active]=id;active=slots.indexOf(null);if(active<0)active=0;draw();step();
+   });
+  };
+  document.body.appendChild(box);draw();
+  let stage=0;
+  const step=()=>{
+   if(stage===0&&!tried){say({title:'Squad rule',formula:'2️⃣ = Kurone ?',text:'Let\'s try! Put me in slot 2. Click me.',arrows:[{sel:'#waiCard_kurone',dir:'up'}],focus:['#waiSquad']});return;}
+   if(stage<=1&&slots[0]!=='kurone'){stage=1;say({formula:'💢 1️⃣ ONLY!',text:'I got angry! I must be 1st. Click slot 1, then click me.',arrows:[{sel:active===0?'#waiCard_kurone':'#waiSlot1',dir:active===0?'up':'down'}],focus:['#waiSquad']});return;}
+   if(stage<2){stage=2;
+    say({formula:'1️⃣ Kurone ✓',text:'Yes! I lead the squad. Then my Shoutout always has teammates!',next:true,focus:['#waiSquad']}).then(()=>{box.remove();done();});}
+  };
+  step();
+ });
+}
+
 // ---- one script per operator (kid-friendly, accurate to the real passive) ------------
 // Each step shows a picture formula (trigger → effect) so it makes sense even without reading.
 const SCRIPTS={
@@ -463,7 +494,7 @@ const SCRIPTS={
   S.auto=2400;say({formula:'📣 +1 ×3',text:'Type 3 words with HYPE!',arrows:[{sel:'#kuroneHype',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneHype']});
   await count(3,{label:'📣'});
   await say({title:'Rage Quit',formula:'💀 → 💥 FULL + 📣',text:'If I get knocked out, my post is FULL damage: 3, 6 or 10! The next one still gets HYPE.',next:true});
-  await say({title:'Squad rule',formula:'1️⃣ ✓ 2️⃣ ✓ 3️⃣ ✖',text:'I need a teammate to pass my stream to. So I can be 1st or 2nd, never 3rd.',next:true});
+  await squadRuleDemo();
   S.hype=0;kuroneHud();
  },
  cassian:async()=>{

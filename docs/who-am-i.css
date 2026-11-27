@@ -35,3 +35,16 @@
 /* Adventure layout: the word lane is in the middle, so the coach sits over the boss side. */
 .wai-page .tutorial-coach{left:auto;right:16px;top:84px;width:min(380px,31%)}
 .wai-page .wai-chip{top:14px}
+
+/* Kurone's squad-rule practice (mini squad picker) */
+.wai-squad{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483640;width:min(520px,90vw);padding:16px 18px;border:2px solid #ff4fa3;background:#140910;color:#fff;box-shadow:0 20px 60px #000c;font-family:var(--ak-sans,'Roboto',system-ui,sans-serif)}
+.wai-squad-title{font:900 14px/1 inherit;letter-spacing:.2em;color:#ff8cc6;margin-bottom:10px}
+.wai-squad-slots,.wai-squad-roster{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.wai-squad-roster{margin-top:14px;padding-top:14px;border-top:1px dashed #5a3448}
+.wai-squad-slot,.wai-squad-card{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border:2px solid #5a3448;background:#24111c;color:#fff;cursor:pointer;font-weight:800;font-size:14px;font-family:inherit;border-radius:4px}
+.wai-squad-slot b{font-size:20px;color:#ffd84f}
+.wai-squad-slot img,.wai-squad-card img{width:56px;height:56px;object-fit:cover;border-radius:4px}
+.wai-squad-slot .empty{min-height:56px;display:grid;place-items:center;font-size:26px;color:#6b5260}
+.wai-squad-slot.active{border-color:#ffd84f;box-shadow:0 0 0 2px #ffd84f55}
+.wai-squad-card:hover,.wai-squad-slot:hover{border-color:#ff4fa3}
+.wai-squad-card.used{opacity:.45}

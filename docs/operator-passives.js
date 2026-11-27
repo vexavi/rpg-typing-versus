@@ -49,7 +49,7 @@
     kurone: Object.freeze({id:'kurone',name:'Kurone',rarity:6,title:'Live Chat / Shoutout / Rage Quit',
       maxViewers:30,typoLoss:5,tiers:Object.freeze([10,20,30]),
       bonus:Object.freeze([0,0.3,0.5,1]),every:Object.freeze([0,3,2,1]),burst:Object.freeze([0,3,6,10]),hype:Object.freeze([0,3,6,10]),
-      description:'Live Chat: every correct word adds 1 viewer (max 30); a typo makes 5 viewers leave. At 10 / 20 / 30 viewers every word deals more damage. Shoutout (Adventure): swap Kurone out to any available squad member; the next operator gets Hype (+1 damage on its next 3 / 6 / 10 words) and the boss takes a half-strength parting post. Rage Quit: if Kurone is knocked out, the parting post deals full damage (3 / 6 / 10) and the next operator still gets Hype. Kurone cannot be the last squad member.'})
+      description:'Live Chat: every correct word adds 1 viewer (max 30); a typo makes 5 viewers leave. At 10 / 20 / 30 viewers every word deals more damage. Shoutout (Adventure): swap Kurone out to any available squad member; the next operator gets Hype (+1 damage on its next 3 / 6 / 10 words) and the boss takes a half-strength parting post. Rage Quit: if Kurone is knocked out, the parting post deals full damage (3 / 6 / 10) and the next operator still gets Hype. Kurone must be the 1st squad member.'})
   });
   // Kurone tier: 0 below 10 viewers, then 1 / 2 / 3.
   const kuroneTier=v=>{const t=RULES.kurone.tiers;return v>=t[2]?3:v>=t[1]?2:v>=t[0]?1:0;};

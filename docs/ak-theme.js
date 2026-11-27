@@ -154,7 +154,7 @@
   // Plays when the player moves between major screens. The new screen is already
   // rendered underneath; the shutter covers it on the first frame, holds briefly,
   // then sweeps away diagonally. It never intercepts clicks or keys.
-  const LABELS={home:'MODE SELECT',conquest:'CONQUEST',squad:'SQUAD ASSEMBLY',battle:'OPERATION START',intro:'RPG TYPING VERSUS',rankings:'RANKINGS',result:''};
+  const LABELS={home:'MODE SELECT',conquest:'ADVENTURE',squad:'SQUAD ASSEMBLY',battle:'OPERATION START',intro:'RPG TYPING VERSUS',rankings:'RANKINGS',result:''};
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)');
   let shutter=null,lastScreen=null,shutterTimer=0;
   function currentScreen(){

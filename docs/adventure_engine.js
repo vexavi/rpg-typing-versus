@@ -3773,12 +3773,12 @@ async function debugJumpTo(mode, idx){
           const details=make('span','storySquadRosterName',op.name);
           const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':op.rarity?`${op.rarity}★`:'DEFAULT');
           card.append(pic,details,status);
-          // v148.10: Kurone needs a teammate to pass her stream to, so never 3rd.
-          const kuroneBlocked=!single&&op.id==='kurone'&&lockedCount===2;
-          if(kuroneBlocked){card.classList.add('kurone-blocked');status.textContent='NOT 3RD';card.title='Kurone cannot be the 3rd (last) operator.';}
+          // v148.10: Kurone must lead the squad (slot 1), so her Shoutout always has teammates.
+          const kuroneBlocked=!single&&op.id==='kurone'&&lockedCount!==0;
+          if(kuroneBlocked){card.classList.add('kurone-blocked');status.textContent='1ST ONLY';card.title='Kurone can only be the 1st operator.';}
           card.addEventListener('click',()=>{
             if(lockedCount>SLOTS-1)return;
-            if(kuroneBlocked){message.textContent='Kurone can\'t be 3rd. She needs a teammate to pass her stream to!';return;}
+            if(kuroneBlocked){message.textContent='Kurone must be 1st!';window.RPG_KURONE_NOTIFY?.();return;}
             const occupied=selected.indexOf(op.id);
             if(occupied>=0 && occupied!==lockedCount){
               message.textContent='Already selected.';return;
@@ -3852,7 +3852,7 @@ async function debugJumpTo(mode, idx){
       ready.addEventListener('click',()=>{
         if(!selected[lockedCount])return;
         const chosen=selected[lockedCount];
-        if(!single&&lockedCount===2&&chosen==='kurone'){message.textContent='Kurone can\'t be 3rd. She needs a teammate to pass her stream to!';return;}
+        if(!single&&lockedCount!==0&&chosen==='kurone'){message.textContent='Kurone must be 1st!';window.RPG_KURONE_NOTIFY?.();return;}
         if(selected.slice(0,lockedCount).includes(chosen)){
           message.textContent='Already selected.';return;
         }

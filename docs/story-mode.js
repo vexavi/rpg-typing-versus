@@ -90,7 +90,7 @@ function leaveStoryToModes(){
  if(typeof window.RPG_STORY_EXIT_TO_MODES==='function')window.RPG_STORY_EXIT_TO_MODES();
  else document.getElementById('overlay')?.classList.add('show');
 }
-function errorScreen(msg){show(`<div class="story-modal"><h1>CONQUEST</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=leaveStoryToModes}
+function errorScreen(msg){show(`<div class="story-modal"><h1>ADVENTURE</h1><p class="story-error">${esc(msg)}</p><button id="st-error-back" type="button">BACK TO MODES</button></div>`);box.querySelector('#st-error-back').onclick=leaveStoryToModes}
 const starMarkup=(n=0)=>`<span class="story-stars" aria-label="${n} of 4 stars">${Array.from({length:4},(_,i)=>`<span class="${i<n?'earned':'empty'}" aria-hidden="true">★</span>`).join('')}</span>`;
 function openConquestChapter(chIndex,preferred=null,requestedId=null,focus=false,intermission=null){
  const core=window.RPG_CONQUEST,atlas=window.RPG_CONQUEST_MAP;
@@ -117,7 +117,7 @@ function openConquestChapter(chIndex,preferred=null,requestedId=null,focus=false
  // Uncreated Rift/Valcrest/Vesper are visible as Coming Soon, never playable.
  // All other uncreated or retired stock slots are omitted.
  const choices=[...regions.map(c=>({id:c.id,name:atlas.byId(c.id)?.name||c.title})),...atlas.regions.filter(r=>['1','2','3'].includes(r.id)&&!chapters.some(c=>c.id===r.id)&&!retiredTerritoryIds.has(r.id)).map(r=>({id:r.id,name:r.name}))];
- if(!choices.length){show(`<div class="story-modal"><h1>CONQUEST</h1><p>No territories available.</p><button id="story-close" type="button">BACK TO MODES</button></div>`);box.querySelector('#story-close').onclick=activeRun?intermission.back:leaveStoryToModes;return;}
+ if(!choices.length){show(`<div class="story-modal"><h1>ADVENTURE</h1><p>No territories available.</p><button id="story-close" type="button">BACK TO MODES</button></div>`);box.querySelector('#story-close').onclick=activeRun?intermission.back:leaveStoryToModes;return;}
  const preferredIndex=preferred?regions.findIndex(ch=>ch.stages.some(s=>s.id===preferred)):-1;
  activeChapter=preferredIndex>=0?preferredIndex:Math.max(0,Math.min(regions.length-1,chIndex));
  if(!available(regions[activeChapter],activeChapter))activeChapter=Math.max(0,regions.findLastIndex(available));
@@ -198,7 +198,7 @@ function openChapter(chIndex,preferred=null,focusTarget=''){
 let mapOpenRequest=0,mapLoading=null;
 async function openMap(fn,preferred){
  const request=++mapOpenRequest;if(typeof fn==='function')startFn=fn;
- show('<div class="story-modal"><h1>CONQUEST</h1><p>LOADING…</p><button id="st-loading-back" type="button">BACK</button></div>');view='map-loading';box.querySelector('#st-loading-back').onclick=leaveStoryToModes;
+ show('<div class="story-modal"><h1>ADVENTURE</h1><p>LOADING…</p><button id="st-loading-back" type="button">BACK</button></div>');view='map-loading';box.querySelector('#st-loading-back').onclick=leaveStoryToModes;
  if(!mapLoading){const pending=Promise.allSettled([loadManifest(true),loadProgress()]).then(results=>{const failure=results.find(result=>result.status==='rejected');if(failure)throw failure.reason;});mapLoading=pending;pending.then(()=>{if(mapLoading===pending)mapLoading=null;},()=>{if(mapLoading===pending)mapLoading=null;});}
  try{await mapLoading;if(request===mapOpenRequest)openChapter(activeChapter,preferred)}catch(e){if(request===mapOpenRequest)errorScreen(e.message||'Story unavailable')}
 }
