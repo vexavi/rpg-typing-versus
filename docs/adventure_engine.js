@@ -5585,7 +5585,14 @@ if(state === "landed"){
     bossImg.classList.add("bossFlash");
   }
 
-  async function setStageArt(stage){
+  async function setStageArt(stage,opts={}){
+    // v148.10: idle resets (intro / Mode Select) no longer download the Normal Stage 1
+    // background + boss (~0.6 MB) that sit hidden behind those screens; startStage() loads
+    // the real art when a battle actually begins.
+    if(opts.idle){
+      bgImg.style.display="none";bgFallback.style.display="block";bgImg.removeAttribute("src");
+      bossImg.removeAttribute("src");bossImg.style.display="none";bossNormalSrc="";return;
+    }
     bgImg.style.display = "none";
     bgFallback.style.display = "block";
     bgImg.onload = () => { bgImg.style.display = "block"; bgFallback.style.display = "none"; };
@@ -6660,7 +6667,7 @@ setMode("normal");
     stage5Phase3At = null;
 
     stopBgm();
-    try{ setStageArt(STAGES[0]); }catch(_){/* ignore */}
+    try{ setStageArt(STAGES[0],{idle:true}); }catch(_){/* ignore */}
 
     // Hide the in-game overlay (mode select, dialogue, etc.) so the intro can be seen.
     showOverlay(false);
@@ -6747,7 +6754,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
       stage5Phase3At = null;
 
       stopBgm();
-      setStageArt(STAGES[0]);
+      setStageArt(STAGES[0],{idle:true});
 
       setInputsEnabled(false);
       updateUI();

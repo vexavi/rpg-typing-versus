@@ -90,3 +90,28 @@ img[data-missing]:not([src]){background-image:url("data:image/svg+xml,%3Csvg xml
 .se-art-row .boss-sprite-panel>p.muted{margin:0 0 8px}
 .se-fold-body>.damage-settings>.editheading:first-child,.se-fold-body>.music-panel>h4:first-child{display:none}
 .se-fold-body>.damage-settings,.se-fold-body>.music-panel{border:0;padding:0;margin:0;background:none}
+
+/* v148.10 Stage effects: active list + add picker */
+.se-effects{display:flex;flex-direction:column;gap:10px}
+.se-effects-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.se-effects-empty{margin:0;padding:12px;border:1px dashed #ffffff26;border-radius:8px;color:#9aa6b8;text-align:center}
+.se-effect{border:1px solid #ffffff1f;border-radius:10px;background:#ffffff08}
+.se-effect.open{border-color:#7fb2ff66;background:#7fb2ff0d}
+.se-effect-head{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.se-effect-icon{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:8px;background:#ffffff12;font-size:19px}
+.se-effect-name{flex:1;min-width:0}
+.se-effect-name b{display:block}
+.se-effect-name small{display:block;margin-top:2px;color:#9aa6b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.se-effect-name small b{display:inline;color:#dfe7f3}
+.se-effect-body{padding:0 12px 12px}
+.se-effect-body .field .muted{font-size:11px}
+.se-effect-add{border:1px dashed #7fb2ff66;border-radius:10px}
+.se-effect-add>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:700;color:#9cc4ff}
+.se-effect-add>summary::-webkit-details-marker{display:none}
+.se-effect-add[open]>summary{border-bottom:1px dashed #7fb2ff40}
+.se-effect-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;padding:10px}
+.se-effect-pick{display:flex;align-items:flex-start;gap:10px;white-space:normal;padding:10px;text-align:left;border:1px solid #ffffff1f;border-radius:8px;background:#ffffff08;color:inherit;cursor:pointer;font:inherit}
+.se-effect-pick:hover,.se-effect-pick:focus-visible{border-color:#7fb2ff;background:#7fb2ff14}
+.se-effect-pick b{display:block}
+.se-effect-pick small{display:block;margin-top:3px;color:#9aa6b8;font-size:12px;line-height:1.35}
+.se-effect-pick em{display:block;margin-top:4px;color:#ffd27f;font-size:11px;font-style:normal}

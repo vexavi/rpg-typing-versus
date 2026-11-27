@@ -166,6 +166,53 @@ function mechanicMarkup(st,onlyChapter1=false){
   return `<div class="mechanicgroup${hasSwitch&&!on?' is-off':''}"><h4>${esc(m.label)}</h4><p class="muted">${esc(m.description||'')}</p><div class="grid">${controls}</div></div>`;
  }).join('');
 }
+// ---- v148.10 Stage effects: a simple "active list + add picker" instead of every setting at once.
+const EFFECT_ICON={sleepy:'😴',delirium:'🌀',panic:'🚨',disorientation:'💫',repression:'🌫️',fortification:'🛡️',reinforcements:'👥',siege:'🏰',encirclement:'↔️',duel:'⚔️',poison:'☠️',blood_pact:'🩸',infiltration:'🗡️',death_mark:'⏳',moonlit_execution:'🌙',drift_words:'🍃'};
+const EFFECT_NEEDS={delirium:'sleepy'};
+// One plain-English line per effect for the picker (the full rules show in Settings).
+const EFFECT_BLURB={drift_words:'Some words fall slower than others.',sleepy:'The screen blinks dark like heavy eyelids.',delirium:'When the eyes close, words change to new words.',panic:'Red words that hurt more when they land.',disorientation:'Words freeze, then suddenly speed up.',repression:'Some words are hidden by dark mist.',
+ fortification:'Armored words must be typed twice.',reinforcements:'A big wave of words arrives at once.',siege:'Giant words take up extra space.',encirclement:'Words come in from the sides.',duel:'A golden word to clear for bonus damage.',
+ poison:'Landed words hurt a little over time.',blood_pact:'A marked word heals the boss if it lands.',infiltration:'A fast word sneaks to the bottom and locks others.',death_mark:'A countdown word — clear it before time runs out.',moonlit_execution:'Everything freezes; clear the marked words fast.'};
+const TERRITORY_EFFECTS={'1':['sleepy','delirium','panic','disorientation','repression'],'2':['fortification','reinforcements','siege','encirclement','duel'],'3':['poison','blood_pact','infiltration','death_mark','moonlit_execution']};
+const TERRITORY_EFFECT_TITLE={'1':'The Rift · Special Mechanics','2':'Valcrest · Special Mechanics','3':'Vesper · Special Mechanics'};
+let openEffect='',effectPickerOpen=false;
+function effectScopes(st){return ['mode:story',`chapter:${currentChapter()?.id}`,`stage:story:${st.id}`];}
+function effectOn(m,st){
+ const own=st.battle?.mechanics?.[m.id]?.enabled;if(own!==undefined)return own===true;
+ let v=m.fields.find(f=>f.key==='enabled')?.default;for(const scope of effectScopes(st))if(liveBalance[scope]?.mechanics?.[m.id]?.enabled!==undefined)v=liveBalance[scope].mechanics[m.id].enabled;
+ return v===true;
+}
+function effectValue(m,field,st){
+ const own=st.battle?.mechanics?.[m.id]?.[field.key];if(own!==undefined)return own;
+ let v=field.default??(field.type==='boolean'?false:field.min);for(const scope of effectScopes(st))if(liveBalance[scope]?.mechanics?.[m.id]?.[field.key]!==undefined)v=liveBalance[scope].mechanics[m.id][field.key];
+ return v;
+}
+function effectsFor(ch){const mine=TERRITORY_EFFECTS[String(ch.id)]||[],all=Object.values(TERRITORY_EFFECTS).flat();return catalog().filter(m=>mine.includes(m.id)||!all.includes(m.id));}
+const effectFields=m=>m.fields.filter(f=>f.key!=='enabled'&&!(m.id==='panic'&&f.key==='damage'));
+const effectLabel=m=>String(m.label||m.id).split(' · ')[0];
+const effectShort=m=>{if(EFFECT_BLURB[m.id])return EFFECT_BLURB[m.id];const d=String(m.description||'');const i=d.indexOf('. ');return i>0&&i<120?d.slice(0,i+1):d.slice(0,120)};
+function effectsMarkup(st,ch){
+ const list=effectsFor(ch),active=list.filter(m=>effectOn(m,st)),idle=list.filter(m=>!effectOn(m,st));
+ const territory=TERRITORY_EFFECT_TITLE[String(ch.id)];
+ const card=m=>{
+  const open=openEffect===m.id,fields=effectFields(m);
+  const summary=fields.slice(0,3).map(f=>`${esc(f.label)}: <b>${esc(f.type==='boolean'?(effectValue(m,f,st)?'On':'Off'):effectValue(m,f,st))}</b>`).join(' · ');
+  const controls=fields.map(f=>{const attr=`data-mechanic-id="${esc(m.id)}" data-mechanic-key="${esc(f.key)}"`,v=effectValue(m,f,st);
+   const input=f.type==='boolean'?`<select ${attr}><option value="true" ${v===true?'selected':''}>On</option><option value="false" ${v!==true?'selected':''}>Off</option></select>`
+    :`<input type="number" ${attr} min="${f.min}" max="${f.max}" step="${f.step||1}" value="${esc(v)}">`;
+   return `<div class="field"><label>${esc(f.label)}</label>${input}<span class="muted">${f.type==='boolean'?'':`${f.min}–${f.max} · default ${esc(f.default??f.min)}`}</span></div>`;}).join('');
+  return `<div class="se-effect${open?' open':''}"><div class="se-effect-head"><span class="se-effect-icon" aria-hidden="true">${EFFECT_ICON[m.id]||'✨'}</span><div class="se-effect-name"><b>${esc(effectLabel(m))}</b><small>${summary||esc(effectShort(m))}</small></div>
+   <button type="button" data-action="effect-edit" data-effect="${esc(m.id)}">${open?'Done':'Settings'}</button><button type="button" class="danger" data-action="effect-remove" data-effect="${esc(m.id)}">Remove</button></div>
+   ${open?`<div class="se-effect-body"><p class="muted">${esc(m.description||'')}</p><div class="grid">${controls}</div><button type="button" data-action="effect-reset" data-effect="${esc(m.id)}">Reset to defaults</button></div>`:''}</div>`;
+ };
+ const pick=m=>`<button type="button" class="se-effect-pick" data-action="effect-add" data-effect="${esc(m.id)}"><span class="se-effect-icon" aria-hidden="true">${EFFECT_ICON[m.id]||'✨'}</span><span><b>${esc(effectLabel(m))}</b><small>${esc(effectShort(m))}</small>${EFFECT_NEEDS[m.id]?`<em>Also turns on ${esc(effectLabel(list.find(x=>x.id===EFFECT_NEEDS[m.id])||{id:EFFECT_NEEDS[m.id]}))}</em>`:''}</span></button>`;
+ const copy=String(ch.id)==='1'?`<button type="button" data-action="copy-ch1-mechanics">Copy to all Rift stages</button>`:`<button type="button" data-action="copy-effects">Copy to all stages in ${esc(territoryName(ch.id))}</button>`;
+ return `<div class="se-effects">
+  <div class="se-effects-top"><span class="muted">${territory?`${esc(territory)} + general effects.`:'General effects.'} Effects only change this stage.${String(ch.id)==='1'?' Delirium needs Sleepy. Darkness pauses new spawns.':''}</span>${active.length?copy:''}</div>
+  ${active.length?active.map(card).join(''):'<p class="se-effects-empty">No effects yet — this stage is a plain battle.</p>'}
+  ${idle.length?`<details class="se-effect-add" data-sec-local="add" ${effectPickerOpen?'open':''}><summary>+ Add effect</summary><div class="se-effect-grid">${idle.map(pick).join('')}</div></details>`:''}
+ </div>`;
+}
 function clearPhotoSelection(){for(const data of stagedPhotos.values())URL.revokeObjectURL(data.url);stagedPhotos.clear();updateAuth()}
 function dropUnusedPhotos(){const names=new Set(referencedImages(chapters));for(const [key,item] of stagedPhotos)if(!names.has(key)){URL.revokeObjectURL(item.url);stagedPhotos.delete(key)}updateAuth()}
 async function addPhoto(event){
@@ -476,7 +523,7 @@ async function addBannerArt(event){
 }
 // Folded sections remember whether the teacher opened them.
 const openSections=new Set((()=>{try{return JSON.parse(localStorage.getItem('rpgEditorOpenSections')||'[]')}catch{return []}})());
-document.addEventListener('toggle',e=>{const d=e.target;if(!(d instanceof HTMLDetailsElement)||!d.dataset.sec)return;
+document.addEventListener('toggle',e=>{const d=e.target;if(d instanceof HTMLDetailsElement&&d.classList.contains('se-effect-add'))effectPickerOpen=d.open;if(!(d instanceof HTMLDetailsElement)||!d.dataset.sec)return;
  if(d.open)openSections.add(d.dataset.sec);else openSections.delete(d.dataset.sec);
  try{localStorage.setItem('rpgEditorOpenSections',JSON.stringify([...openSections]))}catch{}},true);
 function renderFields(){
@@ -496,7 +543,7 @@ function renderFields(){
  // everything else lives in folded "More settings" sections that stay open/closed per teacher.
  const sec=(key,title,hint,body)=>`<details class="se-fold" data-sec="${key}" ${openSections.has(key)?'open':''}><summary><b>${title}</b>${hint?`<small>${hint}</small>`:''}</summary><div class="se-fold-body">${body}</div></details>`;
  const stageNo=battles.indexOf(st)+1;
- const special=String(ch.id)==='1'?`<div class="editheading"><span class="muted">Delirium needs Sleepy. Darkness pauses new spawns.</span><button type="button" data-action="copy-ch1-mechanics">Copy to all Rift stages</button></div>${mechanicMarkup(st,true)}`:String(ch.id)==='2'?mechanicMarkup(st,'valcrest'):String(ch.id)==='3'?mechanicMarkup(st,'vesper'):'';
+ const effectCount=effectsFor(ch).filter(m=>effectOn(m,st)).length;
  $('stageFields').innerHTML=`<section class="section se-stage"><div class="editheading se-stage-head"><div><span class="cq-kicker">STAGE ${String(stageNo).padStart(2,'0')}${battles.at(-1)===st?' · FINAL BOSS':''}</span><h2>${esc(st.title||'Stage')}</h2></div><button class="danger" data-action="delete-stage">Delete stage</button></div>
  <div class="se-card"><h3>Basics</h3><div class="grid se-grid-3">
   <div class="field"><label for="st-title">Stage name</label><input id="st-title" data-stage-field="title" maxlength="85" value="${esc(st.title)}"><span class="muted">Shown in the stage list</span></div>
@@ -507,8 +554,7 @@ function renderFields(){
  <div class="se-more-head"><h3>More settings</h3><span class="muted">Optional. Leave closed to use the defaults.</span></div>
  ${sec('damage','Damage','Mistakes, overflow, comets',damageSettings(st))}
  ${sec('music','Music','Battle music for this stage',musicEditor(st))}
- ${special?sec('special',{'1':'The Rift · Special Mechanics','2':'Valcrest · Special Mechanics','3':'Vesper · Special Mechanics'}[String(ch.id)],'Only for this territory',special):''}
- ${sec('words','Word effects','Extra word mechanics',mechanicMarkup(st))}
+ ${sec('effects','Stage effects',effectCount?`${effectCount} active`:'None — add sleepiness, poison, armored words…',effectsMarkup(st,ch))}
  ${sec('template','Battle template','Base difficulty preset',`<div class="field"><label for="st-template">Template</label><select id="st-template" data-battle-field="template">${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(st.battle?.template||1)===n?'selected':''}>${n}</option>`).join('')}</select></div>`)}
  <p class="muted se-id">Stage ID ${esc(st.id)} · changes reach students after you press Publish.</p></section>`;
  fillLiveValues()
@@ -584,6 +630,29 @@ function editorAction(event){const btn=event.target.closest('button[data-action]
    if(ch.id==='1'){target.battle.mechanics ||= {};target.battle.mechanics.panic ||= {};target.battle.mechanics.panic.damage=panic;}
   }
   markDirty();renderFields();status(a==='copy-damage'?`Damage copied to ${targets.length} battle stages. Save Draft or Publish.`:'Damage reset to defaults. Save Draft or Publish.',false,true);return;
+ }
+ if(a&&a.startsWith('effect-')&&st){
+  const id=btn.dataset.effect,m=catalog().find(x=>x.id===id);if(!m)return;
+  st.battle.mechanics ||= {};let msg='';
+  if(a==='effect-add'){
+   st.battle.mechanics[id]={...(st.battle.mechanics[id]||{}),enabled:true};
+   const need=EFFECT_NEEDS[id];let extra='';
+   if(need&&!effectOn(catalog().find(x=>x.id===need)||{id:need,fields:[]},st)){st.battle.mechanics[need]={...(st.battle.mechanics[need]||{}),enabled:true};extra=` (${need} turned on too — it needs it)`;}
+   openEffect=id;effectPickerOpen=false;msg=`${effectLabel(m)} added to ${st.id}${extra}. Save Draft or Publish.`;
+  }else if(a==='effect-remove'){
+   st.battle.mechanics[id]={enabled:false};
+   for(const [dep,need] of Object.entries(EFFECT_NEEDS))if(need===id&&st.battle.mechanics[dep]?.enabled!==false&&effectOn(catalog().find(x=>x.id===dep)||{id:dep,fields:[]},st))st.battle.mechanics[dep]={enabled:false};
+   if(openEffect===id)openEffect='';msg=`${effectLabel(m)} removed from ${st.id}. Save Draft or Publish.`;
+  }else if(a==='effect-reset'){st.battle.mechanics[id]={enabled:true};msg=`${effectLabel(m)} reset to defaults. Save Draft or Publish.`;}
+  else if(a==='effect-edit'){openEffect=openEffect===id?'':id;renderFields();return;}
+  markDirty();renderFields();if(msg)status(msg,false,true);return;
+ }
+ if(a==='copy-effects'){
+  if(!st)return;const ids=(TERRITORY_EFFECTS[String(ch.id)]||[]).concat(effectsFor(ch).map(m=>m.id)).filter((v,i,arr)=>arr.indexOf(v)===i);
+  if(!confirm(`Copy this stage's effects from ${st.id} to every stage in ${territoryName(ch.id)}? Their effects will be replaced.`))return;
+  for(const target of battleStages(ch)){if(target===st)continue;target.battle.mechanics ||= {};
+   for(const id of ids){if(st.battle.mechanics?.[id])target.battle.mechanics[id]=JSON.parse(JSON.stringify(st.battle.mechanics[id]));else delete target.battle.mechanics[id];}}
+  markDirty();renderFields();status(`Effects copied from ${st.id} to the other stages. Save Draft or Publish.`,false,true);return;
  }
  if(a==='copy-ch1-mechanics'){
   if(ch.id!=='1'||!st)return;
