@@ -1,9 +1,10 @@
 /* Guided first-time tutorial (v148.9).
-   Lessons 1–3 run on a battle screen that uses the SAME stylesheets and layout as
-   Normal Mode (Stage 1 · Sporemaw), so students meet exactly what they will see later.
-   Lesson 4 is the REAL Mode Select (adventure.html) with guard rails, followed by the
-   REAL Recruitment page (recruitment.html?tutorial=1) — see tutorial-guide.js.
-   Training never awards HP, XP, Guild Coins or rankings; only the free first 10-pull is real.
+   Lessons 1–4 run on a battle screen that uses the SAME stylesheets and layout as Normal
+   Mode, so students meet exactly what they will see later:
+     1 Type a word   · 2 Taking damage · 3 Falling words · 4 Defeat the boss
+   Lesson 5 is the REAL Mode Select + Recruitment with guard rails (tutorial-guide.js).
+   Saved checkpoints (Firestore tutorial.step): 2 after Lesson 2, 3 after Lesson 3,
+   4 after Lesson 4. Training never awards HP, XP, Guild Coins or rankings.
 */
 const $=id=>document.getElementById(id);
 const query=new URLSearchParams(location.search);
@@ -13,57 +14,65 @@ const replay=query.has('replay')||demo;
 const context=demo?(window.RPG_TUTORIAL_DEMO_CONTEXT||{}):(()=>{try{return JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}')}catch{return {}}})();
 const cloud=window.RPG_V66;
 const code=context.card_code;
+const TOTAL=5;
 const samples={
   1:[{prompt:'りんご',answer:'apple'}],
-  2:[{prompt:'ねこ',answer:'cat'},{prompt:'たいよう',answer:'sun'},{prompt:'ほん',answer:'book'}],
-  3:[{prompt:'みどり',answer:'green'},{prompt:'みず',answer:'water'},{prompt:'うれしい',answer:'happy'}]
+  2:[{prompt:'りんご',answer:'apple'}],
+  3:[{prompt:'ねこ',answer:'cat'},{prompt:'たいよう',answer:'sun'},{prompt:'ほん',answer:'book'}],
+  4:[{prompt:'みどり',answer:'green'},{prompt:'みず',answer:'water'},{prompt:'うれしい',answer:'happy'}]
 };
-const titles={1:'Type a word',2:'Falling words',3:'Defeat the boss',4:'Recruitment'};
-const hints={
-  1:'Each word shows Japanese on the left and its English on the right. Type apple, then press Enter.',
-  2:'Words fall toward the bottom. Type each English word before it lands.',
-  3:'Every correct word hits the boss. Clear all three words to defeat it!',
-  4:'Select Recruitment to get your first ten characters.'
-};
-// Spotlight targets per lesson. Presentation only; never moves anything.
-const focusMap={
-  1:['#trainingWord','.inputBar','#trainingCoach'],
-  2:['#trainingWord','.inputBar','#trainingCoach','.wordLane'],
-  3:['#trainingWord','.inputBar','#trainingCoach','.wordLane','#bossWrap','#storyStatusPanel']
-};
+const titles={1:'Type a word',2:'Taking damage',3:'Falling words',4:'Defeat the boss'};
+// Firestore checkpoint saved when a lesson is finished (Lesson 1 continues straight into 2).
+const saveStepAfter={2:2,3:3,4:4};
+const lessonForStep=s=>s>=3?4:s>=2?3:1;
+
 let stage=1,stepCount=0,playerHP=10,bossHP=3,misses=0,score=0,frameId=null,startMs=0,busy=false;
+let phase='';            // sub-step inside a lesson
+let focusSel=[];         // spotlight cut-outs for the current sub-step
+let onNext=null;
 const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function log(message){$('messageLog').textContent=message||'';}
 function status(message){$('status').textContent=message||'';}
+const input=()=>$('answerInput');
 
-// One translucent veil with rectangular cutouts. It never captures clicks or moves elements.
+// ---- coach + spotlight -----------------------------------------------------------
+function coach({title,text,next=null,enter=false,focus=[]}){
+ if(title)$('lessonTitle').textContent=title;
+ $('lessonObjective').textContent=text||'';
+ $('enterKey').hidden=!enter;$('enterKey').querySelector('.tutorial-keycap').classList.remove('is-pressed');
+ onNext=next;$('coachNext').hidden=!next;
+ focusSel=focus;startSpotlight();
+ if(next)setTimeout(()=>$('coachNext').focus({preventScroll:true}),30);
+}
+$('coachNext').addEventListener('click',()=>{const f=onNext;onNext=null;$('coachNext').hidden=true;f?.();});
 const spotlightCanvas=$('tutorialSpotlight');
 const spotlightContext=spotlightCanvas?.getContext('2d');
 let spotlightFrame=null,lastSpotlightPaint=0;
+const OUTLINED=new Set(['#trainingWord','.inputBar','#trainingWord .answer','#tutorialPlayerRow','#overflowBadge','#storyBossHpRow']);
 function stopSpotlight(){
  if(spotlightFrame!==null)cancelAnimationFrame(spotlightFrame);
  spotlightFrame=null;
  if(spotlightCanvas)spotlightCanvas.hidden=true;
 }
 function drawSpotlight(timestamp=0){
- if(!spotlightContext||stage>3||$('tutorialApp').hidden){stopSpotlight();return;}
+ if(!spotlightContext||stage>4||$('tutorialApp').hidden){stopSpotlight();return;}
  // Limit full-screen repaint work on school Chromebooks while tracking falling words.
- const interval=stage===1?140:42;
+ const interval=frameId===null?140:42;
  if(timestamp-lastSpotlightPaint<interval){spotlightFrame=requestAnimationFrame(drawSpotlight);return;}
  lastSpotlightPaint=timestamp;
  const vw=window.innerWidth,vh=window.innerHeight;
  if(spotlightCanvas.width!==vw||spotlightCanvas.height!==vh){spotlightCanvas.width=vw;spotlightCanvas.height=vh;}
  spotlightContext.clearRect(0,0,vw,vh);
- spotlightContext.fillStyle='rgba(5, 8, 12, 0.62)';
+ spotlightContext.fillStyle='rgba(5, 8, 12, 0.64)';
  spotlightContext.fillRect(0,0,vw,vh);
  const targets=[];
- for(const selector of focusMap[stage]||[]){
+ for(const selector of ['#trainingCoach',...focusSel]){
   for(const element of document.querySelectorAll(selector)){
    if(!element.getClientRects().length||element.hidden)continue;
-   const r=element.getBoundingClientRect(),pad=4;
+   const r=element.getBoundingClientRect(),pad=selector==='#trainingWord .answer'?6:4;
    const left=Math.max(0,r.left-pad),top=Math.max(0,r.top-pad),right=Math.min(vw,r.right+pad),bottom=Math.min(vh,r.bottom+pad);
    if(right<=left||bottom<=top)continue;
-   targets.push({x:left,y:top,w:right-left,h:bottom-top,outline:['#trainingWord','.inputBar'].includes(selector)});
+   targets.push({x:left,y:top,w:right-left,h:bottom-top,outline:OUTLINED.has(selector)});
   }
  }
  for(const r of targets)spotlightContext.clearRect(r.x,r.y,r.w,r.h);
@@ -72,14 +81,16 @@ function drawSpotlight(timestamp=0){
  spotlightFrame=requestAnimationFrame(drawSpotlight);
 }
 function startSpotlight(){
- if(!spotlightContext||stage>3)return stopSpotlight();
+ if(!spotlightContext||stage>4)return stopSpotlight();
  spotlightCanvas.hidden=false;
  if(spotlightFrame===null)spotlightFrame=requestAnimationFrame(drawSpotlight);
 }
+
+// ---- battle helpers ---------------------------------------------------------------
 function stop(){if(frameId!==null){cancelAnimationFrame(frameId);frameId=null;}}
 function routeMenu(){
  if(demo){location.replace('tutorial-preview.html?demo=1');return;}
- // Lesson 4 happens on the REAL Mode Select; the engine adds the guard rails.
+ // Lesson 5 happens on the REAL Mode Select; the engine adds the guard rails.
  sessionStorage.setItem('rpgReturnToAdventureModeSelect','1');
  location.replace('adventure.html?card='+encodeURIComponent(code||''));
 }
@@ -89,62 +100,96 @@ function updateBars(){
  $('mistakesText').textContent=String(misses);$('scoreText').textContent=String(score);
 }
 function updateProgress(){$('progressText').textContent=`${stepCount} / ${(samples[stage]||[]).length} words cleared`;}
-function nextWord(){
- stop();const record=samples[stage]?.[stepCount];if(!record){if(stage<=3)void advance();return;}
- const lane=$('wordLane');lane.replaceChildren();
- // Same markup as a real Normal Mode word.
+function flashDamage(){const f=$('damageFlash');f.classList.remove('show');void f.offsetWidth;f.classList.add('show');setTimeout(()=>f.classList.remove('show'),320);}
+function setInput({enabled=true,value='',readOnly=false}={}){
+ const el=input();el.disabled=!enabled;el.readOnly=readOnly;el.value=value;
+ if(enabled)setTimeout(()=>el.focus({preventScroll:true}),30);
+}
+// Same markup as a real Normal Mode word.
+function spawnWord(record,{falling=false}={}){
+ stop();const lane=$('wordLane');lane.replaceChildren();
  const word=document.createElement('div');word.className='word';word.id='trainingWord';
  word.innerHTML=`<div class="prompt">${escapeHtml(record.prompt)}</div><div class="right"><span class="tag"></span><span class="answer muted">${escapeHtml(record.answer)}</span></div>`;
  word.style.setProperty('--y','18px');
  lane.appendChild(word);
- startSpotlight();
- $('answerInput').value='';$('answerInput').disabled=false;$('answerInput').focus({preventScroll:true});
- updateProgress();
- if(stage===1)return;
+ if(!falling)return word;
  startMs=performance.now();
- const travel=stage===2?18000:14500;
+ const travel=stage===3?16000:13000;
+ let landed=false;
  function tick(ts){
-  if(stage===1||busy||!word.isConnected)return;
+  if(busy||!word.isConnected){frameId=null;return;}
   const distance=Math.max(10,lane.clientHeight-word.getBoundingClientRect().height-20);
   const y=18+Math.min(1,(ts-startMs)/travel)*Math.max(0,distance-18);
   word.style.setProperty('--y',`${y}px`);
-  if(ts-startMs>=travel){
-   if(stage===3){playerHP=Math.max(1,playerHP-1);updateBars();flashDamage();log('A word reached the bottom! You lost 1 HP. Try again.');}
-   else log('A word reached the bottom. Try again!');
-   startMs=ts;
+  if(!landed&&ts-startMs>=travel){
+   landed=true;word.classList.add('landed');
+   // Real rule: a landed word piles up at the bottom (no damage until OVERFLOW).
+   log('It landed at the bottom — you can still type it!');
   }
-  frameId=requestAnimationFrame(tick);
+  frameId=landed?null:requestAnimationFrame(tick);
  }
  frameId=requestAnimationFrame(tick);
+ return word;
 }
-function flashDamage(){const f=$('damageFlash');f.classList.remove('show');void f.offsetWidth;f.classList.add('show');setTimeout(()=>f.classList.remove('show'),260);}
+function clearWord(){stop();$('wordLane').replaceChildren();}
+
+// ---- lessons ----------------------------------------------------------------------
 function lesson(i){
- stop();stage=i;stepCount=0;playerHP=10;bossHP=3;busy=false;
- $('retryTutorialSave').hidden=true;
- $('stepCounter').textContent=`LESSON ${String(i).padStart(2,'0')} / 04`;
+ stop();stage=i;stepCount=0;busy=false;phase='';
+ bossHP=3;
+ $('retryTutorialSave').hidden=true;$('overflowBadge').classList.remove('show');
+ $('stepCounter').textContent=`LESSON ${String(i).padStart(2,'0')} / ${String(TOTAL).padStart(2,'0')}`;
  $('stageName').textContent=`Lesson ${i}`;
- $('lessonTitle').textContent=titles[i];$('lessonObjective').textContent=hints[i];
- $('answerInput').disabled=i===4;
- log('');status('');
- $('wordLane').replaceChildren();
- updateBars();updateProgress();
- if(i===4){
+ $('lessonTitle').textContent=titles[i]||'';
+ log('');status('');clearWord();updateBars();updateProgress();
+ if(i>=5){
   // The live tutorial continues on the real Mode Select. Only the teacher preview
   // (no player account) keeps a stand-in menu.
   if(!demo){routeMenu();return;}
   showDemoModeSelect();return;
  }
- nextWord();
+ ({1:lesson1,2:lesson2,3:fallingLesson,4:fallingLesson})[i]();
+}
+function lesson1(){
+ spawnWord(samples[1][0]);setInput({enabled:false});
+ phase='l1-answer';
+ coach({title:'Type a word',focus:['#trainingWord .answer'],
+  text:'Every word shows Japanese on the left and its English answer on the right. The English word is important — it is exactly what you type!',
+  next:()=>{
+   phase='l1-type';setInput({enabled:true});
+   coach({focus:['.inputBar','#trainingWord'],text:'This is where you type. Click the box and type apple.'});
+  }});
+}
+function lesson2(){
+ spawnWord(samples[2][0]);
+ phase='l2-wrong';
+ setInput({enabled:true,value:'aple',readOnly:true});
+ coach({title:'Taking damage',focus:['.inputBar','#trainingWord'],enter:true,
+  text:'What happens if you make a mistake? Someone typed "aple" instead of "apple". Press ENTER and watch your HP.'});
+}
+function fallingLesson(){
+ phase='falling';
+ const isBoss=stage===4;
+ coach({title:titles[stage],focus:isBoss?['#trainingWord','.inputBar','.wordLane','#bossWrap','#storyStatusPanel']:['#trainingWord','.inputBar','.wordLane'],
+  text:isBoss?'Every correct word hits the boss. Clear all three words to defeat it!':'Words fall toward the bottom. Type each English word and press ENTER to clear it.'});
+ nextFallingWord();
+}
+function nextFallingWord(){
+ const record=samples[stage]?.[stepCount];if(!record){void advance();return;}
+ spawnWord(record,{falling:true});setInput({enabled:true});updateProgress();
 }
 async function advance(){
- if(busy||stage>3)return;
- busy=true;stop();$('answerInput').disabled=true;
- $('retryTutorialSave').hidden=true;status('Saving lesson progress…');
+ if(busy)return;
+ busy=true;stop();input().disabled=true;
+ const finished=stage,save=saveStepAfter[finished];
+ $('retryTutorialSave').hidden=true;
+ if(!save){status('');log('Lesson complete!');await new Promise(r=>setTimeout(r,700));busy=false;lesson(finished+1);return;}
+ status('Saving lesson progress…');
  try{
-  if(!replay)await cloud.call('/api/tutorial/progress',{card_code:code,step:stage+1});
+  if(!replay)await cloud.call('/api/tutorial/progress',{card_code:code,step:save});
   status('');log('Lesson complete!');
-  await new Promise(r=>setTimeout(r,650));
-  lesson(stage+1);
+  await new Promise(r=>setTimeout(r,700));
+  busy=false;lesson(finished+1);
  }catch(e){
   busy=false;
   log('Lesson cleared. Progress could not be confirmed: '+String(e?.message||e));
@@ -153,10 +198,65 @@ async function advance(){
   $('retryTutorialSave').focus({preventScroll:true});
  }
 }
-$('retryTutorialSave').addEventListener('click',()=>void advance());
+$('retryTutorialSave').addEventListener('click',()=>{busy=false;void advance();});
+
+// Lesson 1: the Enter key appears once "apple" is typed.
+input().addEventListener('input',()=>{
+ if(stage!==1)return;
+ const ok=input().value.trim().toLowerCase()==='apple';
+ if(phase==='l1-type'&&ok){phase='l1-enter';coach({focus:['.inputBar','#trainingWord'],enter:true,text:'Perfect! Now press the ENTER key on your keyboard.'});}
+ else if(phase==='l1-enter'&&!ok){phase='l1-type';coach({focus:['.inputBar','#trainingWord'],text:'Type apple in the box.'});}
+});
+
+$('answerForm').addEventListener('submit',e=>{
+ e.preventDefault();if(busy)return;
+ const value=input().value.trim().toLowerCase();
+ const keycap=$('enterKey').querySelector('.tutorial-keycap');keycap.classList.add('is-pressed');
+ if(stage===1){
+  if(phase!=='l1-enter'||value!=='apple'){log('Type apple exactly, then press ENTER.');keycap.classList.remove('is-pressed');return;}
+  stepCount=1;score+=100;updateBars();updateProgress();clearWord();input().value='';
+  log('Correct! The word is cleared.');coach({focus:[],text:'Great job! Correct words disappear and give you points.'});
+  void advance();return;
+ }
+ if(stage===2){
+  if(phase==='l2-wrong'){
+   // Same rule as the real game: a wrong answer is a miss and costs 1 HP.
+   misses++;playerHP=Math.max(1,playerHP-1);updateBars();flashDamage();input().value='';input().readOnly=true;
+   log('MISS: aple');phase='l2-hp';
+   coach({focus:['#tutorialPlayerRow'],
+    text:'Ouch! A wrong answer is a MISS and costs 1 HP (10 → 9). If your HP reaches 0, the run is over.',
+    next:()=>{
+     phase='l2-overflow';$('overflowBadge').classList.add('show');
+     coach({focus:['.wordLane','#overflowBadge'],
+      text:'Words that reach the bottom pile up. If the pile reaches the top, you get OVERFLOW and lose 1 HP every second until you clear words.',
+      next:()=>{
+       $('overflowBadge').classList.remove('show');phase='l2-fix';setInput({enabled:true});
+       coach({focus:['.inputBar','#trainingWord'],enter:true,text:'Now type apple correctly and press ENTER to clear it.'});
+      }});
+    }});
+   return;
+  }
+  if(phase!=='l2-fix')return;
+  if(value!=='apple'){log('Not quite! Type apple, then press ENTER.');keycap.classList.remove('is-pressed');input().select();return;}
+  stepCount=1;score+=100;updateBars();clearWord();log('Correct!');void advance();return;
+ }
+ // Lessons 3–4: falling words. Mistakes here are free (practice).
+ const current=samples[stage]?.[stepCount];if(!current)return;
+ if(value!==current.answer){misses++;updateBars();log('Not quite! Check the English word and try again.');input().select();return;}
+ stop();stepCount++;score+=100;
+ if(stage===4){
+  bossHP=Math.max(0,3-stepCount);
+  const boss=$('bossImg');boss.classList.remove('bossFlash');void boss.offsetWidth;boss.classList.add('bossFlash');
+ }
+ updateBars();updateProgress();log('Correct!');clearWord();input().value='';
+ if(stepCount>=samples[stage].length)void advance();else nextFallingWord();
+});
+// Keep typing focused on the answer box, like the real battle.
+document.addEventListener('pointerdown',e=>{if(stage<=4&&!busy&&!e.target.closest('button')&&!input().disabled)setTimeout(()=>input().focus({preventScroll:true}),0);});
+
 // Teacher preview only: a stand-in for the real Mode Select (no account to open it with).
 function showDemoModeSelect(){
- stopSpotlight();
+ stopSpotlight();$('trainingCoach').hidden=true;
  const choices=$('tutorialModeChoices');choices.replaceChildren();
  for(const title of ['Normal Mode','Practice','???','???','Recruitment','Collection','Rankings']){
   const button=document.createElement('button');
@@ -173,26 +273,9 @@ function showDemoModeSelect(){
 }
 function completed(){
  stop();stopSpotlight();$('tutorialFinishOverlay').classList.add('show');$('tutorialFinishOverlay').setAttribute('aria-hidden','false');
- $('stepCounter').textContent='COMPLETE';$('wordLane').replaceChildren();$('answerInput').disabled=true;
+ $('stepCounter').textContent='COMPLETE';clearWord();input().disabled=true;
  $('finishBtn').onclick=routeMenu;$('finishBtn').focus({preventScroll:true});
 }
-$('answerForm').addEventListener('submit',e=>{
- e.preventDefault();if(busy||stage>3)return;
- const current=samples[stage]?.[stepCount];if(!current)return;
- if($('answerInput').value.trim().toLowerCase()!==current.answer){
-  misses++;updateBars();log('Not quite! Check the English word and try again.');$('answerInput').select();return;
- }
- stop();stepCount++;score+=100;
- if(stage===3){
-  bossHP=Math.max(0,3-stepCount);
-  const boss=$('bossImg');boss.classList.remove('bossFlash');void boss.offsetWidth;boss.classList.add('bossFlash');
- }
- updateBars();updateProgress();
- log('Correct!');$('wordLane').replaceChildren();
- if(stepCount>=samples[stage].length)void advance();else nextWord();
-});
-// Keep typing focused on the answer box, like the real battle.
-document.addEventListener('pointerdown',e=>{if(stage<=3&&!busy&&!e.target.closest('button'))setTimeout(()=>$('answerInput').focus({preventScroll:true}),0);});
 function fillPlayer(){
  $('playerLabel').textContent=String(context.name||'Player').slice(0,16);
  const op=String(context.selected_character||'mc');
@@ -207,9 +290,9 @@ async function start(){
   $('loading').hidden=true;$('tutorialApp').hidden=false;
   if(query.has('complete')&&(data.complete||demo)){completed();return;}
   if(data.complete&&!replay){routeMenu();return;}
-  // Lessons 1–3 done: continue on the real Mode Select (it resumes Recruitment too).
+  // Lessons 1–4 done: continue on the real Mode Select (it resumes Recruitment too).
   if(!replay&&data.step>=4){routeMenu();return;}
-  lesson(replay?1:Math.max(1,Math.min(3,Number(data.step)||1)));
+  lesson(replay?1:lessonForStep(Number(data.step)||1));
  }catch(e){$('loading').textContent=e?.message||String(e);}
 }
 void start();

@@ -74,6 +74,68 @@
   d.querySelectorAll('[data-step]').forEach(b=>b.disabled=items.length<2);
   if(!d.contains(document.activeElement))d.querySelector('[data-close]').focus({preventScroll:true});
   window.RPG_AURA?.refresh?.();
+  if(guideStep==='pick'){guideStep='aura';guideChar=c.id;setTimeout(guideAura,450);}
+ }
+
+ // ---- First-visit guide (runs once, right after the first-time tutorial) ------------
+ const G=()=>window.RPG_TUTORIAL_GUIDE,KG='GUIDE · COLLECTION';
+ let guideStep='',guideChar='',freeAura=false;
+ const pid=()=>String(player?.public_id||'');
+ function startGuide(){
+  const g=G();if(!g||!pid()||!g.pending(pid()).includes('collection')||player?.tutorial?.collectionGuide===true)return;
+  filter='all';ownedOnly=false;$('ownedOnly').checked=false;render();
+  guideStep='owned';
+  g.show({target:()=>$('grid').querySelector('.cl-card:not(.is-locked)'),kicker:KG,title:'Your characters',
+   text:'Cards in colour are characters you own. COPIES shows how many times you recruited them.',
+   button:{label:'NEXT ▸',onClick:guideLocked}});
+ }
+ function guideLocked(){
+  const locked=$('grid').querySelector('.cl-card.is-locked');
+  if(!locked){guidePick();return;}
+  locked.scrollIntoView({block:'nearest'});
+  G().show({target:()=>$('grid').querySelector('.cl-card.is-locked'),kicker:KG,title:'Not recruited yet',
+   text:'Grey cards with a lock are characters you have not recruited yet. Keep recruiting to unlock them!',
+   button:{label:'NEXT ▸',onClick:guidePick}});
+ }
+ function guidePick(){
+  guideStep='pick';
+  // Show only the operators they can pick: owned 4★ (or any owned one if they have no 4★).
+  const has4=catalog.some(c=>c.rarity===4&&owned(c.id)>0);
+  filter=has4?'4':'all';ownedOnly=true;$('ownedOnly').checked=true;render();window.scrollTo({top:0});
+  G().show({target:()=>[...$('grid').querySelectorAll('.cl-card:not(.is-locked)')],park:true,kicker:KG,title:'Open a character',
+   text:has4?'Tap any 4★ character you own to open their file.':'Tap any character you own to open their file.'});
+ }
+ function guideAura(){
+  G().show({target:'#dAuras',kicker:KG,title:'Auras',
+   text:'AURAS make your character glow in battle. Unlocking one costs shards — you get shards when you recruit a character you already have.',
+   button:{label:'NEXT ▸',onClick:guideFree}});
+ }
+ function guideFree(){
+  const c=catOf(guideChar);
+  const canGift=c&&c.rarity===4&&auraOf(c.id).level===0&&player?.recruitment?.tutorialAuraFree!==true;
+  if(!canGift){guideBack();return;}
+  freeAura=true;renderAura(c);
+  G().show({target:()=>$('dAuras').querySelector('[data-tier="1"]'),kicker:KG,title:'A free gift!',
+   text:'You don\'t have enough shards yet, so here is a FREE upgrade. Tap WHITE to unlock your first aura.'});
+ }
+ function guideEquipped(){
+  G().show({target:'#dArt',kicker:KG,title:'Aura unlocked!',
+   text:'Your character now glows with the WHITE aura in battle. Tap any unlocked aura to switch, or NONE to turn it off.',
+   button:{label:'NEXT ▸',onClick:guideBack}});
+ }
+ function guideFreeFailed(){
+  G().show({kicker:KG,title:'Gift not saved',text:'The free aura could not be saved right now. Ask your teacher — you can still unlock auras later with shards.',
+   button:{label:'NEXT ▸',onClick:guideBack}});
+ }
+ function guideBack(){
+  guideStep='back';
+  G().show({target:'#detail [data-close]',kicker:KG,title:'Go back',text:'Tap ‹ to go back to all your characters.'});
+ }
+ function guideExit(){
+  guideStep='exit';filter='all';ownedOnly=false;$('ownedOnly').checked=false;render();
+  G().done(pid(),'collection',code);
+  try{sessionStorage.setItem('rpgTutorialJustDone','1');}catch(_){}
+  G().show({target:'.cl-back',kicker:KG,title:'Back to Mode Select',text:'That\'s it! Tap ‹ MODE SELECT to go back.'});
  }
 
  // ---- Aura row (former Aura Workshop) -------------------------------------------
@@ -90,28 +152,32 @@
   $('dBank').innerHTML=`<i class="cl-gem r${r}" aria-hidden="true"></i>${have} <small>${r}★ SHARD${have===1?'':'S'}</small>`;
   $('dAuras').innerHTML=NAMES.map((nm,i)=>{
    const st=tierState(i,a),cost=core?core.cost(r,i):0;
-   const sub=st==='equipped'?'✓ ON':st==='owned'?'EQUIP':st==='next'?(armed===i?'CONFIRM':`<i class="cl-gem r${r}" aria-hidden="true"></i>${cost}`):'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+   const gift=freeAura&&c.id===guideChar&&st==='next'&&i===1;
+   const sub=gift?'FREE':st==='equipped'?'✓ ON':st==='owned'?'EQUIP':st==='next'?(armed===i?'CONFIRM':`<i class="cl-gem r${r}" aria-hidden="true"></i>${cost}`):'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
    const label=`${i?nm.charAt(0)+nm.slice(1).toLowerCase()+' aura':'No aura'}: ${st==='equipped'?'equipped':st==='owned'?'tap to equip':st==='next'?`unlock for ${cost} ${r}-star shard${cost===1?'':'s'}`:'locked'}`;
-   return `<button type="button" class="cl-aura is-${st}${armed===i?' is-armed':''}${st==='next'&&have<cost?' is-short':''}" data-tier="${i}" style="--aura:${core?.colors?.[i]||'#999'}" aria-pressed="${st==='equipped'}" aria-label="${esc(label)}"${working?' disabled':''}>
+   return `<button type="button" class="cl-aura is-${st}${armed===i?' is-armed':''}${st==='next'&&have<cost&&!gift?' is-short':''}" data-tier="${i}" style="--aura:${core?.colors?.[i]||'#999'}" aria-pressed="${st==='equipped'}" aria-label="${esc(label)}"${working?' disabled':''}>
     <span class="cl-orb t${i}" aria-hidden="true"></span><b>${i?nm:'NONE'}</b><small>${sub}</small></button>`;
   }).join('');
  }
- async function saveAura(action,target){
+ async function saveAura(action,target,free=false){
   const c=catOf(openId);if(!c)return;
   working=true;renderAura(c);auraMsg('Saving…');
   try{
-   const r=await cloud.call('/api/aura/change',{card_code:code,character_id:c.id,action,target});
+   const r=await cloud.call('/api/aura/change',{card_code:code,character_id:c.id,action,target,...(free?{free:true}:{})});
+   if(free){freeAura=false;player.recruitment.tutorialAuraFree=true;}
    for(const f of ['shards','shards5','shards6'])if(Number.isFinite(Number(r[f])))player.recruitment[f]=Number(r[f]);
    player.recruitment.auras=r.auras;window.RPG_AURA?.setPlayer?.(player);
    auraMsg(action==='upgrade'?`${NAMES[r.level]} aura unlocked and equipped.`:`${r.equipped?NAMES[r.equipped]+' aura':'No aura'} equipped.`,'ok');
    const art=$('dArt');art.classList.remove('is-flash');void art.offsetWidth;art.classList.add('is-flash');
   }catch(e){
    auraMsg('Could not save · '+(e?.message||'Try again.'),'error');
+   if(free){freeAura=false;setTimeout(guideFreeFailed,60);}
    try{player=await cloud.call('/api/profile',{card_code:code});window.RPG_AURA?.setPlayer?.(player);}catch{}
   }finally{
    working=false;armed=-1;hover=null;clearTimeout(armTimer);showAura(null);render();
    if(!$('detail').hidden){renderAura(c);$('dCopies').textContent=`RECRUITED ×${owned(c.id)}`;}
    $('dAuras').querySelector(`[data-tier="${target}"]`)?.focus({preventScroll:true});
+   if(free&&player.recruitment.tutorialAuraFree===true)setTimeout(guideEquipped,250);
   }
  }
  function auraTap(i){
@@ -120,6 +186,7 @@
   if(st==='equipped'){auraMsg(i?`${NAMES[i]} aura is already equipped.`:'No aura is equipped.');return;}
   if(st==='owned'){void saveAura('equip',i);return;}
   if(st==='locked'){armed=-1;auraMsg(`Unlock ${NAMES[a.level+1]} first · auras unlock in order.`);renderAura(c);return;}
+  if(freeAura&&c.id===guideChar&&i===1&&st==='next'){void saveAura('upgrade',1,true);return;} // guide gift: one tap
   const cost=core.cost(r,i),have=core.balance(player.recruitment,r);
   if(have<cost){auraMsg(`Need ${cost-have} more ${r}★ shard${cost-have===1?'':'s'} · get them from duplicate ${r}★ recruits.`,'error');return;}
   if(armed!==i){ // first tap arms the purchase for 4 seconds
@@ -133,7 +200,7 @@
   const d=$('detail');if(d.hidden)return;
   armed=-1;hover=null;clearTimeout(armTimer);showAura(null);
   d.classList.add('is-leaving');
-  setTimeout(()=>{d.hidden=true;d.classList.remove('is-leaving');document.body.classList.remove('cl-open');lastFocus?.focus?.({preventScroll:true});},180);
+  setTimeout(()=>{d.hidden=true;d.classList.remove('is-leaving');document.body.classList.remove('cl-open');lastFocus?.focus?.({preventScroll:true});if(guideStep==='back')guideExit();},180);
  }
  function step(n){const items=viewable();if(items.length<2)return;openDetail(items[(current+n+items.length)%items.length].id);}
 
@@ -174,7 +241,8 @@
   code=String(context.card_code||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
   if(!/^[A-HJ-NP-Z2-9]{16}$/.test(code)){notice('Open Adventure with your card first.');return;}
   try{player=await cloud.call('/api/profile',{card_code:code});window.RPG_AURA?.setPlayer?.(player);render();
-   const want=new URLSearchParams(location.search).get('op');if(safeId(want)&&owned(want)>0)openDetail(want);}
+   const want=new URLSearchParams(location.search).get('op');if(safeId(want)&&owned(want)>0)openDetail(want);
+   else setTimeout(startGuide,500);}
   catch(e){notice(e?.message||'Could not load your operators.');}
  }
  void initialize();

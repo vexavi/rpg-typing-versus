@@ -8,12 +8,14 @@
  'use strict';
  let cur=null;
  const BLOCKED=['pointerdown','pointerup','mousedown','mouseup','click','dblclick','auxclick','contextmenu','touchstart','touchend','submit'];
- const targetEl=()=>{try{const t=cur?.target;const el=typeof t==='function'?t():typeof t==='string'?document.querySelector(t):t;return el&&el.isConnected?el:null;}catch(_){return null;}};
+ // A target may be an element, a selector, or a function returning one element or a list.
+ const targetEls=()=>{try{const t=cur?.target;let v=typeof t==='function'?t():typeof t==='string'?[...document.querySelectorAll(t)]:t;
+  v=Array.isArray(v)?v:v?[v]:[];return v.filter(el=>el&&el.isConnected&&el.getClientRects().length);}catch(_){return [];}};
+ const targetEl=()=>targetEls()[0]||null;
  function allowed(node){
   if(!cur||!node||!(node instanceof Node))return !cur;
   if(cur.coach.contains(node))return true;
-  const t=targetEl();
-  return !!(cur.allowTarget&&t&&(t===node||t.contains(node)));
+  return cur.allowTarget&&targetEls().some(t=>t===node||t.contains(node));
  }
  function onPointer(e){
   if(!cur)return;
@@ -28,6 +30,7 @@
  function onKey(e){
   if(!cur)return;
   if(allowed(document.activeElement)&&(e.key==='Enter'||e.key===' '))return;
+  if(cur.allowKeys.includes(e.key))return; // e.g. ESC during the pause guide
   if(e.key==='Tab'){ // keep keyboard focus on the guided controls
    e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
    const order=[cur.allowTarget?targetEl():null,...cur.coach.querySelectorAll('button')].filter(Boolean);
@@ -43,16 +46,22 @@
   if(veil.width!==vw||veil.height!==vh){veil.width=vw;veil.height=vh;}
   ctx.clearRect(0,0,vw,vh);
   if(cur.dim){ctx.fillStyle='rgba(4,6,12,.72)';ctx.fillRect(0,0,vw,vh);}
-  const t=targetEl();
-  if(!t||!t.getClientRects().length){
+  const els=targetEls();
+  if(!els.length){
    coach.style.left=Math.max(12,(vw-coach.offsetWidth)/2)+'px';coach.style.top=Math.max(12,(vh-coach.offsetHeight)/2)+'px';arrow.hidden=true;return;
   }
-  const r=t.getBoundingClientRect(),pad=6;
-  const x=Math.max(0,r.left-pad),y=Math.max(0,r.top-pad),w=Math.min(vw,r.right+pad)-x,h=Math.min(vh,r.bottom+pad)-y;
-  ctx.clearRect(x,y,w,h);
-  ctx.strokeStyle='#fff200';ctx.lineWidth=4;ctx.strokeRect(x+2,y+2,w-4,h-4);
+  const pad=6;let r={left:Infinity,top:Infinity,right:-Infinity,bottom:-Infinity};
+  ctx.strokeStyle='#fff200';ctx.lineWidth=4;
+  for(const el of els){
+   const q=el.getBoundingClientRect();
+   const x=Math.max(0,q.left-pad),y=Math.max(0,q.top-pad),w=Math.min(vw,q.right+pad)-x,h=Math.min(vh,q.bottom+pad)-y;
+   ctx.clearRect(x,y,w,h);ctx.strokeRect(x+2,y+2,w-4,h-4);
+   r={left:Math.min(r.left,q.left),top:Math.min(r.top,q.top),right:Math.max(r.right,q.right),bottom:Math.max(r.bottom,q.bottom)};
+  }
+  r.width=r.right-r.left;r.height=r.bottom-r.top;
   const cw=coach.offsetWidth,ch=coach.offsetHeight,gap=34;
   let left,top,dir;
+  if(opts_park(r,vw,vh)){left=12;top=vh-ch-12;coach.style.left=left+'px';coach.style.top=top+'px';arrow.hidden=true;return;}
   if(r.right+gap+cw+12<=vw){left=r.right+gap;top=r.top+r.height/2-ch/2;dir='left';}
   else if(r.left-gap-cw>=12){left=r.left-gap-cw;top=r.top+r.height/2-ch/2;dir='right';}
   else if(r.bottom+gap+ch+12<=vh){left=r.left+r.width/2-cw/2;top=r.bottom+gap;dir='up';}
@@ -68,6 +77,7 @@
   arrow.style.setProperty('--nx',dir==='left'?'-6px':dir==='right'?'6px':'0');
   arrow.style.setProperty('--ny',dir==='up'?'-6px':dir==='down'?'6px':'0');
  }
+ const opts_park=(r,vw,vh)=>cur.park===true;
  let raf=0,last=0;
  function loop(ts){raf=0;if(!cur)return;if(ts-last>=110){last=ts;place();}raf=requestAnimationFrame(loop);}
  function clear(){
@@ -89,7 +99,7 @@
   if(opts.button){const b=document.createElement('button');b.type='button';b.textContent=opts.button.label;b.addEventListener('click',e=>{e.stopPropagation();opts.button.onClick?.();});coach.append(b);}
   const arrow=document.createElement('div');arrow.className='rpg-guide-arrow';arrow.setAttribute('aria-hidden','true');arrow.hidden=true;
   document.body.append(veil,coach,arrow);
-  cur={veil,coach,arrow,target:opts.target||null,clearOnTarget:opts.clearOnTarget!==false,allowTarget:opts.allowTarget!==false&&!!opts.target,dim:opts.dim!==false};
+  cur={park:opts.park===true,veil,coach,arrow,target:opts.target||null,allowKeys:opts.allowKeys||[],clearOnTarget:opts.clearOnTarget!==false,allowTarget:opts.allowTarget!==false&&!!opts.target,dim:opts.dim!==false};
   for(const type of BLOCKED)window.addEventListener(type,onPointer,true);
   window.addEventListener('keydown',onKey,true);
   document.documentElement.classList.add('rpg-guide-on');
@@ -99,5 +109,14 @@
   return {clear,update:(o)=>{if(o.text!=null)p.textContent=o.text;place();}};
  }
  addEventListener('resize',()=>{if(cur)place();},{passive:true});
- window.RPG_TUTORIAL_GUIDE={show,clear,active:()=>!!cur};
+ // After the first-time tutorial, short follow-up guides (pause/return, collection) run once.
+ const PKEY=id=>'rpgGuidesPending:'+String(id||'');
+ function pending(id){try{const v=JSON.parse(localStorage.getItem(PKEY(id))||'[]');return Array.isArray(v)?v:[];}catch(_){return [];}}
+ function setPending(id,list){try{if(list.length)localStorage.setItem(PKEY(id),JSON.stringify(list));else localStorage.removeItem(PKEY(id));}catch(_){}}
+ function done(id,kind,cardCode){
+  setPending(id,pending(id).filter(k=>k!==kind));
+  // Also remember it on the account (one small save; ignored if the rules are older).
+  try{if(cardCode&&window.RPG_V66?.call)window.RPG_V66.call('/api/tutorial/squad',{card_code:cardCode,guide:kind+'Guide'}).catch(()=>{});}catch(_){}
+ }
+ window.RPG_TUTORIAL_GUIDE={show,clear,active:()=>!!cur,pending,setPending,done};
 })();

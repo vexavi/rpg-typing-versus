@@ -41,3 +41,17 @@
 
 /* Recruitment tutorial, last step: show the × that leads back to Mode Select. */
 body.tutorial-recruitment.tutorial-exit a.close{visibility:visible!important;pointer-events:auto!important}
+
+/* Chromebook-style Enter keycap shown in the coach box. */
+.tutorial-enter{display:flex;align-items:center;gap:12px;margin-top:10px}
+.tutorial-enter[hidden]{display:none}
+.tutorial-enter b{font:900 13px/1 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase}
+.tutorial-keycap{display:inline-grid;place-items:end start;width:96px;height:46px;box-sizing:border-box;padding:0 0 7px 10px;
+  background:linear-gradient(#2b2c30,#1c1d20);border-radius:8px;color:#f2f2f2;
+  box-shadow:0 4px 0 #0b0b0c,0 6px 10px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.12);
+  font:500 15px/1 'Roboto',system-ui,sans-serif;letter-spacing:.02em;animation:tutKeyPress 1.4s ease-in-out infinite}
+@keyframes tutKeyPress{0%,60%,100%{transform:translateY(0);box-shadow:0 4px 0 #0b0b0c,0 6px 10px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.12)}
+  75%{transform:translateY(3px);box-shadow:0 1px 0 #0b0b0c,0 2px 4px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.12)}}
+.tutorial-keycap.is-pressed{transform:translateY(3px)!important;background:#fff200;color:#111;animation:none}
+@media (prefers-reduced-motion:reduce){.tutorial-keycap{animation:none}}
+.tutorial-battle #answerInput[readonly]{caret-color:transparent}

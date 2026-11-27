@@ -2955,6 +2955,29 @@ function whenModeSelectVisible(run){
     else if(Date.now()-started>600000)clearInterval(modeSelectGuideTimer);
   },200);
 }
+function tutorialPlayerId(){return String(window.ADVENTURE_PLAYER?.public_id||ADVENTURE_CONTEXT?.public_id||'');}
+// First Normal Mode run after the tutorial: Pause → Resume → Pause → Mode Select.
+let pauseGuideTimer=0;
+function runPauseGuide(){
+  const g=window.RPG_TUTORIAL_GUIDE,id=tutorialPlayerId();
+  if(!g||!g.pending(id).includes('pause'))return;
+  const K='GUIDE · PAUSE & RETURN';let step=0;const started=Date.now();
+  clearInterval(pauseGuideTimer);
+  pauseGuideTimer=setInterval(()=>{
+    if(step===0&&gameState==='playing'){step=1;
+      g.show({target:'#pauseCmd',allowKeys:['Escape'],kicker:K,title:'Pause',text:'Need a break? Tap PAUSE (or press ESC). The words stop falling while you are paused.'});}
+    else if(step===1&&gameState==='paused'){step=2;
+      g.show({target:()=>overlayChoices.querySelector('[data-act="resume"]'),allowKeys:['Escape'],kicker:K,title:'Resume',text:'The game is paused. Tap RESUME (or press ESC again) to keep playing.'});}
+    else if(step===2&&gameState==='playing'){step=3;
+      g.show({target:'#pauseCmd',allowKeys:['Escape'],kicker:K,title:'Pause again',text:'Great! Now pause one more time.'});}
+    else if(step===3&&gameState==='paused'){step=4;
+      g.done(id,'pause',ADVENTURE_CONTEXT?.card_code);
+      g.show({target:'#runCmd',kicker:K,title:'Back to Mode Select',text:'To leave a battle, tap MODE SELECT. You will go back to the Mode Select screen.'});}
+    else if(step===4&&gameState==='modeselect'){clearInterval(pauseGuideTimer);}
+    // Run ended another way (lost/won) or took too long: stop; the guide returns next Normal run.
+    if(Date.now()-started>900000||(step<4&&['gameover','victory','stageclear'].includes(gameState))){clearInterval(pauseGuideTimer);g.clear();}
+  },150);
+}
 function startModeSelectTutorialGuide(){
   const guide=window.RPG_TUTORIAL_GUIDE;
   if(tutorialLesson4Pending()){
@@ -2962,9 +2985,23 @@ function startModeSelectTutorialGuide(){
       setTimeout(()=>document.querySelectorAll('#overlayChoices .student-mode-card').forEach(b=>{if(b!==modeTile('Recruitment'))b.disabled=true;}),0);
       return;
     }
-    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Recruitment'),kicker:'TUTORIAL · LESSON 04 / 04',
+    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Recruitment'),kicker:'TUTORIAL · LESSON 05 / 05',
       title:'Mode Select',
       text:'This is Mode Select — you start every game from here. Tap RECRUITMENT to get your first ten characters for free.'}));
+    return;
+  }
+  // Follow-up guides after the first-time tutorial (this device only, once each).
+  const pending=guide?.pending?.(tutorialPlayerId())||[];
+  if(guide&&pending.includes('pause')){
+    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Normal Mode'),kicker:'GUIDE · PAUSE & RETURN',
+      title:'Normal Mode',
+      text:'Tap NORMAL MODE. Before you play, we will show you how to pause and how to get back here.'}));
+    return;
+  }
+  if(guide&&pending.includes('collection')){
+    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Collection'),kicker:'GUIDE · COLLECTION',
+      title:'Collection',
+      text:'Tap COLLECTION to see the characters you recruited — there is a free gift waiting!'}));
     return;
   }
   let done=false;try{done=sessionStorage.getItem('rpgTutorialJustDone')==='1';sessionStorage.removeItem('rpgTutorialJustDone');}catch(_){}
@@ -3164,6 +3201,7 @@ function showModeSelectScreen(){
 
   addMode('Normal Mode', {onClick:()=>{
     setMode('normal');showOverlay(false);startGame();
+    runPauseGuide();
   }});
   addMode('Practice', {onClick:()=>{
     setMode('practice');showOverlay(false);startGame();
@@ -6955,7 +6993,7 @@ window.addEventListener("keydown", (e) => {
     resetGame(false);
   });
 runCmd.addEventListener("click", () => {
-    if(gameState === 'playing' && !window.confirm('Leave this run and return to Mode Select?')) return;
+    if(gameState === 'playing' && !window.RPG_TUTORIAL_GUIDE?.active?.() && !window.confirm('Leave this run and return to Mode Select?')) return;
     resetGame(false);
   });
 

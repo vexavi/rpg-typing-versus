@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="guild-coins.css?v=73">
 <link rel="stylesheet" href="ak-theme.css?v=8">
 <link rel="stylesheet" href="battle-fx.css?v=3">
-<link rel="stylesheet" href="tutorial-guide.css?v=1">
+<link rel="stylesheet" href="tutorial-guide.css?v=2">
 <link rel="preload" as="image" href="assets/bosses/tutorial-bg.webp">
 <link rel="preload" as="image" href="assets/bosses/tutorial.webp">
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/ak-roboto-var.woff2" crossorigin>
@@ -41,6 +41,7 @@
         <div class="bossFallback" id="bossFallback" style="display:none">BOSS</div>
       </div>
     </div>
+    <div class="overflowBadge" id="overflowBadge">OVERFLOW! 1 dmg/sec</div>
     <!-- Tutorial coach: the only element that is not part of the real battle screen. -->
     <section class="tutorial-coach" id="trainingCoach" aria-live="polite">
       <div class="tutorial-coach-kicker">TUTORIAL · <span id="stepCounter">LESSON 01 / 04</span></div>
@@ -49,11 +50,13 @@
       <p class="tutorial-coach-feedback" id="messageLog" role="status"></p>
       <div class="tutorial-coach-progress" id="progressText">0 / 1 words cleared</div>
       <div class="tutorial-coach-status" id="status"></div>
+      <div class="tutorial-enter" id="enterKey" hidden aria-hidden="true"><span class="tutorial-keycap"><span>enter</span></span><b>Press ENTER</b></div>
+      <button class="tutorial-coach-btn" type="button" id="coachNext" hidden>NEXT ▸</button>
       <button class="tutorial-coach-btn" type="button" id="retryTutorialSave" hidden>RETRY SAVING</button>
     </section>
     <div class="overlay" id="tutorialModeOverlay" aria-hidden="true">
       <div class="overlayBox modeSelectMenu" role="dialog" aria-modal="true" aria-label="Mode Select">
-        <h2>MODE SELECT</h2><p class="tutorial-overlay-instruction">LESSON 4 — Open Recruitment.</p><div class="overlayChoices show" id="tutorialModeChoices"></div>
+        <h2>MODE SELECT</h2><p class="tutorial-overlay-instruction">LESSON 5 — Open Recruitment.</p><div class="overlayChoices show" id="tutorialModeChoices"></div>
       </div>
     </div>
     <div class="overlay" id="tutorialFinishOverlay" aria-hidden="true"><div class="overlayBox" role="dialog" aria-modal="true"><h2>TUTORIAL COMPLETE!</h2><p>You are ready to play.</p><button type="button" class="choiceBtn tutorial-finish-btn" id="finishBtn"><span class="title">START ADVENTURE ▶</span></button></div></div>
@@ -81,7 +84,7 @@
           <div class="name">Boss</div>
           <div class="bars"><div class="barLine bossHpLine" id="bossHpLine"><span>HP</span><div class="meter" id="bossMeter"><div class="fillBoss" id="bossFill" style="width:100%"></div></div><span><b id="bossHpText">3/3</b></span></div></div>
         </div>
-        <div class="statRow">
+        <div class="statRow" id="tutorialPlayerRow">
           <div class="name">Player</div>
           <div class="bars"><div class="barLine"><span>HP</span><div class="meter" id="playerMeter"><div class="fillHP" id="playerFill" style="width:100%"></div></div><span><b id="playerHpText">10/10</b></span></div></div>
         </div>

@@ -155,7 +155,7 @@
 
  // v148.9 guided steps on the real Recruitment page (guard rails from tutorial-guide.js).
  const G=()=>window.RPG_TUTORIAL_GUIDE;
- const KICK='TUTORIAL · LESSON 04 / 04';
+ const KICK='TUTORIAL · LESSON 05 / 05';
  function guideCoins(){
   const g=G();if(!g){tutorialGuide('Select RECRUIT ×10 below. Your first pull costs 0 Guild Coins.');return;}
   g.show({target:()=>$('walletCoins')?.closest('.wallet-item')||$('walletCoins'),kicker:KICK,title:'Guild Coins',
@@ -180,7 +180,8 @@
  }
  function guideExit(){
   const g=G();if(!g){location.replace('adventure.html');return;}
-  try{sessionStorage.setItem('rpgTutorialJustDone','1');}catch(_){}
+  // Next: short guides for Pause/Return (first Normal run) and Collection.
+  try{const id=JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}').public_id;if(id)g.setPending(id,['pause','collection']);}catch(_){}
   document.body.classList.add('tutorial-exit'); // reveal the × that the tutorial hid
   g.show({target:'a.close[data-return-modes]',kicker:KICK,title:'Back to Mode Select',
    text:'Great job! Tap × at the top right to go back to Mode Select.'});

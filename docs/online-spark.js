@@ -496,9 +496,12 @@ async function auraChange(b){
   const before=auras[id]||{level:0,equipped:0};
   if(!Number.isInteger(before.level)||!Number.isInteger(before.equipped)||before.level<0||before.level>4||before.equipped<0||before.equipped>before.level)err('Aura record is invalid.');
   let after,cost=0;
+  // v148.9: the Collection guide gives every player ONE free first aura on a 4★ operator.
+  const free=action==='upgrade'&&b.free===true;
+  if(free&&(rarity!==4||before.level!==0||d.recruitment?.tutorialAuraFree===true))err('The free aura gift has already been used.');
   if(action==='upgrade'){
    if(before.level>=4)err('Gold Aura already unlocked.');
-   const level=before.level+1;cost=AURA_COSTS[rarity][level];
+   const level=before.level+1;cost=free?0:AURA_COSTS[rarity][level];
    if(shards<cost)err(`Need ${cost-shards} more ${rarity}★ shard${cost-shards===1?'':'s'}.`);
    after={level,equipped:level};
   }else{
@@ -508,6 +511,7 @@ async function auraChange(b){
   }
   // One transaction: spend shards and upgrade the *one* owned character.
   const change={[`recruitment.auras.${id}`]:after,'recruitment.lastAuraCharacter':id,'recruitment.lastAuraAt':serverTimestamp()};
+  if(free)change['recruitment.tutorialAuraFree']=true;
   if(cost>0)change[`recruitment.${field}`]=shards-cost;
   tx.update(p.playerRef,change);
   const wallet={...shardWallet(d.recruitment),[field]:shards-cost};
@@ -554,7 +558,7 @@ async function tutorialProgress(b={}){
 // v127: optional, independent Story help flags. Preserve the existing onboarding map.
 async function squadTutorialProgress(b={}){
  const kind=b.guide;
- if(!['squadAssembly','squadKnockout'].includes(kind))err('Invalid squad guide.');
+ if(!['squadAssembly','squadKnockout','pauseGuide','collectionGuide'].includes(kind))err('Invalid guide.');
  const p=await currentPlayer(b);
  if(p.player.tutorial?.[kind]===true)return {ok:true,alreadySaved:true};
  if(p.player.tutorial){await updateDoc(p.playerRef,{[`tutorial.${kind}`]:true});}
