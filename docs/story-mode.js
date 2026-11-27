@@ -372,7 +372,8 @@ function squadStatus(run){
  return run.ids.map((id,i)=>{
   const max=core.stats(id,rules[id]?.maxHpBonus||0,run.bonuses||{},run.config).hp;
   const ko=run.knockedOut.includes(i);
-  const hp=ko?0:i===run.index?Math.max(0,Math.min(max,run.hp??max)):max;
+  const benched=run.kurone?.bench?.[i];
+  const hp=ko?0:i===run.index?Math.max(0,Math.min(max,run.hp??max)):Number.isFinite(benched)?Math.max(0,Math.min(max,benched)):max;
   return {id,i,ko,hp,max,active:i===run.index&&!ko,name:id==='mc'?String(identity.name||'Operator'):String(rules[id]?.name||id.replace(/_/g,' '))};
  });
 }

@@ -195,6 +195,7 @@ function onMiss(){
  S.misses++;S.streak=0;
  const c=S.counter;if(c&&c.streak&&c.cur>0){c.cur=0;chip(c.label,`0 / ${c.n}`,'reset');log('A mistake reset the count to 0.');}
  S.missHooks.forEach(f=>f());
+ if(S.kurone)kuroneChat(S.kurone.onMistake(0));
  hurtPlayer(1,'input miss');
 }
 $('answerForm').addEventListener('submit',e=>{
@@ -208,7 +209,9 @@ $('answerForm').addEventListener('submit',e=>{
  const rect=w.el.getBoundingClientRect(),classes=w.el.className;
  let bonus=typeof w.bonus==='function'?w.bonus():w.bonus;
  if(!bonus&&S.nextBonus){bonus=S.nextBonus;S.nextBonus=null;}
- const extra=(bonus?.extra||0)+(S.perHit||0);
+ const chat=S.kurone?S.kurone.onCorrect([],0,{}):null;
+ const extra=(bonus?.extra||0)+(S.perHit||0)+(chat?.bonusDamage||0)+(S.hype>0?(S.hype--,1):0);
+ if(chat)kuroneChat(chat);
  log('Correct!');removeWord(w);hitBoss(1,extra,{rect,classes,effect:bonus?.effect});onCorrect(w);
 });
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('button'))setTimeout(()=>input().focus({preventScroll:true}),0);});
@@ -224,6 +227,45 @@ function lowest(filter=()=>true){return S.words.filter(w=>w.state==='fall'&&filt
 function longest(){return S.words.slice().sort((a,b)=>b.answer.length-a.answer.length)[0]||null;}
 function ensureWords(n){while(S.words.length<n)spawn(null,{y:20+Math.random()*120});}
 const wordSel=w=>()=>w?.el?.isConnected?w.el:null;
+
+// ---- Kurone's Live Chat HUD (same markup/classes as the battle screen) ----------------
+function kuroneHud(){
+ const on=!!S.kurone,v=on?S.kurone.getViewers():0,P=window.RPG_OPERATOR_PASSIVES,tier=P.kuroneTier(v),r=P.RULES.kurone;
+ $('kuroneLive').hidden=!on;
+ if(on){$('kuroneViewers').textContent=String(v);$('kuroneLive').className=`kurone-live tier-${tier}`;
+  $('kuroneLive').querySelectorAll('.kurone-live-pips i').forEach(i=>i.classList.toggle('on',v>=Number(i.dataset.at)));
+  $('kuroneBonus').textContent=tier?(r.every[tier]===1?'+1 / word':`+1 every ${r.every[tier]===2?'2nd':'3rd'} word`):'';}
+ $('kuroneHype').hidden=!(S.hype>0);$('kuroneHypeLeft').textContent=String(S.hype||0);
+}
+function kuroneReact(kind,text=''){
+ const host=$('kuroneLive');if(host.hidden)return;const r=host.getBoundingClientRect();
+ const el=document.createElement('div');el.className=`kurone-react${kind==='sad'?' sad':''}${kind==='tier'?' big':''}`;
+ const list=kind==='sad'?['😢','💔','😭','😞']:['😆','❤️','👍','🔥','✨','😂','💖'];
+ el.innerHTML=`${kind==='tier'?'🎉':list[Math.floor(Math.random()*list.length)]}${text?`<small>${esc(text)}</small>`:''}`;
+ el.style.left=`${r.left+r.width*(0.15+Math.random()*0.35)}px`;el.style.top=`${r.top-8}px`;el.style.setProperty('--dx',`${Math.round((Math.random()-.5)*24)}px`);
+ document.body.appendChild(el);setTimeout(()=>el.remove(),1300);
+ const c=$('kuroneViewers');c.classList.remove('bump','drop');void c.offsetWidth;c.classList.add(kind==='sad'?'drop':'bump');
+}
+function kuroneChat(e){
+ if(!e)return;kuroneHud();
+ if(e.type==='kurone-chat'){kuroneReact(e.tierUp?'tier':'happy',e.tierUp?`${e.viewers} VIEWERS`:'+1');if(e.tierUp)fxPassive(e);}
+ else if(e.type==='kurone-leave'&&e.lost>0)kuroneReact('sad',`-${e.lost}`);
+}
+// A pretend Shoutout picker with two squad mates (the real one lists your actual squad).
+function fakePicker(burst,hype){
+ return new Promise(res=>{
+  const box=document.createElement('div');box.className='kurone-pick';
+  const mates=[['alden','Alden'],['lupa','Lupa']];
+  box.innerHTML=`<div class="kurone-pick-box"><h2>📣 SHOUTOUT!</h2><p class="kurone-pick-formula">💥 +${burst} · 📣 +1 × ${hype} words</p>
+   <div class="kurone-pick-list">${mates.map(([id,n],k)=>`<button type="button" class="kurone-pick-card" data-k="${k}"><img alt="" src="assets/profile-icons/${id}.webp"><span>${n}<small>HP 10/10</small></span><kbd>${k+1}</kbd></button>`).join('')}</div></div>`;
+  document.body.appendChild(box);
+  const done=k=>{removeEventListener('keydown',keys,true);box.remove();res(mates[k]);};
+  const keys=e=>{if(e.key==='1'||e.key==='2'){e.preventDefault();done(Number(e.key)-1);}};
+  addEventListener('keydown',keys,true);
+  box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>done(Number(b.dataset.k))));
+  setTimeout(()=>box.querySelector('button')?.focus(),30);
+ });
+}
 
 // ---- one script per operator (kid-friendly, accurate to the real passive) ------------
 // Each step shows a picture formula (trigger → effect) so it makes sense even without reading.
@@ -389,6 +431,40 @@ const SCRIPTS={
   }
   if(hits===3)fxPassive({type:'hound-complete',damage:6});
   await say({formula:`BLOOD HUNT ×${hits} → +${hits*2}`,text:hits===3?'Great hunt! +6 damage!':'The hunt ended. Be fast next time!',next:true});
+ },
+ kurone:async()=>{
+  const P=window.RPG_OPERATOR_PASSIVES;S.kurone=P.create('kurone','normal');S.hype=0;kuroneHud();
+  await say({title:'Live Chat',formula:'✓ → 👁 +1',text:"I'm streaming! Every word you type brings 1 viewer.",next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive','#tutorialPlayerRow']});
+  S.auto=2400;say({formula:'👁 10 → 💥 more damage',text:'Type 10 words. Get 10 viewers!',arrows:[{sel:'#kuroneLive',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneLive']});
+  await new Promise(r=>{const t=setInterval(()=>{if(S.kurone.getViewers()>=10){clearInterval(t);r();}},100);});
+  await say({formula:'👁 10 → +1 every 3rd word',text:'10 viewers! Now every 3rd word hits +1 harder.',next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive']});
+  await mistakeDemo();
+  await say({formula:'❌ → 👁 −5 😢',text:'A mistake = 5 viewers leave. Type carefully!',next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive']});
+  await say({title:'More viewers',formula:'👁 10 · 20 · 30',text:'10 = +1 every 3rd word. 20 = every 2nd word. 30 = EVERY word!',next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive']});
+  S.kurone.setViewers(29);kuroneHud();
+  say({formula:'👁 29 → 30',text:'My stream is popular now! Type 1 word.',arrows:[{sel:'#kuroneLive',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneLive']});
+  await waitCleared(()=>true);
+  await say({formula:'👁 30 → +1 every word',text:'30 viewers! EVERY word hits +1 harder.',next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive']});
+  S.auto=0;
+  // Shoutout: the big button, a squad pick, half parting post + Hype.
+  const btn=$('kuroneShoutout');btn.hidden=false;
+  say({title:'Shoutout',formula:'📣 → 🔁',text:'In Adventure I have a BIG button. Click it to swap me out!',arrows:[{sel:'#kuroneShoutout',dir:'left'}],focus:['#kuroneShoutout']});
+  await new Promise(r=>btn.addEventListener('click',r,{once:true}));btn.hidden=true;
+  const exit=P.kuroneExit(S.kurone.getViewers(),'swap');
+  const mate=await fakePicker(exit.burst,exit.hype);
+  S.kurone.kuroneLeave('swap');
+  fxPassive({type:'kurone-shoutout',burst:exit.burst,hype:exit.hype});
+  hitBoss(0,exit.burst,{effect:{type:'kurone-burst',characterId:'kurone'}});S.hype=exit.hype;
+  $('storySquadArt').src=`assets/recruitment/${mate[0]}.webp`;$('storySquadHeroName').textContent=mate[1];$('playerLabel').textContent=mate[1];
+  $('storyActiveLabel').textContent=` · ${mate[1]}`;
+  $('storySquadRoster').innerHTML=`<div class="storySquadCell"><img alt="" src="assets/profile-icons/kurone.webp"><span>Kurone</span><small>BENCH</small></div><div class="storySquadCell active"><img alt="" src="assets/profile-icons/${mate[0]}.webp"><span>${mate[1]}</span><small>ACTIVE</small></div>`;
+  S.kurone=null;kuroneHud();
+  await say({formula:`📣 → 💥 +${exit.burst} (½) + 📣 ×${exit.hype}`,text:`${mate[1]} is in! I hit the boss on the way out, and ${mate[1]} gets HYPE: +1 on the next ${exit.hype} words.`,next:true,arrows:[{sel:'#kuroneHype',dir:'down'}],focus:['#kuroneHype','#bossWrap']});
+  S.auto=2400;say({formula:'📣 +1 ×3',text:'Type 3 words with HYPE!',arrows:[{sel:'#kuroneHype',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneHype']});
+  await count(3,{label:'📣'});
+  await say({title:'Rage Quit',formula:'💀 → 💥 FULL + 📣',text:'If I get knocked out, my post is FULL damage: 3, 6 or 10! The next one still gets HYPE.',next:true});
+  await say({title:'Squad rule',formula:'1️⃣ ✓ 2️⃣ ✓ 3️⃣ ✖',text:'I need a teammate to pass my stream to. So I can be 1st or 2nd, never 3rd.',next:true});
+  S.hype=0;kuroneHud();
  },
  cassian:async()=>{
   await say({title:'Decree',formula:'✓ ×6 → ✖✖✖',text:'Type 6 words. Then I remove 3 falling words at once!',next:true});

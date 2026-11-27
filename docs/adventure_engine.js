@@ -3568,7 +3568,7 @@ async function debugJumpTo(mode, idx){
 
   // v114 — Chapters 1 and 2 only. The three existing lives are three operators.
   // This is isolated from the normal/practice/tournament battle rules.
-  const storySquad={ids:[],index:0,knockedOut:[],enabled:false};
+  const storySquad={ids:[],index:0,knockedOut:[],enabled:false,bench:{}};
   let storySquadSwitchTimer=null;
   let storySquadGraceUntil=0;
   const storyThreeLifeStage=()=>currentMode==='story'&&/^[12]-/.test(String(storySelectedStage?.id||''))||currentMode==='story'&&!!window.RPG_CONQUEST?.run;
@@ -3638,7 +3638,7 @@ async function debugJumpTo(mode, idx){
         const portrait=document.createElement('img');portrait.alt='';portrait.src=storyIconUrl(id);
         portrait.onerror=()=>{portrait.onerror=null;portrait.src='assets/profile-icons/mc.webp';};
         const name=document.createElement('span');name.textContent=storyOperatorName(id);
-        const state=document.createElement('small');state.textContent=storySquad.knockedOut.includes(i)?'KO':i===storySquad.index?'ACTIVE':'NEXT';
+        const state=document.createElement('small');state.textContent=storySquad.knockedOut.includes(i)?'KO':i===storySquad.index?'ACTIVE':storySquad.bench&&Number.isFinite(storySquad.bench[i])?'BENCH':'NEXT';
         cell.append(portrait,name,state);storySquadRoster.appendChild(cell);
       });
     }
@@ -3646,7 +3646,7 @@ async function debugJumpTo(mode, idx){
   function stopStorySquad(){
     window.RPG_CONQUEST?.abort();
     window.RPG_STORY?.cancelConquestOverlay?.();
-    clearStorySquadSwitch();storySquad.enabled=false;storySquad.ids=[];storySquad.index=0;storySquad.knockedOut=[];
+    clearStorySquadSwitch();storySquad.enabled=false;storySquad.ids=[];storySquad.index=0;storySquad.knockedOut=[];storySquad.bench={};kuroneHype=0;kuronePickClose();
     document.body.classList.remove('story-squad-layout');renderStorySquad();
   }
   async function chooseStorySquad(conquestConfig){
@@ -3773,8 +3773,12 @@ async function debugJumpTo(mode, idx){
           const details=make('span','storySquadRosterName',op.name);
           const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':op.rarity?`${op.rarity}★`:'DEFAULT');
           card.append(pic,details,status);
+          // v148.10: Kurone needs a teammate to pass her stream to, so never 3rd.
+          const kuroneBlocked=!single&&op.id==='kurone'&&lockedCount===2;
+          if(kuroneBlocked){card.classList.add('kurone-blocked');status.textContent='NOT 3RD';card.title='Kurone cannot be the 3rd (last) operator.';}
           card.addEventListener('click',()=>{
             if(lockedCount>SLOTS-1)return;
+            if(kuroneBlocked){message.textContent='Kurone can\'t be 3rd. She needs a teammate to pass her stream to!';return;}
             const occupied=selected.indexOf(op.id);
             if(occupied>=0 && occupied!==lockedCount){
               message.textContent='Already selected.';return;
@@ -3848,6 +3852,7 @@ async function debugJumpTo(mode, idx){
       ready.addEventListener('click',()=>{
         if(!selected[lockedCount])return;
         const chosen=selected[lockedCount];
+        if(!single&&lockedCount===2&&chosen==='kurone'){message.textContent='Kurone can\'t be 3rd. She needs a teammate to pass her stream to!';return;}
         if(selected.slice(0,lockedCount).includes(chosen)){
           message.textContent='Already selected.';return;
         }
@@ -3866,17 +3871,34 @@ async function debugJumpTo(mode, idx){
   }
   function swapToNextStoryOperator(){
     if(!storySquad.enabled||gameState!=='playing')return false;
-    storySquad.knockedOut.push(storySquad.index);
-    const next=storySquad.index+1;
-    if(next>=storySquad.ids.length){resetOperatorForStage();clearOutgoingSquadEffects();renderStorySquad();updateUI();return false;}
+    const leaving=storySquad.index;
+    // Rage Quit: Kurone's parting post + Hype (applied once the next operator is in).
+    const exit=activeOperatorId==='kurone'?operatorPassive?.kuroneLeave?.('ko')||null:null;
+    storySquad.knockedOut.push(storySquad.index);if(storySquad.bench)delete storySquad.bench[leaving];
+    const next=storyNextAvailable();
+    if(next<0){resetOperatorForStage();clearOutgoingSquadEffects();renderStorySquad();if(typeof kuroneSave==='function')kuroneSave();updateUI();return false;}
+    storyDeploy(next,{kind:'ko',exit,from:leaving});
+    return true;
+  }
+  // v148.10: the next operator is the first squad member that is neither active nor
+  // knocked out. Without Shoutout swaps this is exactly index+1 (the old order).
+  function storyNextAvailable(){
+    for(let i=0;i<storySquad.ids.length;i++)if(i!==storySquad.index&&!storySquad.knockedOut.includes(i))return i;
+    return -1;
+  }
+  // Kurone's helpers live outside this squad block; tolerate their absence.
+  function kuroneSaveSafe(){if(typeof kuroneSave==='function')kuroneSave();}
+  function storyDeploy(next,{kind='ko',exit=null,from=storySquad.index}={}){
     storySquad.index=next;
+    // Hype belongs to the operator who received it: unused Hype leaves with them.
+    if(typeof kuroneHype!=='undefined')kuroneHype=0;
     gameState='squad-deploy';setInputsEnabled(false);answerInput.value='';
     pauseStageClock();window.RPG_CH1_SPECIAL?.suspend?.();setSleepyBgmGain(1);
     window.RPG_VESPER?.retireLupa();
     resetOperatorForStage(); // Retire the outgoing rules engine and its temporary hexes.
     clearOutgoingSquadEffects();
-    renderStorySquad();updateUI();
-    if(storySquadDeploy){storySquadDeploy.textContent=`${storyOperatorName(storySquad.ids[next])} DEPLOYING`;storySquadDeploy.setAttribute?.('data-down',storyOperatorName(storySquad.ids[next-1]||''));storySquadDeploy.classList.add('show');}
+    renderStorySquad();kuroneSaveSafe();updateUI();
+    if(storySquadDeploy){storySquadDeploy.textContent=`${storyOperatorName(storySquad.ids[next])} DEPLOYING`;storySquadDeploy.setAttribute?.('data-down',kind==='swap'?'SHOUTOUT':storyOperatorName(storySquad.ids[from]||''));storySquadDeploy.classList.add('show');}
     storySquadSwitchTimer=setTimeout(()=>{
       storySquadSwitchTimer=null;
       if(!storySquad.enabled||gameState!=='squad-deploy'||currentMode!=='story')return;
@@ -3885,26 +3907,32 @@ async function debugJumpTo(mode, idx){
       globalThis.RPG_FX?.prepare?.(activeOperatorId);
       playerMaxHp=BASE_PLAYER_MAX_HP+(operatorPassive?.getMaxHpBonus?.()||0);
       if(window.RPG_CONQUEST?.run)playerMaxHp=window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0).hp;
-      playerHp=playerMaxHp;
+      // A swapped-out (benched) operator returns with the HP they left with.
+      const benched=storySquad.bench?.[next];
+      playerHp=Number.isFinite(benched)&&benched>0?Math.min(playerMaxHp,benched):playerMaxHp;
+      if(storySquad.bench)delete storySquad.bench[next];
       // Show the fresh operator and HP before the optional first-KO lesson.
       renderStorySquad();renderProfileHeader();
       storySquadDeploy?.classList.remove('show');
       uiCache.playerHpStr=null;uiCache.nitrateVisible=null;uiCache.nitrateShield=null;
-      updateUI();
+      kuroneSaveSafe();updateUI();
       const resumeReplacement=()=>{
         if(!storySquad.enabled||gameState!=='squad-deploy'||currentMode!=='story')return;
-        // Grant a short grace window, without resetting or deleting the falling words.
-        resumeStageClock();storySquadGraceUntil=stageElapsedSec()+2;
+        // Grant a short grace window after a knockout, without resetting the falling words.
+        // A voluntary Shoutout swap gets no grace, so it can't be used to dodge damage.
+        resumeStageClock();storySquadGraceUntil=kind==='swap'?0:stageElapsedSec()+2;
         window.RPG_CH1_SPECIAL?.start(currentMode,storySelectedStage?.id||'',stageElapsedSec());
         const stageEffect=operatorPassive?.onStageStart?.(playerHp,stageElapsedSec(),wordsOnField);
         if(stageEffect?.type==='fletcher-last-stand')renderFletcherStatus(stageElapsedSec());
         gameState='playing';setInputsEnabled(true);renderStorySquad();renderProfileHeader();
         updateUI();answerInput.focus();
+        if(exit&&typeof kuroneApplyExit==='function')kuroneApplyExit(exit,kind);
       };
-      if(!window.RPG_SQUAD_TUTORIAL?.showKnockout(resumeReplacement))resumeReplacement();
-    },1600);
+      if(kind==='swap'||!window.RPG_SQUAD_TUTORIAL?.showKnockout(resumeReplacement))resumeReplacement();
+    },kind==='swap'?900:1600);
     return true;
   }
+
   // v86.31 — choose an owned operator for this run; passive effects reset each stage.
   const operatorModeEligible=()=>['normal','practice','story','challenge','shared'].includes(currentMode);
   const ownedOperatorIds=()=>{
@@ -3922,6 +3950,141 @@ async function debugJumpTo(mode, idx){
   function resetOperatorPending(){operatorPendingLupa=false;operatorPendingHound=false;operatorPendingCrossbow=null;}
 
   let lastFletcherPhase='off';
+  // var (not let/const): updateUI() runs at start-up before this block is reached.
+  var kuroneReady=false;
+  // ---- v148.10 Kurone: Live Chat / Shoutout / Rage Quit -------------------------------
+  var kuroneLiveEl=document.getElementById('kuroneLive');
+  var kuroneViewersEl=document.getElementById('kuroneViewers');
+  var kuroneBonusEl=document.getElementById('kuroneBonus');
+  var kuroneHypeEl=document.getElementById('kuroneHype');
+  var kuroneHypeLeftEl=document.getElementById('kuroneHypeLeft');
+  var kuroneShoutBtn=document.getElementById('kuroneShoutout');
+  var kuroneHype=0;            // words left with +1 damage for the operator after Kurone
+  var kuroneHudKey='';
+  var kuroneConquest=()=>currentMode==='story'?window.RPG_CONQUEST?.run||null:null;
+  // Adventure keeps the stream in the run (it carries across stages; a new run starts at 0).
+  function kuroneSave(){
+    const run=kuroneConquest();if(!run)return;
+    run.kurone={viewers:activeOperatorId==='kurone'?(operatorPassive?.getViewers?.()||0):0,hype:kuroneHype,bench:{...storySquad.bench}};
+  }
+  function kuroneRestore(){
+    const run=kuroneConquest(),st=run?.kurone;
+    if(!run){kuroneHype=0;storySquad.bench={};return;}
+    kuroneHype=Math.max(0,Number(st?.hype)||0);
+    storySquad.bench={...(st?.bench||{})};
+    if(activeOperatorId==='kurone')operatorPassive?.setViewers?.(st?.viewers||0);
+  }
+  function kuroneBonusLabel(tier){
+    if(!tier)return '';
+    const r=window.RPG_OPERATOR_PASSIVES?.RULES?.kurone;if(!r)return '';
+    if(kuroneConquest())return `+${window.RPG_CONQUEST.displayed(r.bonus[tier])} / word`;
+    return r.every[tier]===1?'+1 / word':`+1 every ${r.every[tier]===2?'2nd':'3rd'} word`;
+  }
+  function kuroneHud(){
+    if(!kuroneReady)return; // updateUI() also runs during start-up, before this block
+    const on=activeOperatorId==='kurone'&&!!operatorPassive?.rule;
+    const v=on?operatorPassive.getViewers():0,tier=window.RPG_OPERATOR_PASSIVES?.kuroneTier?.(v)||0;
+    const canShout=on&&storySquad.enabled&&gameState==='playing'&&storyNextAvailable()>=0;
+    const key=`${on}|${v}|${kuroneHype}|${canShout}|${!!kuroneConquest()}|${activeOperatorId}`;
+    if(key===kuroneHudKey)return;kuroneHudKey=key;
+    if(kuroneLiveEl){
+      kuroneLiveEl.hidden=!on;
+      if(on){
+        kuroneViewersEl.textContent=String(v);
+        kuroneLiveEl.querySelectorAll('.kurone-live-pips i').forEach(i=>i.classList.toggle('on',v>=Number(i.dataset.at)));
+        kuroneLiveEl.className=`kurone-live tier-${tier}`;
+        kuroneBonusEl.textContent=kuroneBonusLabel(tier);
+        kuroneLiveEl.setAttribute('aria-label',`Live chat: ${v} viewers`);
+      }
+    }
+    if(kuroneHypeEl){kuroneHypeEl.hidden=!(kuroneHype>0&&activeOperatorId!=='kurone');if(kuroneHypeLeftEl)kuroneHypeLeftEl.textContent=String(kuroneHype);}
+    if(kuroneShoutBtn)kuroneShoutBtn.hidden=!canShout;
+  }
+  // Chat reactions: happy faces float up on a correct word, sad ones drop on a typo.
+  var KURONE_HAPPY=['😆','❤️','👍','🔥','✨','😂','💖'],KURONE_SAD=['😢','💔','😭','😞'];
+  function kuroneReact(kind,text=''){
+    if(!kuroneLiveEl||kuroneLiveEl.hidden)return;
+    if(document.querySelectorAll('.kurone-react').length>8)return;
+    const r=kuroneLiveEl.getBoundingClientRect();if(!r.width)return;
+    const el=document.createElement('div');
+    const list=kind==='sad'?KURONE_SAD:KURONE_HAPPY;
+    el.className=`kurone-react${kind==='sad'?' sad':''}${kind==='tier'?' big':''}`;
+    el.innerHTML=`${kind==='tier'?'🎉':list[Math.floor(Math.random()*list.length)]}${text?`<small>${text}</small>`:''}`;
+    el.style.left=`${r.left+r.width*(0.15+Math.random()*0.35)}px`;el.style.top=`${r.top-8}px`;
+    el.style.setProperty('--dx',`${Math.round((Math.random()-.5)*24)}px`);
+    el.setAttribute('aria-hidden','true');document.body.appendChild(el);setTimeout(()=>el.remove(),1300);
+    const c=kuroneViewersEl;if(c){c.classList.remove('bump','drop');void c.offsetWidth;c.classList.add(kind==='sad'?'drop':'bump');}
+  }
+  function kuroneOnChat(effect){
+    if(effect.type==='kurone-chat'){
+      kuroneHud();kuroneReact(effect.tierUp?'tier':'happy',effect.tierUp?`${effect.viewers} VIEWERS`:'+1');
+      if(effect.tierUp)pushMsg(`KURONE · LIVE CHAT ${effect.viewers} VIEWERS (${kuroneBonusLabel(effect.tier).toUpperCase()})`,true);
+    }else if(effect.type==='kurone-leave'){
+      kuroneHud();if(effect.lost>0)kuroneReact('sad',`-${effect.lost}`);
+      pushMsg(`KURONE · ${effect.lost} VIEWERS LEFT (${effect.viewers})`,true);
+    }
+    kuroneSave();
+  }
+  // Parting post (burst) and Hype once the next operator is on the field.
+  function kuroneApplyExit(exit,kind){
+    if(!exit)return;
+    if(exit.hype>0){kuroneHype=Math.max(kuroneHype,exit.hype);}
+    if(exit.tier)globalThis.RPG_FX?.passive?.({type:kind==='swap'?'kurone-shoutout':'kurone-ragequit',burst:exit.burst,hype:exit.hype,viewers:exit.viewers,characterId:'kurone'});
+    if(exit.burst>0&&!operatorStageWithoutBoss()&&gameState==='playing'){
+      const conquest=kuroneConquest();
+      const shown=conquest?window.RPG_CONQUEST.displayed(exit.burst):exit.burst;
+      pushMsg(`KURONE · ${kind==='swap'?'SHOUTOUT':'RAGE QUIT'} PARTING POST (+${shown} DMG)`,true);
+      try{globalThis.RPG_FX?.attack?.({operatorId:'kurone',damage:exit.burst,crit:false,effect:{type:'kurone-burst',characterId:'kurone'},display:shown});}catch(_){}
+      damageBoss(exit.burst);
+    }
+    if(exit.hype>0)pushMsg(`📣 HYPE: +1 DAMAGE ON THE NEXT ${kuroneHype} WORDS`,true);
+    kuroneSave();kuroneHudKey='';kuroneHud();
+  }
+  // Shoutout: pause, pick an available squad member, swap Kurone out (no grace period).
+  var kuronePickEl=null,kuronePickKeys=null;
+  function kuronePickClose(){
+    if(kuronePickKeys)window.removeEventListener('keydown',kuronePickKeys,true);kuronePickKeys=null;
+    kuronePickEl?.remove();kuronePickEl=null;
+  }
+  function kuroneShoutout(){
+    if(activeOperatorId!=='kurone'||!storySquad.enabled||gameState!=='playing'||storyNextAvailable()<0)return;
+    const choices=storySquad.ids.map((id,i)=>({id,i})).filter(o=>o.i!==storySquad.index&&!storySquad.knockedOut.includes(o.i));
+    gameState='kurone-swap';setInputsEnabledSoft(false);pauseStageClock();window.RPG_CH1_SPECIAL?.suspend?.();
+    const precise=!!kuroneConquest();
+    const preview=window.RPG_OPERATOR_PASSIVES.kuroneExit(operatorPassive?.getViewers?.()||0,'swap',precise);
+    const show=n=>precise?window.RPG_CONQUEST.displayed(n):n;
+    const box=document.createElement('div');box.className='kurone-pick';box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Shoutout: choose who takes over');
+    const hpOf=o=>{
+      const bonus=window.RPG_OPERATOR_PASSIVES?.RULES?.[o.id]?.maxHpBonus||0;
+      const max=window.RPG_CONQUEST?.run?window.RPG_CONQUEST.stats(o.id,bonus).hp:BASE_PLAYER_MAX_HP+bonus;
+      const benched=storySquad.bench[o.i];const hp=Number.isFinite(benched)?benched:max;
+      return `${show(hp)}/${show(max)}`;
+    };
+    box.innerHTML=`<div class="kurone-pick-box"><h2>📣 SHOUTOUT!</h2>
+      <p class="kurone-pick-formula">${preview.tier?`💥 +${show(preview.burst)} · 📣 +1 × ${preview.hype} words`:'👁 0–9 viewers: no bonus yet'}</p>
+      <div class="kurone-pick-list">${choices.map((o,k)=>`<button type="button" class="kurone-pick-card" data-i="${o.i}"><img alt="" src="${storyIconUrl(o.id)}"><span>${escapeHtml(storyOperatorName(o.id))}<small>HP ${hpOf(o)}</small></span><kbd>${k+1}</kbd></button>`).join('')}</div>
+      <button type="button" class="kurone-pick-cancel">✕ CANCEL (ESC)</button></div>`;
+    document.body.appendChild(box);kuronePickEl=box;
+    const resume=()=>{kuronePickClose();if(gameState!=='kurone-swap')return;resumeStageClock();gameState='playing';setInputsEnabledSoft(true);kuroneHudKey='';updateUI();answerInput.focus();};
+    const choose=i=>{
+      kuronePickClose();if(gameState!=='kurone-swap')return;
+      const exit=operatorPassive?.kuroneLeave?.('swap')||null;
+      storySquad.bench[storySquad.index]=playerHp;
+      const from=storySquad.index;
+      storyDeploy(i,{kind:'swap',exit,from});
+    };
+    box.querySelectorAll('.kurone-pick-card').forEach(b=>b.addEventListener('click',()=>choose(Number(b.dataset.i))));
+    box.querySelector('.kurone-pick-cancel').addEventListener('click',resume);
+    kuronePickKeys=e=>{
+      if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();resume();return;}
+      const n=Number(e.key);if(n>=1&&n<=choices.length){e.preventDefault();e.stopImmediatePropagation();choose(choices[n-1].i);}
+    };
+    window.addEventListener('keydown',kuronePickKeys,true);
+    setTimeout(()=>box.querySelector('.kurone-pick-card')?.focus(),30);
+  }
+  kuroneShoutBtn?.addEventListener('click',e=>{e.preventDefault();kuroneShoutout();});
+  kuroneReady=true; // Kurone's HUD may now read the operator state
+
   const nitrateShieldEl=document.getElementById('nitrateShield');
   const nitrateShieldSegments=Array.from(nitrateShieldEl?.querySelectorAll('.nitrate-shield-segment')||[]);
   let fletcherStatusEl=null;
@@ -4049,6 +4212,7 @@ async function debugJumpTo(mode, idx){
     }
     operatorPassive=window.RPG_OPERATOR_PASSIVES?.create(activeOperatorId,currentMode,undefined,!!operation)||null;
     globalThis.RPG_FX?.prepare?.(activeOperatorId);
+    kuroneRestore();kuroneHudKey='';
     renderStorySquad();
   }
   // Keeps one unobtrusive visible 3-second countdown inside the word lane.
@@ -4270,6 +4434,7 @@ async function debugJumpTo(mode, idx){
       hp:playerHp,maxHp:playerMaxHp,clearedWord,nonBoss:operatorStageWithoutBoss()
     });
     if(!effect)return null;
+    if(effect.type==='kurone-chat')kuroneOnChat(effect);
     if(effect.momentumUnlocked)pushMsg('FLETCHER · ADRENALINE MOMENTUM (+1 DAMAGE UNLOCKED)',true);
     if(effect.type==='word-freeze')pushMsg('NORA · SHADOW HOLD (1.5s)',true);
     else if(effect.type==='spawn-pause'){
@@ -4511,6 +4676,7 @@ async function debugJumpTo(mode, idx){
   }
   function operatorOnMistake(){
     const effect=operatorPassive?.onMistake(stageElapsedSec());
+    if(effect?.type==='kurone-leave')kuroneOnChat(effect);
     if(effect?.type==='mistake-guard'){globalThis.RPG_FX?.passive?.(effect);pushMsg('KADE · TRICKSTER (NO HP LOSS)',true);}
     return !!effect?.preventHpLoss;
   }
@@ -4790,6 +4956,7 @@ function updateUI(){
     }
 
     updatePauseCmdUI();
+    kuroneHud();
   }
 
   function flashPlayerDamage(){
@@ -5525,6 +5692,8 @@ if(state === "landed"){
     if(passiveEffect?.type==='hound-next'||passiveEffect?.type==='hound-complete'){
       bonusDamage+=passiveEffect.damage||0;
     }
+    // Kurone's Hype: the operator after her deals +1 on each of the next few words.
+    if(kuroneHype>0&&!operatorStageWithoutBoss()){bonusDamage+=1;kuroneHype--;kuroneSave();}
     if(passiveEffect?.type==='cassian-decree'){
       bonusDamage+=passiveEffect.missingDamage;
       // Each word actually removed contributes one normal boss hit; missing
@@ -6072,6 +6241,7 @@ function storyIncomingDamage(key,fallback){
       if(swapToNextStoryOperator())return;
       hardLoseNoContinues();return;
     }
+    if(activeOperatorId==='kurone')operatorPassive?.setViewers?.(0); // knocked out: the stream crashes
     if(continuesLeft > 0){ showContinuePrompt(); return; }
     hardLoseNoContinues();
   }

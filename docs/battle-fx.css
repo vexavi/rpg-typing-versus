@@ -420,6 +420,18 @@
   background:repeating-linear-gradient(-45deg,#2cc5f6 0 8px,transparent 8px 16px);box-shadow:0 0 12px #2cc5f6}
 .fx-lane.fx-suppress::after{background:repeating-linear-gradient(-45deg,#38e0bd 0 8px,#0d2a24 8px 16px);box-shadow:0 0 12px #38e0bd}
 
+/* Kurone (6★): pink data packets, pixel blocks and a pop-up window on the boss. */
+.fx-tracer--glitch{height:5px;margin-top:-2px;background:repeating-linear-gradient(90deg,var(--c1) 0 10px,transparent 10px 14px,var(--c3) 14px 18px,transparent 18px 22px);box-shadow:0 0 12px var(--c1)}
+.fx-pixel{width:8px;height:8px;translate:-50% -50%;background:var(--c1);box-shadow:3px 3px 0 var(--c3);opacity:0;animation:fx-pixel .5s steps(4,end) var(--d,0ms) both}
+@keyframes fx-pixel{0%{opacity:1;transform:scale(1.4)}100%{opacity:0;transform:translate(6px,-10px) scale(.6)}}
+.fx-pixel--burst{width:10px;height:10px;rotate:var(--a);opacity:1;animation:fx-fly .7s steps(6,end) both}
+.fx-popup{width:110px;height:74px;translate:-50% -50%;border:2px solid var(--c2);background:linear-gradient(var(--c1) 0 16px,#16070fe6 16px);box-shadow:0 0 18px var(--c1);
+  animation:fx-popup .65s cubic-bezier(.2,1.4,.4,1) both}
+.fx-popup b{position:absolute;right:4px;top:0;font:900 13px/16px var(--fx-font,system-ui);color:#16070f}
+.fx-popup i{position:absolute;left:10px;right:10px;top:30px;height:6px;background:repeating-linear-gradient(90deg,var(--c2) 0 14px,transparent 14px 20px);box-shadow:0 14px 0 var(--c1)}
+.fx-popup--big{width:170px;height:110px;animation-duration:1s}
+@keyframes fx-popup{0%{opacity:0;transform:scale(.3) rotate(-8deg)}30%{opacity:1;transform:scale(1.08)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.25);filter:hue-rotate(60deg)}}
+
 @media (prefers-reduced-motion:reduce){
   .fx-layer>*,.fx-hud>*{animation-duration:.01ms!important;animation-iteration-count:1!important}
   .fx-num,.fx-hudnum{animation:fx-fade-rm 1s linear both!important}

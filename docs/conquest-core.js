@@ -8,7 +8,7 @@ const letters=answer=>(String(answer||'').match(/[a-z]/gi)||[]).length;
 const roles=Object.freeze({
   mc:[0,1,0],alden:[0,1,0],livia:[0,1,0],elise:[0,1,0],vern:[0,1,0],kade:[0,1,0],nora:[0,1,0],mira:[0,1,0],vex:[0,1,0],
   aveline:[0,1.1,0],isolde:[0,1,.05],shield:[0,.9,.10],hexaxe:[0,1.1,0],crossbow:[-1,1.2,0],anodyne:[1,.9,.05],seraphine:[0,1.1,0],
-  tavi:[0,1.05,.05],lupa:[0,1.15,0],nitrate:[2,1,.15],hound:[0,1.15,0],cassian:[1,1.2,.05]
+  tavi:[0,1.05,.05],lupa:[0,1.15,0],nitrate:[2,1,.15],hound:[0,1.15,0],cassian:[1,1.2,.05],kurone:[0,1.1,0]
 });
 const pool=Object.freeze([
  {id:'hp',name:'Vitality',label:'MAX HP',values:[2,4,6],format:v=>`+${displayed(v)}`},
@@ -19,7 +19,7 @@ const pool=Object.freeze([
  {id:'recovery',name:'Recovery',label:'HEAL AFTER VICTORY',values:[1,2,3],format:v=>`+${displayed(v)}`}
 ]);
 const caps={hp:12,atk:1,def:.6,crit:.55,critDmg:2,recovery:6};
-const names={mc:'Main Character',alden:'Alden',livia:'Livia',elise:'Elise',vern:'Vern',kade:'Kade',nora:'Nora',mira:'Mira',vex:'Vex',aveline:'Aveline',isolde:'Isolde',shield:'Mara',hexaxe:'Nyx',crossbow:'Fletcher',anodyne:'Anodyne',seraphine:'Seraphine',tavi:'Tavi',lupa:'Lupa',nitrate:'Nitrate',hound:'Hound',cassian:'Cassian'};
+const names={mc:'Main Character',alden:'Alden',livia:'Livia',elise:'Elise',vern:'Vern',kade:'Kade',nora:'Nora',mira:'Mira',vex:'Vex',aveline:'Aveline',isolde:'Isolde',shield:'Mara',hexaxe:'Nyx',crossbow:'Fletcher',anodyne:'Anodyne',seraphine:'Seraphine',tavi:'Tavi',lupa:'Lupa',nitrate:'Nitrate',hound:'Hound',cassian:'Cassian',kurone:'Kurone'};
 const rewardScale=id=>id==='hp'||id==='recovery'?10:100;
 const defaultRewardValues=id=>pool.find(e=>e.id===id)?.values.map(n=>Math.round(n*rewardScale(id)));
 const rewardMax=id=>Math.round(caps[id]*rewardScale(id));

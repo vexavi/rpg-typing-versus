@@ -7,7 +7,7 @@
  const ROSTER=Object.freeze([
   ['alden',4],['elise',4],['kade',4],['livia',4],['mira',4],['nora',4],['vern',4],['vex',4],
   ['aveline',5],['isolde',5],['anodyne',5],['seraphine',5],['shield',5],['crossbow',5],['hexaxe',5],
-  ['cassian',6],['hound',6],['tavi',6],['lupa',6],['nitrate',6]
+  ['cassian',6],['hound',6],['tavi',6],['lupa',6],['nitrate',6],['kurone',6]
  ]);
  const byRarity={4:ROSTER.filter(x=>x[1]===4).map(x=>x[0]),5:ROSTER.filter(x=>x[1]===5).map(x=>x[0]),6:ROSTER.filter(x=>x[1]===6).map(x=>x[0])};
  const rarityOf=Object.fromEntries(ROSTER);

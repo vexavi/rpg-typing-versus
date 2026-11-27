@@ -10,7 +10,7 @@
   const reduced=()=>!!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   const RULES=()=>window.RPG_OPERATOR_PASSIVES?.RULES||{};
   // Face points (percent of deployment art) used to frame 6★ cut-ins.
-  const FACE={alden:[45.2,10.7],anodyne:[46.7,9.0],aveline:[59.8,10.2],cassian:[59.4,19.9],crossbow:[51.2,10.7],elise:[48.5,12.2],hexaxe:[51.7,10.0],hound:[65.2,33.7],isolde:[50.6,14.3],kade:[49.4,10.0],livia:[44.2,14.7],lupa:[79.2,20.0],mira:[51.7,10.2],nitrate:[40.8,19.7],nora:[48.1,12.4],seraphine:[57.3,9.9],shield:[38.5,12.2],tavi:[52.5,21.3],vern:[39.8,15.9],vex:[56.2,9.7]};
+  const FACE={alden:[45.2,10.7],anodyne:[46.7,9.0],aveline:[59.8,10.2],cassian:[59.4,19.9],crossbow:[51.2,10.7],elise:[48.5,12.2],hexaxe:[51.7,10.0],hound:[65.2,33.7],isolde:[50.6,14.3],kade:[49.4,10.0],livia:[44.2,14.7],lupa:[79.2,20.0],mira:[51.7,10.2],nitrate:[40.8,19.7],nora:[48.1,12.4],seraphine:[57.3,9.9],shield:[38.5,12.2],tavi:[52.5,21.3],vern:[39.8,15.9],vex:[56.2,9.7],kurone:[49.5,22.1]};
   // 4★ operators (and the default character) share the standard strike.
   const THEMES={
     std:      {kind:'std',     c1:'#2cc5f6',c2:'#eafcff',c3:'#0b5f86',bg:'#06202c',band:'#06202c'},
@@ -25,6 +25,7 @@
     lupa:     {kind:'claw',    c1:'#ff2e4d',c2:'#e9edff',c3:'#4a0c18',bg:'#2a0610',band:'#6a0b1f',skill:'MOONLIT AMBUSH'},
     nitrate:  {kind:'blast',   c1:'#ffd21a',c2:'#ff6a1a',c3:'#141414',bg:'#141414',band:'#1a1a1a',skill:'WRATH'},
     hound:    {kind:'fang',    c1:'#e3122f',c2:'#ffb3bd',c3:'#26050a',bg:'#1c0306',band:'#5a0611',skill:'BLOOD HUNT'},
+    kurone:   {kind:'glitch',  c1:'#ff3d9a',c2:'#ffe3f1',c3:'#7a2cff',bg:'#16070f',band:'#ff2e86',skill:'LIVE CHAT'},
     cassian:  {kind:'decree',  c1:'#f6c84c',c2:'#fff6d6',c3:'#1e2d74',bg:'#121c4f',band:'#1a2a78',skill:'SOVEREIGN’S DECREE'}
   };
   const rarityOf=id=>Number(RULES()[id]?.rarity)||0;
@@ -164,7 +165,12 @@
       return 320;},
     fang(a,b,th){const g=geo(a,b);
       life(node('fx-tracer fx-tracer--blood',layer,{x:a.x,y:a.y,...g,...colors(th)}),460);return 140;},
-    decree(a,b,th){life(node('fx-pillar',layer,{x:a.x,y:a.y,...colors(th)}),620);return 170;}
+    decree(a,b,th){life(node('fx-pillar',layer,{x:a.x,y:a.y,...colors(th)}),620);return 170;},
+    // Kurone: a pink data packet zips to the boss, trailing pixel blocks.
+    glitch(a,b,th){const g=geo(a,b);
+      life(node('fx-tracer fx-tracer--glitch',layer,{x:a.x,y:a.y,...g,...colors(th)}),380);
+      for(let i=0;i<4;i++)life(node('fx-pixel',layer,{x:a.x+g.dx*(.2+i*.2),y:a.y+g.dy*(.2+i*.2),d:`${i*40}ms`,...colors(th)}),520);
+      return 130;}
   };
 
   // ---------- impacts at the boss ----------
@@ -216,6 +222,11 @@
       const hunt=/hound-/.test(o.effect?.type||'')||/operator-hound-prey/.test(o.classes||'');
       life(node(`fx-jaws${hunt?' fx-jaws--hunt':''}`,layer,{x:at.x,y:at.y,...colors(th)},'<i></i><i></i>'),720);
       radial('fx-splat',at,hunt?10:7,th,hunt?120:90,640);},
+    glitch(at,th,o){
+      const big=o.effect?.type==='kurone-burst';
+      life(node(`fx-popup${big?' fx-popup--big':''}`,layer,{x:at.x,y:at.y,...colors(th)},'<i></i><b>×</b>'),big?1100:700);
+      radial('fx-pixel fx-pixel--burst',at,big?14:7,th,big?150:90,big?900:620);
+      if(big)shakeField(3);},
     decree(at,th){life(node('fx-sword',layer,{x:at.x,y:at.y,...colors(th)},'<i></i>'),900);life(node('fx-seal',layer,{x:at.x,y:at.y,...colors(th)},'<i></i>'),1100);life(node('fx-lightcol',layer,{x:at.x,y:at.y,...colors(th)}),900);}
   };
 
@@ -231,7 +242,7 @@
       if(o.immune){if(o.score)number(`+${o.score}`,to,th,{cls:'fx-num--score'});return;}
       if(o.display!=null&&o.display!==''&&Number(o.damage)>0){
         const extra=o.effect?.type==='boss-bonus'?'WEAK POINT':/operator-crossbow-bullseye/.test(o.classes||'')?'BULLSEYE':
-          o.effect?.type==='nitrate-release'?'WRATH':o.effect?.type==='lupa-complete'?'AMBUSH':o.effect?.type==='hound-next'&&o.effect.damage>0?'HUNT':'';
+          o.effect?.type==='nitrate-release'?'WRATH':o.effect?.type==='kurone-burst'?'PARTING POST':o.effect?.type==='lupa-complete'?'AMBUSH':o.effect?.type==='hound-next'&&o.effect.damage>0?'HUNT':'';
         number(o.display,to,th,{crit:!!o.crit,label:o.crit?'CRITICAL':extra});
       }
     };
@@ -433,6 +444,9 @@
       case 'hound-mark':wordPing(elFor(effect.wordId),effect.chain?'fx-ping--hunt':'fx-ping--prey',800);break;
       case 'hound-next':if(!(effect.damage>0))cutin(id,'BLOOD HUNT',th,'3 PREY · 3s EACH');break;
       case 'hound-complete':banner(id,'HUNT COMPLETE',th);break;
+      case 'kurone-chat':if(effect.tierUp)banner(id,'LIVE CHAT',th,`${effect.viewers} VIEWERS`);break;
+      case 'kurone-shoutout':cutin(id,'SHOUTOUT!',th,`PARTING POST · HYPE ×${effect.hype||0}`);break;
+      case 'kurone-ragequit':cutin(id,'RAGE QUIT',th,`PARTING POST · HYPE ×${effect.hype||0}`);break;
       case 'cassian-decree':
         cutin(id,'SOVEREIGN’S DECREE',th,effect.invulnerable?'ROYAL AUTHORITY · 5s':'');
         (effect.wordIds||[]).forEach(w=>{const e=elFor(w);if(e)autoClear(e,'cassian');});

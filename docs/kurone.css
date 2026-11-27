@@ -1,0 +1,58 @@
+/* v148.10 Kurone (6★): Live Chat viewer counter, Hype badge, Shoutout button and picker. */
+.kurone-live{display:flex;align-items:center;gap:6px;margin-top:5px;padding:3px 8px;border:1px solid #ff4fa3;background:linear-gradient(90deg,#2a0a1c,#14080f);
+  font:700 11px/1.2 var(--ak-sans,'Roboto',system-ui,sans-serif);color:#f6e9f1;letter-spacing:.04em;border-radius:3px}
+.kurone-live[hidden],.kurone-hype[hidden]{display:none}
+.kurone-live-dot{padding:1px 5px;background:#ff2e63;color:#fff;font-size:9px;letter-spacing:.14em;border-radius:2px;animation:kuroneBlink 1.2s steps(2,end) infinite}
+@keyframes kuroneBlink{50%{opacity:.45}}
+.kurone-live-count{font-size:16px;color:#ff8cc6;min-width:22px;text-align:right;font-variant-numeric:tabular-nums}
+.kurone-live-count.bump{animation:kuroneBump .35s cubic-bezier(.2,1.6,.4,1)}
+.kurone-live-count.drop{animation:kuroneDrop .45s}
+@keyframes kuroneBump{from{transform:scale(1.5)}to{transform:none}}
+@keyframes kuroneDrop{30%{transform:translateY(3px);color:#7fa7ff}}
+.kurone-live-label{color:#c9a9bb;font-weight:600}
+.kurone-live-pips{display:inline-flex;gap:3px;margin-left:2px}
+.kurone-live-pips i{width:16px;height:6px;border:1px solid #ff4fa3;background:transparent;transform:skewX(-20deg)}
+.kurone-live-pips i.on{background:#ff4fa3;box-shadow:0 0 6px #ff4fa3}
+.kurone-live-bonus{margin-left:auto;color:#ffd84f;font-weight:900;white-space:nowrap}
+.kurone-live.tier-3{box-shadow:0 0 0 1px #ff4fa3,0 0 14px #ff4fa388}
+.kurone-hype{margin-top:5px;padding:3px 8px;border:1px solid #ffd84f;background:#2a2006;color:#ffe9a6;font:700 11px/1.2 var(--ak-sans,'Roboto',system-ui,sans-serif);border-radius:3px}
+.kurone-hype b{color:#ffd84f}
+
+/* Chat reactions float up from the counter (happy) or drop away (sad). */
+.kurone-react{position:fixed;z-index:70;pointer-events:none;font:900 20px/1 system-ui,'Segoe UI Emoji','Noto Color Emoji',sans-serif;
+  animation:kuroneUp 1.1s ease-out forwards;text-shadow:0 2px 6px #000a}
+.kurone-react small{display:block;margin-top:2px;font:900 12px/1 var(--ak-sans,'Roboto',system-ui,sans-serif);color:#ff8cc6;text-align:center}
+.kurone-react.sad{animation:kuroneDown 1.2s ease-in forwards}
+.kurone-react.sad small{color:#8fb0ff}
+.kurone-react.big{font-size:30px}
+@keyframes kuroneUp{0%{opacity:0;transform:translate(0,6px) scale(.6)}15%{opacity:1;transform:translate(var(--dx,0px),-6px) scale(1.15)}100%{opacity:0;transform:translate(calc(var(--dx,0px)*2),-70px) scale(1)}}
+@keyframes kuroneDown{0%{opacity:0;transform:scale(1.4)}15%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translate(var(--dx,0px),46px) rotate(-12deg)}}
+
+/* Shoutout: the big swap-out button (Adventure squads only). */
+.kurone-shoutout{display:flex;flex-direction:column;align-items:center;justify-content:center;width:calc(100% - 16px);margin:6px 8px;padding:10px 8px;
+  border:2px solid #fff;border-radius:6px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#ff2e86,#a0145a);
+  box-shadow:0 0 0 2px #ff2e86,0 0 18px #ff2e8699;font:900 18px/1.05 var(--ak-sans,'Roboto',system-ui,sans-serif);letter-spacing:.06em;
+  animation:kuroneShout 1.6s ease-in-out infinite}
+.kurone-shoutout small{font-size:10px;letter-spacing:.22em;opacity:.9;margin-top:3px}
+.kurone-shoutout:hover{filter:brightness(1.12)}
+.kurone-shoutout:focus-visible{outline:3px solid #ffd84f;outline-offset:2px}
+.kurone-shoutout[hidden]{display:none}
+@keyframes kuroneShout{50%{box-shadow:0 0 0 2px #ff2e86,0 0 30px #ff2e86}}
+
+/* Shoutout picker */
+.kurone-pick{position:fixed;inset:0;z-index:2147483600;display:grid;place-items:center;background:rgba(8,4,10,.78);backdrop-filter:blur(2px)}
+.kurone-pick-box{width:min(620px,92vw);padding:18px 20px;border:2px solid #ff4fa3;background:#140910;color:#f6e9f1;box-shadow:0 20px 60px #000c;
+  font-family:var(--ak-sans,'Roboto',system-ui,sans-serif)}
+.kurone-pick-box h2{margin:0 0 4px;font-size:26px;letter-spacing:.06em;color:#ff8cc6}
+.kurone-pick-formula{margin:0 0 12px;font-size:20px;font-weight:900;color:#ffd84f}
+.kurone-pick-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kurone-pick-card{display:flex;align-items:center;gap:10px;padding:10px;border:2px solid #5a3448;background:#24111c;color:#fff;cursor:pointer;text-align:left;font-weight:800;font-size:16px;line-height:1.2;font-family:inherit;border-radius:4px}
+.kurone-pick-card:hover,.kurone-pick-card:focus-visible{border-color:#ff4fa3;background:#36152a;outline:none}
+.kurone-pick-card img{width:54px;height:54px;object-fit:cover;border-radius:3px}
+.kurone-pick-card small{display:block;margin-top:4px;font:700 11px/1 var(--ak-mono,ui-monospace,monospace);color:#c9a9bb}
+.kurone-pick-card kbd{margin-left:auto;padding:2px 6px;border:1px solid #c9a9bb;border-radius:3px;font:700 12px/1 var(--ak-mono,ui-monospace,monospace);color:#c9a9bb}
+.kurone-pick-cancel{margin-top:14px;padding:8px 14px;border:1px solid #6b5260;background:transparent;color:#e7d6df;cursor:pointer;font-weight:800;font-size:12px;font-family:inherit;letter-spacing:.12em}
+
+/* Squad select: Kurone cannot be the 3rd (last) operator. */
+.storySquadRosterCard.kurone-blocked{opacity:.45;filter:grayscale(.7)}
+.storySquadRosterCard.kurone-blocked .storySquadRosterBadge{background:#5a1a33;color:#ffc2dc}

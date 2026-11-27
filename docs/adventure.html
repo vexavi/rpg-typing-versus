@@ -1768,10 +1768,10 @@ width:min(600px, calc(100% - 30px));
 <link rel="stylesheet" href="tutorial-guide.css?v=6">
 <script src="tutorial-guide.js?v=3" defer></script>
 <script src="adventure-fx.js?v=1" defer></script>
-<link rel="stylesheet" href="battle-fx.css?v=3">
-<link rel="stylesheet" href="battle-marks.css?v=1">
+<link rel="stylesheet" href="battle-fx.css?v=4">
+<link rel="stylesheet" href="battle-marks.css?v=1"><link rel="stylesheet" href="kurone.css?v=1">
 <link rel="stylesheet" href="aura-fx.css?v=3">
-<script src="battle-fx.js?v=2" defer></script>
+<script src="battle-fx.js?v=3" defer></script>
 <script src="aura-fx.js?v=2" defer></script>
 <link rel="preload" as="image" href="assets/backgrounds/mode-select.webp">
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/ak-roboto-var.woff2" crossorigin>
@@ -1792,6 +1792,7 @@ width:min(600px, calc(100% - 30px));
       <aside class="storySquadVisual" id="storySquadVisual" hidden aria-label="Story squad">
         <div class="storySquadHeading">SQUAD <span id="storySquadCount">3/3</span></div>
         <div class="storySquadHero"><img id="storySquadArt" alt="Active operator" decoding="async" /><div class="storySquadHeroName" id="storySquadHeroName">—</div></div>
+        <button type="button" class="kurone-shoutout" id="kuroneShoutout" hidden><span>📣 SHOUTOUT</span><small>SWAP OUT</small></button>
         <div class="storySquadRoster" id="storySquadRoster"></div>
         <div class="storySquadDeploy" id="storySquadDeploy" aria-live="polite"></div>
       </aside>
@@ -1913,6 +1914,12 @@ width:min(600px, calc(100% - 30px));
                 </div>
                 <span class="nitrate-shield-caption">5 MAX</span>
               </div>
+              <div class="kurone-live" id="kuroneLive" hidden aria-live="off">
+                <span class="kurone-live-dot">LIVE</span><b class="kurone-live-count" id="kuroneViewers">0</b><span class="kurone-live-label">viewers</span>
+                <span class="kurone-live-pips" aria-hidden="true"><i data-at="10"></i><i data-at="20"></i><i data-at="30"></i></span>
+                <span class="kurone-live-bonus" id="kuroneBonus"></span>
+              </div>
+              <div class="kurone-hype" id="kuroneHype" hidden><b>📣 HYPE</b> +1 DMG · <span id="kuroneHypeLeft">0</span> words</div>
             </div>
           </div>
 

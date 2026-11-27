@@ -43,8 +43,24 @@
     hound: Object.freeze({id:'hound',name:'Hound',rarity:6,title:'Blood Hunt',every:4,preySec:6,chainSec:3,maxChain:3,bonusDamage:2,
       description:'After 4 consecutive correct words, type the marked Prey within 6 seconds to start Blood Hunt: complete up to 3 timed Prey (3 seconds each) for +2 boss damage apiece.'}),
     cassian: Object.freeze({id:'cassian',name:'Cassian',rarity:6,title:"Sovereign’s Decree",every:6,maxEliminations:3,invulnerableSec:5,
-      description:'Every 6 correct words, instantly eliminate up to 3 falling words. Missing eliminations deal 1 boss damage each; 4+ available words grant 5 seconds of invulnerability.'})
+      description:'Every 6 correct words, instantly eliminate up to 3 falling words. Missing eliminations deal 1 boss damage each; 4+ available words grant 5 seconds of invulnerability.'}),
+    // v148.10 Kurone. Viewers belong to the run (they carry across stages) and only
+    // leave on typos, a swap-out, a knockout or a brand-new run.
+    kurone: Object.freeze({id:'kurone',name:'Kurone',rarity:6,title:'Live Chat / Shoutout / Rage Quit',
+      maxViewers:30,typoLoss:5,tiers:Object.freeze([10,20,30]),
+      bonus:Object.freeze([0,0.3,0.5,1]),every:Object.freeze([0,3,2,1]),burst:Object.freeze([0,3,6,10]),hype:Object.freeze([0,3,6,10]),
+      description:'Live Chat: every correct word adds 1 viewer (max 30); a typo makes 5 viewers leave. At 10 / 20 / 30 viewers every word deals more damage. Shoutout (Adventure): swap Kurone out to any available squad member; the next operator gets Hype (+1 damage on its next 3 / 6 / 10 words) and the boss takes a half-strength parting post. Rage Quit: if Kurone is knocked out, the parting post deals full damage (3 / 6 / 10) and the next operator still gets Hype. Kurone cannot be the last squad member.'})
   });
+  // Kurone tier: 0 below 10 viewers, then 1 / 2 / 3.
+  const kuroneTier=v=>{const t=RULES.kurone.tiers;return v>=t[2]?3:v>=t[1]?2:v>=t[0]?1:0;};
+  // Parting post + Hype when Kurone leaves the field. A swap-out halves the post;
+  // whole-number modes round the half UP (3 -> 2, 5 -> 3).
+  function kuroneExit(viewers,kind,precise=false){
+    const r=RULES.kurone,tier=kuroneTier(Math.max(0,Number(viewers)||0));
+    const full=r.burst[tier];
+    const burst=kind==='swap'?(precise?full/2:Math.ceil(full/2)):full;
+    return {tier,burst,hype:r.hype[tier],viewers:Math.max(0,Number(viewers)||0)};
+  }
   const ALLOWED_MODES = new Set(['normal','practice','story','challenge','shared']);
   const validTime=t=>Number.isFinite(t)&&t>=0?t:0;
   const fallingWord=w=>w&&w.state==='falling'&&!w.ex2Hacked&&!w.ex3ExpiredGhost&&!w.s5Permafrost&&Number.isFinite(w.y);
@@ -58,6 +74,8 @@
     const rule=ALLOWED_MODES.has(mode)?RULES[characterId]||null:null;
     const lowHp=(hp,threshold)=>preciseHp?Number(hp)>0&&Number(hp)<=threshold:Number(hp)===threshold;
     let correct=0,activations=0,spawnPauseUntil=0,slowUntil=0,lastSlowAt=-Infinity;
+    // Kurone's viewers are NOT cleared by reset(): the stream carries across stages.
+    let viewers=0,chatHits=0;
     let frozen=null,freezeUntil=0,mistakeArmed=false,used=false;
     let streak=0,domainFreezeUntil=0,charged=false,marked=null,awaitingMark=false,executionPendingUntil=0;
     // 6★ state. Only one operator runs per game, so no inter-operator effect stacking.
@@ -390,6 +408,10 @@
         return null;
       }
       if(rule.id==='isolde'){streak=0;return null;}
+      if(rule.id==='kurone'){
+        const before=viewers;viewers=Math.max(0,viewers-rule.typoLoss);chatHits=0;
+        return {type:'kurone-leave',viewers,lost:before-viewers,tier:kuroneTier(viewers),tierDown:kuroneTier(viewers)<kuroneTier(before),characterId:rule.id};
+      }
       if(rule.id==='tavi'){
         if(!foxfireActive)foxfireProgress=0;
         return null;
@@ -503,6 +525,20 @@
       if(!rule)return null;
       correct++;
       const t=validTime(time);
+      if(rule.id==='kurone'){
+        const before=kuroneTier(viewers);
+        viewers=Math.min(rule.maxViewers,viewers+1);
+        const tier=kuroneTier(viewers);
+        if(tier!==before)chatHits=0;
+        // Adventure (precise) adds a fractional bonus to every word; whole-number
+        // modes give +1 on every 3rd / 2nd / every word instead (same average).
+        let bonusDamage=0;
+        if(tier&&!context.nonBoss){
+          if(preciseHp)bonusDamage=rule.bonus[tier];
+          else if(++chatHits%rule.every[tier]===0)bonusDamage=1;
+        }
+        return {type:'kurone-chat',viewers,tier,tierUp:tier>before,bonusDamage,characterId:rule.id};
+      }
       if(rule.id==='nitrate'){
         const word=context.clearedWord;
         if(!word||!wrathMarked.has(word.id))return null;
@@ -837,10 +873,14 @@
       adrenalineMomentumStreak,adrenalineMomentumUnlocked};}
     function isInvulnerable(time){return (rule?.id==='cassian'&&validTime(time)<cassianGuardUntil)||getAdrenalinePhase(time)==='last-stand';}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
+    function getViewers(){return rule?.id==='kurone'?viewers:0;}
+    function setViewers(n){if(rule?.id==='kurone'){viewers=Math.max(0,Math.min(rule.maxViewers,Math.floor(Number(n)||0)));chatHits=0;}}
+    // Kurone leaves the field: returns the parting post / Hype and ends the stream.
+    function kuroneLeave(kind){if(rule?.id!=='kurone')return null;const out=kuroneExit(viewers,kind,preciseHp);viewers=0;chatHits=0;return out;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,onRevive,updateField,
       startLupa,markCrossbowWord,syncAdrenaline,protectDeadlines,onWordSpawn,nitrateAbsorbDamage,getNitrateShield,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
-      isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,debug});
+      isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,getViewers,setViewers,kuroneLeave,debug});
   }
-  window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create});
+  window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create,kuroneTier,kuroneExit});
 })();

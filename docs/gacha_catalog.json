@@ -127,6 +127,12 @@
       "name": "Nitrate",
       "rarity": 6,
       "art": "assets/recruitment/nitrate.webp"
+    },
+    {
+      "id": "kurone",
+      "name": "Kurone",
+      "rarity": 6,
+      "art": "assets/recruitment/kurone.webp"
     }
   ]
 }
