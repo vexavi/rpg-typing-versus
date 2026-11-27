@@ -133,6 +133,60 @@ function spawnWord(record,{falling=false}={}){
 }
 function clearWord(){stop();$('wordLane').replaceChildren();}
 
+// Lesson 2 demo: a rush of fast words piles up until OVERFLOW, then HP ticks down to 1.
+const RUSH=[['いぬ','dog'],['あか','red'],['やま','mountain'],['うみ','sea'],['ほし','star'],['はな','flower'],['くるま','car'],['とり','bird'],
+ ['そら','sky'],['き','tree'],['かわ','river'],['つき','moon'],['あめ','rain'],['ゆき','snow'],['かぜ','wind'],['ひ','fire'],['いし','stone'],['みち','road'],
+ ['まど','window'],['いす','chair'],['つくえ','desk'],['かさ','umbrella'],['ふね','ship'],['くつ','shoes'],['かぎ','key'],['さかな','fish']];
+let demoTimers=[];
+function demoLater(fn,ms){const t=setTimeout(fn,ms);demoTimers.push(t);return t;}
+function overflowDemo(){
+ phase='l2-overflow';setInput({enabled:false});clearWord();
+ coach({focus:['.wordLane','#tutorialPlayerRow'],text:'Words you do not clear fall to the bottom and pile up. Watch what happens when lots of words fall at once…'});
+ const lane=$('wordLane'),rowH=30;
+ const rows=Math.floor(lane.clientHeight/rowH);   // same OVERFLOW rule as the real game
+ const words=[];let i=0;
+ const spawn=()=>{
+  if(i>=rows){startOverflow();return;}
+  const [jp,en]=RUSH[i%RUSH.length];
+  const w=document.createElement('div');w.className='word';
+  w.innerHTML=`<div class="prompt">${escapeHtml(jp)}</div><div class="right"><span class="tag"></span><span class="answer muted">${escapeHtml(en)}</span></div>`;
+  w.style.setProperty('--y','-30px');lane.appendChild(w);
+  const target=lane.clientHeight-rowH*(i+1)-4;   // pile from the bottom up
+  words.push({w,target,start:performance.now()});i++;
+  demoLater(spawn,170);
+ };
+ const fall=ts=>{
+  let moving=false;
+  for(const o of words){
+   const t=Math.min(1,(ts-o.start)/520),y=-30+(o.target+30)*t*t;
+   o.w.style.setProperty('--y',`${y}px`);
+   if(t<1)moving=true;else o.w.classList.add('landed');
+  }
+  if(phase==='l2-overflow'&&(moving||i<rows))frameId=requestAnimationFrame(fall);else frameId=null;
+ };
+ frameId=requestAnimationFrame(fall);spawn();
+}
+function startOverflow(){
+ $('overflowBadge').classList.add('show');
+ coach({focus:['.wordLane','#overflowBadge','#tutorialPlayerRow'],
+  text:'OVERFLOW! The pile reached the top, so you lose 1 HP every second until you clear words. Watch your HP…'});
+ const tickHp=()=>{
+  if(phase!=='l2-overflow')return;
+  if(playerHP>1){playerHP--;updateBars();flashDamage();log(`OVERFLOW · HP ${playerHP}/10`);demoLater(tickHp,1000);return;}
+  // Stop at 1 HP: the tutorial never makes them lose.
+  coach({focus:['#tutorialPlayerRow','#overflowBadge'],
+   text:'Your HP dropped to 1! In a real battle you would lose at 0. Clear words quickly so the pile never reaches the top.',
+   next:()=>{
+    demoTimers.forEach(clearTimeout);demoTimers=[];stop();
+    $('overflowBadge').classList.remove('show');clearWord();
+    playerHP=10;updateBars();log('HP restored for the tutorial.');
+    spawnWord(samples[2][0]);phase='l2-fix';setInput({enabled:true});
+    coach({focus:['.inputBar','#trainingWord','#tutorialPlayerRow'],enter:true,text:'Your HP is back to 10. Now type apple correctly and press ENTER to clear it.'});
+   }});
+ };
+ demoLater(tickHp,900);
+}
+
 // ---- lessons ----------------------------------------------------------------------
 function lesson(i){
  stop();stage=i;stepCount=0;busy=false;phase='';
@@ -225,15 +279,7 @@ $('answerForm').addEventListener('submit',e=>{
    log('MISS: aple');phase='l2-hp';
    coach({focus:['#tutorialPlayerRow'],
     text:'Ouch! A wrong answer is a MISS and costs 1 HP (10 → 9). If your HP reaches 0, the run is over.',
-    next:()=>{
-     phase='l2-overflow';$('overflowBadge').classList.add('show');
-     coach({focus:['.wordLane','#overflowBadge'],
-      text:'Words that reach the bottom pile up. If the pile reaches the top, you get OVERFLOW and lose 1 HP every second until you clear words.',
-      next:()=>{
-       $('overflowBadge').classList.remove('show');phase='l2-fix';setInput({enabled:true});
-       coach({focus:['.inputBar','#trainingWord'],enter:true,text:'Now type apple correctly and press ENTER to clear it.'});
-      }});
-    }});
+    next:()=>overflowDemo()});
    return;
   }
   if(phase!=='l2-fix')return;
