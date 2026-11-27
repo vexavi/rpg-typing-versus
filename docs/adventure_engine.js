@@ -2766,8 +2766,9 @@ function setBgm(src, loop=true, autoplay=true){
 
     if(introState === "ready"){
       hideIntroStartScreen();
-      if(Number(window.ADVENTURE_PLAYER?.tutorial?.version)===0){
-        // First-time accounts complete the four lessons, including a real free 10-pull.
+      if(Number(window.ADVENTURE_PLAYER?.tutorial?.version)===0&&Number(window.ADVENTURE_PLAYER?.tutorial?.step||1)<4){
+        // First-time accounts complete Lessons 1–3 on the tutorial battle screen.
+        // Lesson 4 (step 4) happens right here on the real Mode Select, with guard rails.
         window.location.assign('tutorial.html');
         return;
       }
@@ -2931,6 +2932,49 @@ async function completeStoryStage(stage,damage=null){
 // v122: mode navigation always ends in a real menu state, never an empty arena.
 // Story map's own Back/Escape path calls this same exit route.
 window.RPG_STORY_EXIT_TO_MODES = () => resetGame(false);
+// v148.9 first-time tutorial, Lesson 4: the REAL Mode Select with guard rails.
+function tutorialLesson4Pending(){
+  const t=window.ADVENTURE_PLAYER?.tutorial;
+  return !!t&&Number(t.version)===0&&Number(t.step||1)>=4;
+}
+function modeTile(title){
+  return [...document.querySelectorAll('#overlayChoices .student-mode-card')].find(b=>b.querySelector('.title')?.textContent.trim()===title)||null;
+}
+let modeSelectGuideTimer=0;
+function modeSelectVisible(){
+  const ov=document.getElementById('overlay');
+  return !!ov&&ov.classList.contains('show')&&ov.classList.contains('mode-select-active')&&
+    !document.getElementById('introOverlay')?.classList.contains('show')&&!document.getElementById('adventureGate');
+}
+// Show the guide only once Mode Select is really on screen (not behind the title screen).
+function whenModeSelectVisible(run){
+  clearInterval(modeSelectGuideTimer);
+  const started=Date.now();
+  modeSelectGuideTimer=setInterval(()=>{
+    if(modeSelectVisible()){clearInterval(modeSelectGuideTimer);setTimeout(()=>{if(modeSelectVisible())run();},250);}
+    else if(Date.now()-started>600000)clearInterval(modeSelectGuideTimer);
+  },200);
+}
+function startModeSelectTutorialGuide(){
+  const guide=window.RPG_TUTORIAL_GUIDE;
+  if(tutorialLesson4Pending()){
+    if(!guide){ // guard rails unavailable: keep only Recruitment usable
+      setTimeout(()=>document.querySelectorAll('#overlayChoices .student-mode-card').forEach(b=>{if(b!==modeTile('Recruitment'))b.disabled=true;}),0);
+      return;
+    }
+    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Recruitment'),kicker:'TUTORIAL · LESSON 04 / 04',
+      title:'Mode Select',
+      text:'This is Mode Select — you start every game from here. Tap RECRUITMENT to get your first ten characters for free.'}));
+    return;
+  }
+  let done=false;try{done=sessionStorage.getItem('rpgTutorialJustDone')==='1';sessionStorage.removeItem('rpgTutorialJustDone');}catch(_){}
+  if(done&&guide){
+    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Normal Mode'),kicker:'TUTORIAL COMPLETE',
+      title:'You are ready!',
+      text:'Start with NORMAL MODE. Clear it once to unlock Adventure and All Grades Challenge.',
+      button:{label:'GOT IT',onClick:()=>guide.clear()}}));
+  }
+}
 function showModeSelectScreen(){
   window.RPG_V66_COMPETITIVE_ACTIVE=false;window.dispatchEvent(new Event("rpg-v66-unlock-settings"));
   closeRankings();
@@ -3134,7 +3178,8 @@ function showModeSelectScreen(){
     setMode('shared');showOverlay(false);startGame();
   }});
   addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
-    window.location.assign('recruitment.html');
+    // Lesson 4 of the first-time tutorial continues on the guided Recruitment page.
+    window.location.assign(tutorialLesson4Pending()?'recruitment.html?tutorial=1':'recruitment.html');
   }});
   // v148.9: the Aura Workshop now lives inside Collection (each operator page has an Aura row).
   addMode('Collection', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
@@ -3147,6 +3192,7 @@ function showModeSelectScreen(){
   }});
   // v148.9: Tournament is hidden for now. Set SHOW_TOURNAMENT_TILE to true to show it again
   // (the tournament code itself is unchanged).
+  startModeSelectTutorialGuide();
   if(SHOW_TOURNAMENT_TILE)addMode('Tournament', {disabled:true,
     lockedReason:'Scan your teacher’s tournament QR code to join'});
   if(!ADVENTURE_CONTEXT.online){
@@ -6935,7 +6981,7 @@ runCmd.addEventListener("click", () => {
   function bootGame(){
     try{ renderProfileHeader(); }catch(_){/* ignore */}
     resetGame();
-    if(window.RPG_RESUME_MODE_SELECT === true && Number(window.ADVENTURE_PLAYER?.tutorial?.version)!==0){
+    if(window.RPG_RESUME_MODE_SELECT === true && (Number(window.ADVENTURE_PLAYER?.tutorial?.version)!==0 || Number(window.ADVENTURE_PLAYER?.tutorial?.step||1)>=4)){
       window.RPG_RESUME_MODE_SELECT = false;
       showModeSelectScreen();
     }else{
