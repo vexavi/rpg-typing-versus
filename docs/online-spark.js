@@ -117,6 +117,11 @@ async function verifyPlayer(){
  if(!c||c.disabled||c.deleted||c.publicId!==s.publicId){forgetIdentity();err('Card session expired, disabled, or missing.');}
  const p=await read('players',s.publicId);
  if(!p||p.disabled){forgetIdentity();err('Card session expired, disabled, or missing.');}
+ // v148.9: list this Chromebook on the player document so security rules can check
+ // ownership without an extra billed lookup. Only written the first time (max 5 devices).
+ const owners=Array.isArray(p.ownerUids)?p.ownerUids:[];
+ if(!owners.includes(owner)&&(()=>{try{return sessionStorage.getItem('rpgOwnerLinkOff')!==owner;}catch(_){return true;}})()){const next=owners.filter(x=>x!==owner).concat(owner).slice(-5);
+  try{await fsUpdateDoc(ref('players',s.publicId),{ownerUids:next});p.ownerUids=next;}catch(_){/* old rules: lookup still works */try{sessionStorage.setItem('rpgOwnerLinkOff',owner);}catch(__){}}}
  if(!known){identity={uid:owner,at:Date.now(),session:{code:s.code,publicId:s.publicId},card:c};try{sessionStorage.setItem(IDENTITY_KEY,JSON.stringify(identity));}catch(_){}}
  return {session:s,card:c,player:p,id:s.publicId,playerRef:ref('players',s.publicId)};
 }
@@ -161,6 +166,10 @@ async function openCard(b){
   c.username=n;c.grade=grade;
  }
  // The QR code is a bearer credential. Auth UID sessions can be re-established on another Chromebook.
+ let prevId=cachedIdentity(uid())?.session?.publicId;
+ if(!prevId){try{prevId=(await read('cardSessions',uid()))?.publicId;}catch(_){}}
+ if(prevId&&prevId!==c.publicId){try{const prev=await read('players',prevId);const list=Array.isArray(prev?.ownerUids)?prev.ownerUids:[];
+  if(list.includes(uid()))await fsUpdateDoc(ref('players',prevId),{ownerUids:list.filter(x=>x!==uid())});}catch(_){}}
  await setDoc(ref('cardSessions',uid()),{code,publicId:c.publicId,linkedAt:serverTimestamp()});forgetIdentity();forgetPlayer();
  if(!await read('players',c.publicId)){
   try{await setDoc(ref('players',c.publicId),defaultPlayer(c));forgetPlayer();}

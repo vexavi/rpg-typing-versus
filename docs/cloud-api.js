@@ -104,10 +104,12 @@ export async function importCards(rows){
  await runTransaction(db,async tx=>{const d=await tx.get(cfgref);if(!d.exists()||Number(d.data().lastId||0)<maxId)tx.set(cfgref,{lastId:maxId,updatedAt:serverTimestamp()})});
  return {imported:adds.length,skipped:rows.length-adds.length};
 }
-export async function disableCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{disabled:true})}
+// v148.9: disabling or revoking a card also removes every Chromebook from it (ownerUids).
+async function clearCardDevices(code){try{const c=await getDoc(doc(db,'cloudCards',normalizeCode(code)));const id=c.exists()&&c.data().publicId;if(id)await updateDoc(doc(db,'players',id),{ownerUids:[]});}catch(_){/* no player yet */}}
+export async function disableCard(code){await updateDoc(doc(db,'cloudCards',normalizeCode(code)),{disabled:true});await clearCardDevices(code);}
 export async function enableCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{disabled:false})}
 export async function clearCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{username:null,registeredAt:null,character:'mc'})}
-export async function revokeCard(code){return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{username:null,registeredAt:null,disabled:true,deleted:true})}
+export async function revokeCard(code){await clearCardDevices(code);return updateDoc(doc(db,'cloudCards',normalizeCode(code)),{username:null,registeredAt:null,disabled:true,deleted:true})}
 export async function rotateCard(code){
  const old=normalizeCode(code),fresh=secretCode();
  await runTransaction(db,async tx=>{
