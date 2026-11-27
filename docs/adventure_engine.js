@@ -6123,6 +6123,18 @@ function storyIncomingDamage(key,fallback){
     gameState = "countdown";
     setInputsEnabled(false);
 
+    // v148.9 Adventure: "Level X" countdown from 5 with bars converging to the middle.
+    const conquestRun=currentMode==='story'?window.RPG_CONQUEST?.run:null;
+    if(conquestRun&&window.RPG_ADVENTURE_FX){
+      showOverlay(false);
+      const id=String(conquestRun.chapter?.id||'');
+      const ok=await window.RPG_ADVENTURE_FX.countdown({level:conquestRun.position+1,seconds:5,
+        territory:window.RPG_CONQUEST_MAP?.name?.(id)||'',
+        emblem:{'1':'assets/emblems/rift.webp','2':'assets/emblems/valcrest.webp','3':'assets/emblems/vesper.webp'}[id]||'',
+        alive:()=>isUiFlow(token)&&gameState==='countdown'});
+      return ok&&isUiFlow(token)&&gameState==='countdown';
+    }
+
     showOverlay(true);
     setOverlayText("READY?", "カウントダウン後に開始", "");
     for(let s=seconds; s>=1; s--){

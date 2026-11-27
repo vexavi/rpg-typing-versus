@@ -363,16 +363,42 @@ function openStageSelect(territoryId,opts={}){
 }
 // Clearing a stage mid-run: a result window, then back to Stage Select where the next
 // stage unlocks. Resolves 'next' (GO TO BATTLE) or 'retreat'.
+// v148.9 stage complete screen: "Level X / Completed", the three squad portraits with
+// their HP (knocked-out operators greyed out), and a STAGE SELECT button.
+function squadStatus(run){
+ const core=window.RPG_CONQUEST,rules=window.RPG_OPERATOR_PASSIVES?.RULES||{};
+ return run.ids.map((id,i)=>{
+  const max=core.stats(id,rules[id]?.maxHpBonus||0,run.bonuses||{},run.config).hp;
+  const ko=run.knockedOut.includes(i);
+  const hp=ko?0:i===run.index?Math.max(0,Math.min(max,run.hp??max)):max;
+  return {id,i,ko,hp,max,active:i===run.index&&!ko,name:id==='mc'?String(identity.name||'Operator'):String(rules[id]?.name||id.replace(/_/g,' '))};
+ });
+}
+function endScreenHtml(run,level,note=''){
+ const core=window.RPG_CONQUEST,total=run.encounters.length,done=run.records.length;
+ const ops=squadStatus(run).map(o=>{
+  const art=o.id==='mc'?'assets/characters/mc.webp':`assets/deployment/${o.id}.webp`;
+  return `<div class="ae-op${o.ko?' is-ko':''}" style="--i:${o.i}"><div class="ae-face"><img src="${esc(media(art))}" alt="" onerror="this.onerror=null;this.src='assets/profile-icons/${esc(o.id)}.webp'">${o.ko?'<i>K.O.</i>':o.active?'<i>ACTIVE</i>':''}<b>${esc(o.name)}</b></div>
+   <div class="ae-hp"><span><em data-w="${o.max?Math.round(100*o.hp/o.max):0}"></em></span>${esc(core.displayed(o.hp))}</div></div>`;}).join('');
+ return `<div class="ae-end" role="dialog" aria-label="Level ${level} completed">
+  <div class="ae-head"><i class="ae-hatch"></i><div class="ae-plate"><small>Level ${level}</small><h2>Completed</h2></div><i class="ae-hatch"></i><div class="ae-rule"></div></div>
+  <div class="ae-label">Squad Status</div>
+  <div class="ae-squad">${ops}</div>
+  ${note?`<p class="ae-note">${note}</p>`:''}
+  <div class="ae-progress" aria-label="Stages cleared"><i style="width:${total?100*done/total:0}%"></i></div>
+  <button type="button" class="ae-ok" id="ae-ok"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/><path d="M14 8l-4 4 4 4"/></svg><span>Stage Select</span></button></div>`;
+}
+function fillHpBars(){setTimeout(()=>box.querySelectorAll('.ae-hp em').forEach(e=>{e.style.width=(e.dataset.w||0)+'%';}),650);}
+// Clearing a stage mid-run → the complete screen → Stage Select (next stage unlocks).
+// Resolves 'next' (GO TO BATTLE) or 'retreat'.
 function showConquestReward(run,step){
  return new Promise(resolve=>{
-   const reward=step.reward,done=run.records.length,total=run.encounters.length;
-   const cleared=run.encounters[done-1];
+   const done=run.records.length;
    const finish=v=>{if(conquestOverlayFinish!==cancel)return;conquestOverlayFinish=null;clearStageTimers();hide();resolve(v);};
    const cancel=()=>finish('next');conquestOverlayFinish=cancel;
-   const body=reward?`<div class="cq-reward-box"><div class="conquest-rarity">${'★'.repeat(reward.rarity)}</div><h2>${esc(reward.name)}</h2><div class="conquest-reward-stat">${esc(reward.label)} ${esc(reward.display)}</div></div>`:'';
-   show(`<div class="ss-clear" role="dialog" aria-label="Stage clear"><div class="ss-clear-box"><small>STAGE ${stageNo(done-1)} · ${esc(cleared?.battle?.bossName||cleared?.title||'')}</small><h2>STAGE CLEAR</h2><div class="cq-result-count">${done} / ${total}</div>${body}<p>SQUAD HP ${window.RPG_CONQUEST.displayed(step.hp)}${step.healed?` · +${step.healed} HEALED`:''}</p><button type="button" id="ss-clear-ok">STAGE SELECT ››</button></div></div>`);
-   box.querySelector('#ss-clear-ok').onclick=()=>openStageSelect(String(run.chapter.id),{anim:'unlock',intermission:{run,go:()=>finish('next'),retreat:()=>finish('retreat')}});
-   box.querySelector('#ss-clear-ok').focus();
+   show(endScreenHtml(run,done));fillHpBars();
+   box.querySelector('#ae-ok').onclick=()=>openStageSelect(String(run.chapter.id),{anim:'unlock',intermission:{run,go:()=>finish('next'),retreat:()=>finish('retreat')}});
+   box.querySelector('#ae-ok').focus();
  });
 }
 function cancelConquestOverlay(){if(conquestOverlayFinish)conquestOverlayFinish();}
@@ -383,9 +409,10 @@ function conquestBannerResult(run,done,captured,animate){
 function showConquestResult(run,result){
  return new Promise(resolve=>{
    const total=run.encounters.length;
-   show(`<div class="story-result conquest-reward cq-banner-result ${result.saved?'cq-captured-result':''} ${run.chapter.conquest?.banner?.animate===false?'cq-no-animation':''}" role="dialog" aria-label="Operation complete">${conquestBannerResult(run,total,false,true)}${result.saved?`<div class="cq-gold-reveal">${conquestBannerResult(run,total,true,false)}</div>`:''}<div class="cq-result-info"><div class="story-result-label">OPERATION COMPLETE</div><h2>${esc(window.RPG_CONQUEST_MAP.byId(run.chapter.id)?.name||run.chapter.title)}</h2><div class="cq-result-count">${total} / ${total}</div><p>${3-run.knockedOut.length} / 3 OPERATORS</p><p>${result.saved?'TERRITORY CAPTURED':'UNRANKED / NOT SAVED'}</p>${result.coins?`<p>+${result.coins} GUILD COINS</p>`:''}<button type="button" id="conquest-finish">OK</button></div></div>`);
+   const note=[result.saved?'TERRITORY CAPTURED':'UNRANKED · NOT SAVED',result.coins?`+${result.coins} GUILD COINS`:''].filter(Boolean).join(' · ');
+   show(endScreenHtml(run,total,esc(note)));fillHpBars();
    const finish=()=>{if(conquestOverlayFinish!==finish)return;conquestOverlayFinish=null;hide();resolve();};conquestOverlayFinish=finish;
-   box.querySelector('#conquest-finish').onclick=finish;box.querySelector('#conquest-finish').focus();
+   box.querySelector('#ae-ok').onclick=finish;box.querySelector('#ae-ok').focus();
  });
 }
 function showResult(stageId,rating,damage){
