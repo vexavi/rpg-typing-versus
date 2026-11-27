@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 760">
+ <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a5260"/><stop offset="1" stop-color="#1f242c"/></linearGradient></defs>
+ <!-- Placeholder boss: hooded full-body silhouette. Replace with the real art later. -->
+ <path fill="url(#g)" stroke="#7b8594" stroke-width="3" d="M200 40c-46 0-78 38-80 86-1 22 6 40 16 54-46 18-78 60-86 118l-22 170c-3 22 14 30 30 18l30-24 6 170c0 18 12 28 28 28h26l8-150h88l8 150h26c16 0 28-10 28-28l6-170 30 24c16 12 33 4 30-18l-22-170c-8-58-40-100-86-118 10-14 17-32 16-54-2-48-34-86-80-86z"/>
+ <text x="200" y="330" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="900" font-size="120" fill="#9aa4b2" opacity=".8">?</text>
+ <text x="200" y="740" text-anchor="middle" font-family="ui-monospace,monospace" font-size="18" letter-spacing="6" fill="#8a94a3">BOSS ART PENDING</text>
+</svg>

@@ -2824,7 +2824,7 @@ async function launchStoryStage(stage){
   if(Array.isArray(stage.stages)){
     if(!normalCleared||window.RPG_CONQUEST.visibility(stage)!=='enabled'){showModeSelectScreen();return;}
     const chosen=await chooseStorySquad(stage.conquest);
-    if(!chosen){showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage);return;}
+    if(!chosen){showModeSelectScreen();window.RPG_STORY.openStageSelect(String(stage.id));return;}
     const operation=window.RPG_CONQUEST.begin(stage,chosen);
     storySquad.ids=chosen;
     return launchStoryStage(operation.encounters[0]);
@@ -2846,6 +2846,9 @@ async function launchStoryStage(stage){
       playBgmFile:(/^story\/audio\/[a-zA-Z0-9][\w.-]*\.(?:mp3|m4a|webm|opus|ogg|wav)$/i.test(String(stage.battle?.bgmFile||""))?String(stage.battle.bgmFile):(String(stage.id||"").startsWith("1-")?"story/audio/ch1-battle.webm":"")),
       playBgmLoop:stage.battle?.bgmLoop!==false,dialogueBgmFile:"",
       words:WORDS};
+    // v148.9: stages without their own art yet use placeholder boss / background images.
+    if(!storyBattleStage.bossFile)storyBattleStage.bossFile='story/images/boss-placeholder.svg';
+    if(!storyBattleStage.bgFile)storyBattleStage.bgFile='story/images/stage-bg-placeholder.svg';
   }else storyBattleStage=null;
   // Per-stage Story Editor values take priority over inherited Game Settings.
   // Behavior remains defined by static game modules; Firestore supplies only numeric/boolean options.
@@ -2878,8 +2881,10 @@ async function completeConquestEncounter(){
   const step=core.finishEncounter({index:storySquad.index,knockedOut:storySquad.knockedOut,hp:playerHp,passiveHp:operatorPassive?.getMaxHpBonus?.()||0,damage:Math.ceil(damageTakenThisStage-1e-8),correct:guildCorrectThisRun,incorrect:mistakes,attemptId:guildStoryAttemptId,unranked:runLocalOnly||!!window.RPG_V66_DISCONNECTED||!navigator.onLine});
   if(!step)return;
   if(!step.final){
-    await window.RPG_STORY.showConquestReward(run,step);
+    const choice=await window.RPG_STORY.showConquestReward(run,step);
     if(core.run!==run||gameState!=='stageclear')return;
+    // v148.9: retreating from Stage Select ends the run and returns to the Hall of Banners.
+    if(choice==='retreat'){core.abort();resetGame(false);window.RPG_STORY.openMap(launchStoryStage);return;}
     return launchStoryStage(step.next);
   }
   let saved=false,coins=0;
@@ -2898,8 +2903,8 @@ async function completeConquestEncounter(){
   if(core.run!==run)return;
   await window.RPG_STORY.showConquestResult(run,{saved,coins});
   if(core.run!==run)return;
-  const preferred=run.chapter.stages[0].id;
-  resetGame(false);window.RPG_STORY.openMap(launchStoryStage,preferred);
+  // v148.9: back to the territory's Stage Select with an "all stages cleared" animation.
+  resetGame(false);window.RPG_STORY.openStageSelect(String(run.chapter.id),{anim:'complete'});
 }
 async function completeStoryStage(stage,damage=null){
   if(!stage)return;
@@ -5912,6 +5917,15 @@ function storyIncomingDamage(key,fallback){
     overlayChoices.innerHTML = "";
   }
   function returnFromDefeatToModes(){
+    // v148.9: a knocked-out Adventure squad returns to that territory's Stage Select,
+    // where the cleared stages grey out again (the run restarts from Stage 01).
+    const failedRun=currentMode==='story'?window.RPG_CONQUEST?.run:null;
+    if(failedRun&&window.RPG_STORY?.openStageSelect){
+      const id=String(failedRun.chapter.id),cleared=failedRun.records.length;
+      stopDefeatUI();resetGame(false);
+      window.RPG_STORY.openStageSelect(id,{anim:'fail',failFrom:cleared});
+      return;
+    }
     stopDefeatUI();
     // Do not reopen Story's map or the login screen. Keep the active card signed in.
     resetGame(false);

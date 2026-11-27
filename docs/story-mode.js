@@ -148,12 +148,16 @@ function openConquestChapter(chIndex,preferred=null,requestedId=null,focus=false
  const stageProgress=`<div class="cq-stage-progress"><span>STAGES CLEARED</span><strong>${done} / ${battles.length}</strong><div class="cq-stage-meter" role="progressbar" aria-label="Stages cleared" aria-valuemin="0" aria-valuemax="${battles.length}" aria-valuenow="${done}"><i style="width:${battles.length?100*done/battles.length:0}%"></i></div></div>`;
  const lockHint=state(selected)==='locked'&&!starter(ch)&&!startersComplete?`<p class="cq-stage-status">Clear The Rift, Valcrest and Vesper (${starterClears}/3).</p>`:'';
  const actionLabel=activeRun?(isActive(selected)?`CONTINUE · STAGE ${stageNo(done)}`:'OPERATION ACTIVE'):allowed?(cleared(ch)?'REPLAY · STAGE 01':'START · STAGE 01'):(state(selected)==='unpublished'?'COMING SOON':'LOCKED');
- show(`<div class="story-world conquest-world cq-atlas cq-hall"><div class="story-world-top"><button id="story-close" class="story-map-back" type="button" aria-label="${activeRun?'Back to reward':'Back to Mode Select'}">‹ <span>${activeRun?'REWARD':'MODE SELECT'}</span></button><div class="story-map-title">CONQUEST</div><div class="cq-progress">TERRITORIES <strong>${enabledRegions.filter(cleared).length} / ${enabledRegions.length}</strong></div></div><div class="cq-main"><section class="cq-map-panel cq-banner-panel" aria-label="Hall of Banners"><div class="cq-hall-heading">HALL OF BANNERS</div><div class="cq-banner-row ${pageCount===1?'cq-single-page':''}">${pageCount>1?`<button id="cq-prev" type="button" aria-label="Previous banners" ${page===0?'disabled':''}>‹</button>`:''}<div class="cq-banner-grid cq-count-${pageItems.length}">${banners}</div>${pageCount>1?`<button id="cq-next" type="button" aria-label="Next banners" ${page===pageCount-1?'disabled':''}>›</button>`:''}</div><div class="cq-map-footer" ${pageCount===1?'hidden':''}><span class="cq-page">${page+1} / ${pageCount}</span><label class="cq-jump"><span class="cq-jump-label">Territory</span><select id="cq-territory-select" aria-label="Select territory">${choices.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.name)} · ${status[state(c.id)]}</option>`).join('')}</select></label></div></section><aside class="cq-side" style="--territory:${selectedColor}" aria-label="Selected territory"><div class="cq-side-head"><span class="cq-side-status">${status[state(selected)]}</span><h2>${esc(label)}</h2></div>${ch&&state(selected)!=='unpublished'?`${stageProgress}<div class="cq-encounters" role="list" aria-label="Stage order"><h3>STAGE ORDER</h3>${entries}</div>`:'<div class="cq-empty">Coming soon.</div>'}<div class="cq-actions">${lockHint}<button id="conquest-start" class="story-start" type="button" ${canStart?'':'disabled'}>${actionLabel} <span>${canStart?'››':''}</span></button></div></aside></div></div>`);
+ show(`<div class="story-world conquest-world cq-atlas cq-hall"><div class="story-world-top"><button id="story-close" class="story-map-back" type="button" aria-label="${activeRun?'Back to reward':'Back to Mode Select'}">‹ <span>${activeRun?'REWARD':'MODE SELECT'}</span></button><div class="story-map-title">ADVENTURE</div><div class="cq-progress">TERRITORIES <strong>${enabledRegions.filter(cleared).length} / ${enabledRegions.length}</strong></div></div><div class="cq-main"><section class="cq-map-panel cq-banner-panel" aria-label="Hall of Banners"><div class="cq-hall-heading">HALL OF BANNERS <small class="cq-hall-hint">· CHOOSE A TERRITORY</small></div><div class="cq-banner-row ${pageCount===1?'cq-single-page':''}">${pageCount>1?`<button id="cq-prev" type="button" aria-label="Previous banners" ${page===0?'disabled':''}>‹</button>`:''}<div class="cq-banner-grid cq-count-${pageItems.length}">${banners}</div>${pageCount>1?`<button id="cq-next" type="button" aria-label="Next banners" ${page===pageCount-1?'disabled':''}>›</button>`:''}</div><div class="cq-map-footer" ${pageCount===1?'hidden':''}><span class="cq-page">${page+1} / ${pageCount}</span><label class="cq-jump"><span class="cq-jump-label">Territory</span><select id="cq-territory-select" aria-label="Select territory">${choices.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.name)} · ${status[state(c.id)]}</option>`).join('')}</select></label></div></section><aside class="cq-side" style="--territory:${selectedColor}" aria-label="Selected territory"><div class="cq-side-head"><span class="cq-side-status">${status[state(selected)]}</span><h2>${esc(label)}</h2></div>${ch&&state(selected)!=='unpublished'?`${stageProgress}<div class="cq-encounters" role="list" aria-label="Stage order"><h3>STAGE ORDER</h3>${entries}</div>`:'<div class="cq-empty">Coming soon.</div>'}<div class="cq-actions">${lockHint}<button id="conquest-start" class="story-start" type="button" ${canStart?'':'disabled'}>${actionLabel} <span>${canStart?'››':''}</span></button></div></aside></div></div>`);
  view='map';
  const list=box.querySelector('.cq-encounters'),currentRow=box.querySelector('.cq-stage-current');
  if(list?.getBoundingClientRect&&currentRow?.getBoundingClientRect){const a=list.getBoundingClientRect(),b=currentRow.getBoundingClientRect();if(b.bottom>a.bottom)list.scrollTop+=b.bottom-a.bottom;}
  box.querySelector('#story-close').onclick=activeRun?intermission.back:leaveStoryToModes;
- box.querySelectorAll('[data-territory]').forEach(el=>{el.onclick=()=>openConquestChapter(activeChapter,null,el.dataset.territory,true,intermission);});
+ box.querySelectorAll('[data-territory]').forEach(el=>{el.onclick=()=>{
+   const id=el.dataset.territory,i=regions.findIndex(c=>String(c.id)===id);
+   // v148.9: an open banner goes straight to its Stage Select (with the reveal animation).
+   if(!activeRun&&i>=0&&available(regions[i],i)){activeChapter=i;openStageSelect(id,{anim:'open'});return;}
+   openConquestChapter(activeChapter,null,id,true,intermission);};});
  for(const [selector,offset] of [['#cq-prev',-1],['#cq-next',1]]){const button=box.querySelector(selector);if(button)button.onclick=()=>{const target=choices[(page+offset)*pageSize];if(target)openConquestChapter(activeChapter,null,target.id,true,intermission);};}
  box.querySelector('#cq-territory-select').onchange=e=>{openConquestChapter(activeChapter,null,e.target.value,false,intermission);box.querySelector('#cq-territory-select')?.focus();};
  box.querySelector('#conquest-start').onclick=()=>{if(activeRun){if(canStart)intermission.next();return;}if(!allowed)return;hide();startFn?.(ch);};
@@ -199,6 +203,7 @@ async function openMap(fn,preferred){
  try{await mapLoading;if(request===mapOpenRequest)openChapter(activeChapter,preferred)}catch(e){if(request===mapOpenRequest)errorScreen(e.message||'Story unavailable')}
 }
 document.addEventListener('keydown',e=>{
+ if(e.key==='Escape' && !box.hidden && view==='stage'){e.preventDefault();box.querySelector('#ss-close')?.click();return;}
  if(e.key==='Escape' && !box.hidden && (view==='map'||view==='map-loading')){
   e.preventDefault();leaveStoryToModes();
  }
@@ -250,24 +255,130 @@ async function markConquestCompleted(run){
  if(!acceptTerritorySave(saved,territory,Object.keys(delta)))return {ok:false,firstClears:[]};
  return {ok:true,firstClears:saved.first_clears.filter(key=>Object.hasOwn(delta,key))};
 }
+// ---- v148.9 Stage Select (after choosing a banner) ----------------------------------
+// Left: the territory's stages. Middle: the selected stage's boss (full body). Top: emblem.
+// One run clears the stages in order; a knocked-out squad sends the run back to Stage 01.
+const EMBLEMS={'1':'assets/emblems/rift.webp','2':'assets/emblems/valcrest.webp','3':'assets/emblems/vesper.webp'};
+const BOSS_PLACEHOLDER='story/images/boss-placeholder.svg';
+const media=p=>window.RPG_MEDIA?.url?.(p)||p;
+const stageNo=i=>String(i+1).padStart(2,'0');
+const bossArt=st=>safeImage(st?.battle?.bossSprite)||BOSS_PLACEHOLDER;
+let stageSelectTimers=[];
+function clearStageTimers(){stageSelectTimers.forEach(clearTimeout);stageSelectTimers=[];}
+function later(fn,ms){stageSelectTimers.push(setTimeout(fn,ms));}
+function openStageSelect(territoryId,opts={}){
+ clearStageTimers();
+ const atlas=window.RPG_CONQUEST_MAP,core=window.RPG_CONQUEST;
+ const id=String(territoryId),ch=chapters?.find(c=>String(c.id)===id);
+ if(!ch){openConquestChapter(activeChapter);return;}
+ const mid=opts.intermission||null,run=mid?.run||null;
+ const battles=run?run.encounters:ch.stages.filter(s=>s.type!=='story-only');
+ const captured=battles.length&&battles.every(s=>completed.has(s.id));
+ const doneRun=run?Math.min(battles.length,run.records.length):0;
+ const complete=opts.anim==='complete';
+ let shownDone=complete?battles.length:opts.anim==='fail'?Math.min(battles.length,opts.failFrom||0):doneRun;
+ const startable=complete||opts.anim==='fail'?0:doneRun;   // the only stage that can be played now
+ const name=atlas.byId(id)?.name||ch.title,color=ch.conquest?.banner?.color||atlas.byId(id)?.color||'#9fb3c8';
+ const art=atlas.artPath(ch),emblem=EMBLEMS[id];
+ let selected=Math.min(battles.length-1,opts.select??(complete?battles.length-1:shownDone));
+ const status=()=>run?`OPERATION IN PROGRESS · ${doneRun} / ${battles.length}`:complete?'TERRITORY CAPTURED':captured?'CAPTURED · REPLAY FROM STAGE 01':'NOT STARTED';
+ const card=(st,i)=>{
+  const state=i<shownDone?'cleared':i===(opts.anim==='fail'?shownDone:startable)&&!complete?'current':'locked';
+  return `<li><button type="button" class="ss-stage is-${state}${i===selected?' is-selected':''}" data-i="${i}" style="--d:${i}" aria-pressed="${i===selected}">
+   <span class="ss-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l3 5 6 1-4 5 1 7-6-3-6 3 1-7-4-5 6-1z"/></svg></span>
+   <span class="ss-txt"><small>STAGE ${stageNo(i)}</small><b>Level ${i+1}</b></span>
+   <span class="ss-tag">${state==='cleared'?'✓ CLEARED':state==='current'?'CURRENT GOAL':'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>'}</span></button></li>`;
+ };
+ show(`<div class="ss-root ${opts.anim?'ss-anim-'+esc(opts.anim):''}" style="--territory:${esc(color)}">
+  <div class="ss-bg" style="${art?`background-image:url('${esc(media(art))}')`:''}"></div>
+  <header class="ss-head"><span class="ss-term">// ADVENTURE TERMINAL</span>
+   <div class="ss-title">${emblem?`<img class="ss-emblem" src="${esc(media(emblem))}" alt="">`:''}<div><small>CURRENT TERRITORY STATUS</small><h1>${esc(name)}</h1></div></div>
+   <span class="ss-status" id="ss-status">${esc(status())}</span>
+   <button type="button" class="ss-close" id="ss-close" aria-label="${run?'Retreat from the operation':'Back to Hall of Banners'}">✕</button></header>
+  <aside class="ss-left"><div class="ss-left-head"><span>STAGES</span><b id="ss-count">${shownDone} / ${battles.length}</b></div>
+   <ol class="ss-list" id="ss-list">${battles.map(card).join('')}</ol>
+   <div class="ss-info">${run?`<b>SQUAD HP</b> ${esc(core.displayed(run.hp??0))} · <b>ENHANCEMENTS</b> ${run.rewards.length}`:'Clear every stage in one run. If your whole squad is knocked out, the run restarts from Stage 01.'}</div></aside>
+  <main class="ss-mid"><div class="ss-boss-wrap"><img class="ss-boss" id="ss-boss" alt="" decoding="async"></div>
+   <div class="ss-boss-meta"><small id="ss-boss-stage">STAGE 01</small><h2 id="ss-boss-name">—</h2><span id="ss-boss-hp"></span></div>
+   <button type="button" class="ss-go" id="ss-go"><span>GO TO BATTLE</span><i>››</i></button></main>
+  <div class="ss-flash" aria-hidden="true"></div><div class="ss-banner" id="ss-banner" hidden></div></div>`);
+ view='stage';
+ const root=box.querySelector('.ss-root');
+ function paintMiddle(){
+  const st=battles[selected];if(!st)return;
+  const el=box.querySelector(`.ss-stage[data-i="${selected}"]`),locked=el?.classList.contains('is-locked');
+  const img=box.querySelector('#ss-boss');img.classList.toggle('is-locked',!!locked);
+  img.onerror=()=>{img.onerror=null;img.src=BOSS_PLACEHOLDER;};
+  img.src=media(bossArt(st));img.classList.remove('is-in');void img.offsetWidth;img.classList.add('is-in');
+  box.querySelector('#ss-boss-stage').textContent=`STAGE ${stageNo(selected)}`;
+  box.querySelector('#ss-boss-name').textContent=locked?'???':(st.battle.bossName||st.title);
+  box.querySelector('#ss-boss-hp').textContent=locked?'LOCKED':`BOSS HP ${st.battle.bossHp*10}`;
+  const go=box.querySelector('#ss-go'),can=el?.classList.contains('is-current');
+  go.disabled=!can;
+  go.querySelector('span').textContent=can?(run?`GO TO BATTLE · STAGE ${stageNo(selected)}`:'GO TO BATTLE'):el?.classList.contains('is-cleared')?'CLEARED':'LOCKED';
+ }
+ function select(i){selected=i;box.querySelectorAll('.ss-stage').forEach(b=>{const on=Number(b.dataset.i)===i;b.classList.toggle('is-selected',on);b.setAttribute('aria-pressed',String(on));});paintMiddle();}
+ box.querySelectorAll('.ss-stage').forEach(b=>b.onclick=()=>select(Number(b.dataset.i)));
+ box.querySelector('#ss-go').onclick=()=>{
+  if(box.querySelector('#ss-go').disabled)return;
+  clearStageTimers();
+  if(mid){mid.go();return;}
+  hide();startFn?.(ch);           // new run: Squad Assembly → Stage 01
+ };
+ box.querySelector('#ss-close').onclick=()=>{
+  if(mid){if(window.confirm('Retreat from this operation? Your progress in this run will be lost.'))mid.retreat();return;}
+  clearStageTimers();openConquestChapter(activeChapter,null,id,true);
+ };
+ paintMiddle();
+ const setCard=(i,state)=>{const b=box.querySelector(`.ss-stage[data-i="${i}"]`);if(!b)return;b.classList.remove('is-cleared','is-current','is-locked');b.classList.add('is-'+state);
+  b.querySelector('.ss-tag').innerHTML=state==='cleared'?'✓ CLEARED':state==='current'?'CURRENT GOAL':'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';};
+ const banner=(text,kind)=>{const b=box.querySelector('#ss-banner');b.textContent=text;b.className='ss-banner is-'+kind;b.hidden=false;};
+ if(opts.anim==='unlock'&&doneRun>0&&doneRun<battles.length){
+  // The just-cleared stage stamps ✓, then the next stage unlocks with a light sweep.
+  setCard(doneRun,'locked');select(doneRun-1);
+  const prev=box.querySelector(`.ss-stage[data-i="${doneRun-1}"]`);prev?.classList.add('ss-stamp');
+  banner(`STAGE ${stageNo(doneRun-1)} CLEARED`,'ok');
+  later(()=>{setCard(doneRun,'current');const nx=box.querySelector(`.ss-stage[data-i="${doneRun}"]`);nx?.classList.add('ss-unlock');select(doneRun);
+   banner(`STAGE ${stageNo(doneRun)} UNLOCKED`,'ok');},900);
+  later(()=>{box.querySelector('#ss-banner')&&(box.querySelector('#ss-banner').hidden=true);},2600);
+ }
+ if(opts.anim==='fail'){
+  // Squad knocked out: every stage except the first slowly greys out again.
+  root.classList.add('is-failed');banner('SQUAD KNOCKED OUT · OPERATION RESET','bad');
+  box.querySelector('#ss-go').disabled=true;
+  const n=shownDone,step=520;
+  for(let k=n;k>=1;k--){const i=k;later(()=>{setCard(i,'locked');box.querySelector(`.ss-stage[data-i="${i}"]`)?.classList.add('ss-grey');
+   box.querySelector('#ss-count').textContent=`${Math.max(0,i-1)} / ${battles.length}`;},700+(n-k)*step);}
+  later(()=>{setCard(0,'current');box.querySelector('.ss-stage[data-i="0"]')?.classList.add('ss-unlock');shownDone=0;
+   box.querySelector('#ss-count').textContent=`0 / ${battles.length}`;root.classList.remove('is-failed');select(0);
+   box.querySelector('#ss-status').textContent=captured?'CAPTURED · REPLAY FROM STAGE 01':'NOT STARTED';},700+n*step+200);
+  later(()=>{const b=box.querySelector('#ss-banner');if(b)b.hidden=true;},700+n*step+2200);
+ }
+ if(complete){banner('ALL STAGES CLEARED','gold');later(()=>{const b=box.querySelector('#ss-banner');if(b)b.hidden=true;},2600);
+  box.querySelectorAll('.ss-stage').forEach((b,i)=>{b.style.setProperty('--d',i);b.classList.add('ss-stamp');});
+  // After the celebration the territory can be replayed from Stage 01.
+  later(()=>{battles.forEach((_,i)=>setCard(i,i===0?'current':'cleared'));select(0);
+   box.querySelector('#ss-go span').textContent='REPLAY · STAGE 01';},2400);}
+ box.querySelector('.ss-stage.is-selected')?.focus({preventScroll:true});
+}
+// Clearing a stage mid-run: a result window, then back to Stage Select where the next
+// stage unlocks. Resolves 'next' (GO TO BATTLE) or 'retreat'.
+function showConquestReward(run,step){
+ return new Promise(resolve=>{
+   const reward=step.reward,done=run.records.length,total=run.encounters.length;
+   const cleared=run.encounters[done-1];
+   const finish=v=>{if(conquestOverlayFinish!==cancel)return;conquestOverlayFinish=null;clearStageTimers();hide();resolve(v);};
+   const cancel=()=>finish('next');conquestOverlayFinish=cancel;
+   const body=reward?`<div class="cq-reward-box"><div class="conquest-rarity">${'★'.repeat(reward.rarity)}</div><h2>${esc(reward.name)}</h2><div class="conquest-reward-stat">${esc(reward.label)} ${esc(reward.display)}</div></div>`:'';
+   show(`<div class="ss-clear" role="dialog" aria-label="Stage clear"><div class="ss-clear-box"><small>STAGE ${stageNo(done-1)} · ${esc(cleared?.battle?.bossName||cleared?.title||'')}</small><h2>STAGE CLEAR</h2><div class="cq-result-count">${done} / ${total}</div>${body}<p>SQUAD HP ${window.RPG_CONQUEST.displayed(step.hp)}${step.healed?` · +${step.healed} HEALED`:''}</p><button type="button" id="ss-clear-ok">STAGE SELECT ››</button></div></div>`);
+   box.querySelector('#ss-clear-ok').onclick=()=>openStageSelect(String(run.chapter.id),{anim:'unlock',intermission:{run,go:()=>finish('next'),retreat:()=>finish('retreat')}});
+   box.querySelector('#ss-clear-ok').focus();
+ });
+}
 function cancelConquestOverlay(){if(conquestOverlayFinish)conquestOverlayFinish();}
 function conquestBannerResult(run,done,captured,animate){
  const atlas=window.RPG_CONQUEST_MAP;
  return `<div class="cq-result-banner">${atlas.banner(run.chapter,{total:run.encounters.length,cleared:done,segmented:true,captured,animate})}</div>`;
-}
-function showConquestReward(run,step){
- return new Promise(resolve=>{
-   const reward=step.reward,done=run.records.length,total=run.encounters.length;
-   const next=run.encounters[done];
-   const nextStage=next?`<div class="cq-next-stage"><span>NEXT · STAGE ${String(done+1).padStart(2,'0')}</span><strong>${esc(next.battle.bossName||next.title)}</strong></div>`:'';
-   const body=reward?`<div class="cq-reward-box"><div class="conquest-rarity">${'★'.repeat(reward.rarity)}</div><h2>${esc(reward.name)}</h2><div class="conquest-reward-stat">${esc(reward.label)} ${esc(reward.display)}</div></div>`:'';
-   const renderReward=(animate=false)=>{show(`<div class="story-result conquest-reward cq-banner-result" role="dialog" aria-label="Encounter complete">${conquestBannerResult(run,done,false,animate)}<div class="cq-result-info"><div class="story-result-label">ENCOUNTER COMPLETE</div><h2>${esc(window.RPG_CONQUEST_MAP.name(run.chapter.id))}</h2><div class="cq-result-count">${done} / ${total}</div><div class="cq-result-meter"><i style="width:${100*done/total}%"></i></div>${body}<p>HP ${window.RPG_CONQUEST.displayed(step.hp)}${step.healed?` · +${step.healed} HEALED`:''}</p>${nextStage}<button type="button" id="conquest-reward-next">NEXT STAGE ››</button><button type="button" id="conquest-reward-hall" class="cq-hall-return">HALL OF BANNERS</button></div></div>`);
-   box.querySelector('#conquest-reward-next').onclick=finish;
-   box.querySelector('#conquest-reward-hall').onclick=()=>openConquestChapter(activeChapter,null,String(run.chapter.id),false,{run,back:()=>renderReward(false),next:finish});
-   box.querySelector('#conquest-reward-next').focus();};
-   const finish=()=>{if(conquestOverlayFinish!==finish)return;conquestOverlayFinish=null;hide();resolve();};
-   conquestOverlayFinish=finish;renderReward(true);
- });
 }
 function showConquestResult(run,result){
  return new Promise(resolve=>{
@@ -287,5 +398,5 @@ function showResult(stageId,rating,damage){
   box.addEventListener('keydown',onKey);box.querySelector('#story-result-continue').onclick=finish;box.querySelector('#story-result-continue').focus();
  });
 }
-window.RPG_STORY={openMap,showSlides,markCompleted,showResult,markConquestCompleted,showConquestReward,showConquestResult,cancelConquestOverlay,loadManifest,getCompleted:()=>[...completed],getBestStars:()=>({...bestStars}),isUnlocked,starsForDamage};
+window.RPG_STORY={openMap,openStageSelect,showSlides,markCompleted,showResult,markConquestCompleted,showConquestReward,showConquestResult,cancelConquestOverlay,loadManifest,getCompleted:()=>[...completed],getBestStars:()=>({...bestStars}),isUnlocked,starsForDamage};
 })();
