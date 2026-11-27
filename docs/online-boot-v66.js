@@ -80,6 +80,16 @@ const params=new URLSearchParams(location.search);
 const clean=s=>String(s||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
 const cardPattern=/^[A-HJ-NP-Z2-9]{16}$/;
 const qrCode=clean(params.get('card'));
+// v148.9: never leave the secret card code in the address bar, history or bookmarks.
+// It stays in memory for this sign-in only.
+if(params.has('card')){try{const u=new URL(location.href);u.searchParams.delete('card');history.replaceState(null,'',u.pathname+u.search+u.hash);}catch(_){}}
+// v148.9: a fingerprint (not the code) of the card this browser is signed in with, so
+// scanning the same QR again skips the full card check and session rewrite.
+const REMEMBERED_CARD_KEY='rpgRememberedCard';
+async function cardFingerprint(c){try{const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('rpg-card:'+c));return [...new Uint8Array(d)].slice(0,12).map(b=>b.toString(16).padStart(2,'0')).join('');}catch(_){return '';}}
+async function rememberCard(c){const h=await cardFingerprint(c);try{if(h)localStorage.setItem(REMEMBERED_CARD_KEY,h);}catch(_){}}
+async function isRememberedCard(c){const h=await cardFingerprint(c);try{return !!h&&localStorage.getItem(REMEMBERED_CARD_KEY)===h;}catch(_){return false;}}
+function forgetRememberedCard(){try{localStorage.removeItem(REMEMBERED_CARD_KEY);}catch(_){}}
 const switchPlayer=params.get('switch')==='1' && !qrCode;
 const resume=sessionStorage.getItem('rpgReturnToAdventureModeSelect')==='1';
 let code=qrCode||(!switchPlayer&&resume?clean(cached?.card_code):'');
@@ -177,6 +187,7 @@ async function finish(card,boot=null){
  const selectedCharacter=String(profile?.selected_character||profile?.cosmetics?.featured||'mc');
  const identity={public_id:card.public_id,name:card.name,grade:card.grade||null,card_code:code,online:true,cloud:true,selected_character:selectedCharacter,cosmetics:profile?.cosmetics||null,recruitment:profile?.recruitment||null,tutorial:profile.tutorial};
  sessionStorage.setItem('rpgAdventureContext',JSON.stringify(identity));
+ void rememberCard(code);
  // A verified online visit saves ONLY read-only progress identity + the class word list.
  // Never persist the bearer code in localStorage or any queued cloud write.
  await offlineCardCache.save(code,identity,progress);
@@ -239,6 +250,7 @@ async function returnToModeSelect(){
 async function beginSwitchPlayer(){
  sessionStorage.removeItem('rpgAdventureContext');
  sessionStorage.removeItem('rpgReturnToAdventureModeSelect');
+ forgetRememberedCard();
  view('checking','SWITCH PLAYER','Clearing this browser’s previous sign-in…');
  try{
   const cloud=await import('./cloud-api.js?v=86.30');
@@ -305,6 +317,8 @@ document.getElementById('introSwitchPlayer')?.addEventListener('click',()=>{
 
 // Explicit QR entry always wins; otherwise first try a verified remembered Firebase session.
 if(switchPlayer)void beginSwitchPlayer();
-else if(qrCode)void resolveCard();
+// Same card as this browser already uses: quick verified return (no session rewrite).
+// returnToModeSelect falls back to the full card check if anything does not match.
+else if(qrCode)void isRememberedCard(qrCode).then(same=>same?returnToModeSelect():resolveCard());
 else if(code)void returnToModeSelect();
 else void resumeRememberedCard();
