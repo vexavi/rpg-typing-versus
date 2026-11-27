@@ -338,7 +338,16 @@ async function start(){
   if(data.complete&&!replay){routeMenu();return;}
   // Lessons 1–4 done: continue on the real Mode Select (it resumes Recruitment too).
   if(!replay&&data.step>=4){routeMenu();return;}
-  lesson(replay?1:lessonForStep(Number(data.step)||1));
+  const first=replay?1:lessonForStep(Number(data.step)||1);
+  // First time only: "WELCOME, <name>" → "TUTORIAL" title cards, then the battle.
+  const introKey='rpgTutorialIntro:'+String(context.public_id||'');
+  let seen=false;try{seen=sessionStorage.getItem(introKey)==='1';}catch(_){}
+  lesson(first);   // set up underneath so the intro fades straight into Lesson 1
+  if(first===1&&!seen&&window.RPG_TUTORIAL_INTRO){
+   try{sessionStorage.setItem(introKey,'1');}catch(_){}
+   await window.RPG_TUTORIAL_INTRO.play(context.name);
+   $('coachNext').focus({preventScroll:true});
+  }
  }catch(e){$('loading').textContent=e?.message||String(e);}
 }
 void start();

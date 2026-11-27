@@ -55,3 +55,45 @@ body.tutorial-recruitment.tutorial-exit a.close{visibility:visible!important;poi
 .tutorial-keycap.is-pressed{transform:translateY(3px)!important;background:#fff200;color:#111;animation:none}
 @media (prefers-reduced-motion:reduce){.tutorial-keycap{animation:none}}
 .tutorial-battle #answerInput[readonly]{caret-color:transparent}
+
+/* ---- v148.9 tutorial intro title cards (tutorial-intro.js) ---- */
+.ti-root{position:fixed;inset:0;z-index:2147483600;background:#0e0f12;overflow:hidden;color:#f4f4f2;
+  font-family:var(--ak-sans,'Roboto',system-ui,sans-serif);transition:opacity .6s ease,transform .6s ease}
+.ti-root.is-out{opacity:0;transform:scale(1.04)}
+.ti-glow{position:absolute;left:50%;top:-22vh;width:60vw;height:50vh;transform:translateX(-50%);
+  background:radial-gradient(closest-side,rgba(255,255,255,.16),rgba(255,255,255,.04) 60%,transparent);pointer-events:none}
+.ti-foot{position:absolute;left:14px;bottom:10px;font:600 10px/1 var(--ak-mono,ui-monospace,monospace);letter-spacing:.18em;color:rgba(255,255,255,.35);display:flex;gap:8px;align-items:center}
+.ti-foot i{width:6px;height:6px;background:#fff200}
+.ti-stage,.ti-card{position:absolute;inset:0}
+.ti-card{display:grid;place-items:center;--dur:2.8s}
+.ti-art{position:absolute;left:50%;top:50%;width:min(980px,92vw);transform:translate(-50%,-50%);opacity:0}
+.ti-bar{position:absolute;left:50%;top:50%;width:min(780px,84vw);height:clamp(12px,1.6vw,18px);margin:calc(clamp(12px,1.6vw,18px)/-2) 0 0 calc(min(780px,84vw)/-2);
+  background:#f4f4f2;transform:scaleX(0);transform-origin:center;opacity:0}
+.ti-label{position:relative;display:flex;align-items:center;gap:clamp(8px,1.2vw,16px);opacity:0;white-space:nowrap}
+.ti-title{position:relative;z-index:1;font-weight:700;font-size:clamp(28px,3.7vw,56px);letter-spacing:.05em;line-height:1;text-shadow:0 0 18px rgba(255,255,255,.18),0 2px 10px #0e0f12,0 0 4px #0e0f12}
+.ti-brk{width:2px;height:clamp(28px,3.4vw,50px);background:rgba(255,255,255,.75)}
+.ti-hatch{width:clamp(48px,6vw,92px);height:clamp(14px,1.6vw,22px);
+  background:repeating-linear-gradient(-55deg,rgba(255,255,255,.75) 0 3px,transparent 3px 8px);background-size:22px 100%}
+.ti-sub{position:absolute;left:50%;top:calc(50% + clamp(26px,3vw,44px));transform:translateX(-50%);
+  font:600 clamp(10px,.95vw,13px)/1 var(--ak-mono,ui-monospace,monospace);letter-spacing:.5em;color:rgba(255,255,255,.6);opacity:0}
+.ti-disc,.ti-hex{transform-box:fill-box;transform-origin:center;transform:scale(0)}
+.ti-hex{opacity:0}
+
+.ti-card.is-run .ti-bar{animation:tiBar var(--dur) cubic-bezier(.6,0,.2,1) forwards}
+.ti-card.is-run .ti-label{animation:tiLabel var(--dur) ease forwards}
+.ti-card.is-run .ti-sub{animation:tiSub var(--dur) ease forwards}
+.ti-card.is-run .ti-art{animation:tiArt var(--dur) ease forwards}
+.ti-card.is-run .ti-hatch{animation:tiHatch .9s linear infinite}
+.ti-card.is-run .ti-disc{animation:tiDisc var(--dur) cubic-bezier(.3,1.6,.5,1) forwards;animation-delay:calc(var(--i)*40ms)}
+.ti-card.is-run .ti-hex{animation:tiHex var(--dur) ease forwards}
+.ti-card.is-static .ti-label,.ti-card.is-static .ti-sub,.ti-card.is-static .ti-art{opacity:1}
+
+@keyframes tiBar{0%{opacity:1;transform:scaleX(.03)}11%{opacity:1;transform:scaleX(1)}19%{opacity:0;transform:scaleX(1)}
+  77%{opacity:0;transform:scaleX(1)}81%{opacity:1;transform:scaleX(1)}95%{opacity:1;transform:scaleX(.015)}100%{opacity:0;transform:scaleX(0)}}
+@keyframes tiLabel{0%,11%{opacity:0;clip-path:inset(0 50% 0 50%)}13%{opacity:1}21%{opacity:1;clip-path:inset(0 0 0 0)}79%{opacity:1;clip-path:inset(0 0 0 0)}81%,100%{opacity:0}}
+@keyframes tiSub{0%,20%{opacity:0;letter-spacing:1em}30%{opacity:1;letter-spacing:.5em}76%{opacity:1}80%,100%{opacity:0}}
+@keyframes tiArt{0%,10%{opacity:0;transform:translate(-50%,-50%) scale(.95)}26%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  82%{opacity:1;transform:translate(-50%,-50%) scale(1)}94%,100%{opacity:0;transform:translate(-50%,-50%) scale(1.02)}}
+@keyframes tiDisc{0%,66%{transform:scale(0)}73%{transform:scale(1)}84%{transform:scale(1);opacity:1}92%,100%{transform:scale(.6);opacity:0}}
+@keyframes tiHex{0%,73%{opacity:0;transform:scale(0)}77%{opacity:1;transform:scale(1.15)}80%{transform:scale(1)}86%{opacity:1}92%,100%{opacity:0}}
+@keyframes tiHatch{to{background-position:22px 0}}
