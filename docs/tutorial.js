@@ -204,7 +204,20 @@ function lesson(i){
  }
  ({1:lesson1,2:lesson2,3:fallingLesson,4:fallingLesson})[i]();
 }
+// Pip (the tutorial bot) introduces itself before Lesson 1, using the real boss speech bubble.
+function pipSays(text){const b=$('bossBubble');b.textContent=text;b.classList.remove('show');void b.offsetWidth;b.classList.add('show');}
+function pipQuiet(){const b=$('bossBubble');b.classList.remove('show');b.textContent='';}
 function lesson1(){
+ setInput({enabled:false});phase='pip';
+ $('progressText').hidden=true;
+ pipSays('Hello! My name is Pip.');
+ coach({title:'Pip',focus:['#bossWrap'],text:'Hello! My name is Pip.',
+  next:()=>{
+   pipSays('Let me help you!');
+   coach({title:'Pip',focus:['#bossWrap'],text:'Let me help you!',next:()=>{pipQuiet();$('progressText').hidden=false;lesson1Word();}});
+  }});
+}
+function lesson1Word(){
  spawnWord(samples[1][0]);setInput({enabled:false});
  phase='l1-answer';
  coach({title:'Type a word',focus:['#trainingWord .answer'],
