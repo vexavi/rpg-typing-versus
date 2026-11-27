@@ -167,7 +167,7 @@ async function openCard(b){
  }
  // The QR code is a bearer credential. Auth UID sessions can be re-established on another Chromebook.
  let prevId=cachedIdentity(uid())?.session?.publicId;
- if(!prevId){try{prevId=(await read('cardSessions',uid()))?.publicId;}catch(_){}}
+ if(!prevId&&(()=>{try{return !!localStorage.getItem('rpgRememberedCard');}catch(_){return false;}})()){try{prevId=(await read('cardSessions',uid()))?.publicId;}catch(_){}}
  if(prevId&&prevId!==c.publicId){try{const prev=await read('players',prevId);const list=Array.isArray(prev?.ownerUids)?prev.ownerUids:[];
   if(list.includes(uid()))await fsUpdateDoc(ref('players',prevId),{ownerUids:list.filter(x=>x!==uid())});}catch(_){}}
  await setDoc(ref('cardSessions',uid()),{code,publicId:c.publicId,linkedAt:serverTimestamp()});forgetIdentity();forgetPlayer();
@@ -325,7 +325,8 @@ const LOCAL_BEST_KEY='rpgSparkMyBest';
 function rememberMyBest(entry){try{localStorage.setItem(LOCAL_BEST_KEY,JSON.stringify(entry));}catch(_){}}
 function myBest(){try{return JSON.parse(localStorage.getItem(LOCAL_BEST_KEY)||'null');}catch(_){return null;}}
 async function readSnapshot(mode,grade){try{return await read('rankSnapshots',snapshotId(mode,grade));}catch(_){return null;}}
-const snapshotFresh=s=>s&&Array.isArray(s.entries)&&s.builtAt&&typeof s.builtAt.toMillis==='function'&&Date.now()-s.builtAt.toMillis()<SNAPSHOT_MS;
+function snapshotJitter(){try{let j=Number(localStorage.getItem('rpgSnapJitter'));if(!(j>=0&&j<=3600000)){j=Math.floor(Math.random()*3600000);localStorage.setItem('rpgSnapJitter',String(j));}return j;}catch(_){return 0;}}
+const snapshotFresh=s=>s&&Array.isArray(s.entries)&&s.builtAt&&typeof s.builtAt.toMillis==='function'&&Date.now()-s.builtAt.toMillis()<SNAPSHOT_MS+snapshotJitter();
 async function liveBoard(mode,grade,limitCount=20){
  const pool=grade==='all'?'all':poolOf(grade),[v,c]=await Promise.all([sharedRead('vocabPools',pool),currentConfig(mode)]);if(!v)err('Vocabulary pool missing.');
  const revision=Number(v.revision)||1;
@@ -351,7 +352,9 @@ async function rankingFresh(b,p,mode,grade){
  if(!['normal','challenge','shared'].includes(mode)||!['all',...grades].includes(grade))err('Invalid ranking selection.');
  let rows,revision,c;
  const snap=Math.min(20,Number(b.limit)||20)===20&&!b.live?await readSnapshot(mode,grade):null;
- if(snapshotFresh(snap)){rows=snap.entries.slice(0,20);revision=Number(snap.vocabRevision)||1;c=snap.configRevision;}
+ let same=false;
+ if(snapshotFresh(snap)){try{const [v,cc]=await Promise.all([sharedRead('vocabPools',grade==='all'?'all':poolOf(grade)),currentConfig(mode)]);same=(Number(v?.revision)||1)===Number(snap.vocabRevision)&&cc===snap.configRevision;}catch(_){}}
+ if(same){rows=snap.entries.slice(0,20);revision=Number(snap.vocabRevision)||1;c=snap.configRevision;}
  else{
   const board=await liveBoard(mode,grade,Math.min(20,Number(b.limit)||20));
   rows=board.rows;revision=board.revision;c=board.config;
