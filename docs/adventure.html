@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ja" class="ak-theme">
 <head><meta name="referrer" content="no-referrer">
-  <meta charset="utf-8" />
+  <meta charset="utf-8" /><link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="preconnect" href="https://firestore.googleapis.com" crossorigin><link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin><link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>RPG Typing Versus — Adventure Mode</title>
   <style>
@@ -2008,7 +2008,25 @@ width:min(600px, calc(100% - 30px));
 // An old offline shell may cache old JavaScript even after GitHub Pages publishes new files.
 // Request the updated worker from fresh HTML before starting the application.
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./offline-sw.js?v=148.0',{scope:'./'}).catch(()=>{});
+  navigator.serviceWorker.register('./offline-sw.js?v=148.9',{scope:'./'}).catch(()=>{});
+  // v148.9: once the game is idle, let the worker download the remaining art and music
+  // in the background (2 files at a time, staggered per Chromebook so a whole class does
+  // not download at the same moment). Skipped on data-saver / very slow connections.
+  addEventListener('load',()=>{
+    let last=0;try{last=Number(localStorage.getItem('rpgWarmAt'))||0;}catch(_){}
+    if(Date.now()-last<12*3600*1000)return;
+    const net=navigator.connection||{};
+    if(net.saveData||/(^|-)2g$/.test(net.effectiveType||''))return;
+    setTimeout(function warm(){
+      const sw=navigator.serviceWorker.controller,list=window.RPG_ASSET_MANIFEST;
+      if(!sw||!list)return;
+      // Only while Mode Select is showing, never during a battle.
+      if(document.hidden||!document.querySelector('#overlay.mode-select-active')){setTimeout(warm,30000);return;}
+      const urls=Object.entries(list).map(([path,e])=>path+'?v='+e.hash);
+      sw.postMessage({type:'warm',urls});
+      try{localStorage.setItem('rpgWarmAt',String(Date.now()));}catch(_){}
+    },20000+Math.random()*40000);
+  },{once:true});
 }
 </script>
 <script type="module">await import("./online-boot-v66.js?v=148.0");</script>
