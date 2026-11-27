@@ -3774,7 +3774,7 @@ async function debugJumpTo(mode, idx){
           const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':op.rarity?`${op.rarity}★`:'DEFAULT');
           card.append(pic,details,status);
           // v148.10: Kurone must lead the squad (slot 1), so her Shoutout always has teammates.
-          const kuroneBlocked=!single&&op.id==='kurone'&&lockedCount!==0;
+          const kuroneBlocked=!single&&op.id==='kurone'&&lockedCount!==0&&pos<0;
           if(kuroneBlocked){card.classList.add('kurone-blocked');status.textContent='1ST ONLY';card.title='Kurone can only be the 1st operator.';}
           card.addEventListener('click',()=>{
             if(lockedCount>SLOTS-1)return;

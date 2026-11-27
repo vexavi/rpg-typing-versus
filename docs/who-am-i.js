@@ -268,33 +268,92 @@ function fakePicker(burst,hype){
 }
 
 
-// Kurone's squad rule, hands-on: try slot 2 -> angry notification -> put her in slot 1.
+// Kurone's squad rule, hands-on, on the REAL Squad Assembly screen (same markup and
+// classes as chooseStorySquad in adventure_engine.js): try slot 2 -> angry notification
+// -> RESET -> put her in slot 1 -> READY.
 function squadRuleDemo(){
- return new Promise(async done=>{
+ return new Promise(done=>{
   chip('');S.auto=0;
-  const team=[['kurone','Kurone'],['alden','Alden'],['lupa','Lupa']];
-  const slots=['alden',null,null];let active=1,tried=false;
-  const box=document.createElement('div');box.className='wai-squad';box.id='waiSquad';
-  const draw=()=>{
-   box.innerHTML=`<div class="wai-squad-title">SQUAD</div><div class="wai-squad-slots">${slots.map((id,i)=>`<button type="button" class="wai-squad-slot${i===active?' active':''}" data-slot="${i}" id="waiSlot${i+1}"><b>${i+1}</b>${id?`<img alt="" src="assets/profile-icons/${id}.webp"><span>${team.find(t=>t[0]===id)[1]}</span>`:'<span class="empty">?</span>'}</button>`).join('')}</div>
-    <div class="wai-squad-roster">${team.map(([id,n])=>`<button type="button" class="wai-squad-card${slots.includes(id)?' used':''}" data-id="${id}" id="waiCard_${id}"><img alt="" src="assets/profile-icons/${id}.webp"><span>${n}</span></button>`).join('')}</div>`;
-   box.querySelectorAll('.wai-squad-slot').forEach(b=>b.onclick=()=>{active=Number(b.dataset.slot);slots[active]=null;draw();step();});
-   box.querySelectorAll('.wai-squad-card').forEach(b=>b.onclick=()=>{
-    const id=b.dataset.id;
-    if(id==='kurone'&&active!==0){tried=true;window.RPG_KURONE_NOTIFY?.();step();return;}
-    const at=slots.indexOf(id);if(at>=0)slots[at]=null;
-    slots[active]=id;active=slots.indexOf(null);if(active<0)active=0;draw();step();
+  const screen=$('storySquadSelectScreen'),mount=$('storySquadSelectMount'),coach=$('trainingCoach'),coachHome=coach.parentNode,coachNext=coach.nextSibling;
+  const make=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
+  const roster=[['kurone','Kurone',6],['lupa','Lupa',6],['alden','Alden',4]].map(([id,name,rarity])=>({id,name,rarity}));
+  const SLOTS=3;let selected=['alden'],lockedCount=1,activeSlot=1,rarityFilter='all',search='',tried=false,phase=0;
+  mount.replaceChildren();screen.hidden=false;screen.setAttribute('aria-hidden','false');document.body.classList.add('story-squad-picker-open','wai-squad-demo');
+  screen.appendChild(coach);coach.classList.add('wai-squad-coach');
+  const wrap=make('div','storySquadPicker'),stage=make('section','storySquadPickerStage'),heading=make('div','storySquadPickerLegend');
+  const countText=make('span','storySquadSubhead','');heading.append(make('span','storySquadEyebrow','DEPLOYMENT ORDER'),countText);
+  const lineup=make('div','storySquadStages');const cards=[];
+  for(let i=0;i<SLOTS;i++){
+   const holder=make('div','storySquadStage'),card=make('button','storySquadSlot');card.type='button';card.id=`waiSlot${i+1}`;
+   const number=make('span','storySquadSlotNumber',String(i+1).padStart(2,'0')),image=make('img','storySquadSlotArt');image.alt='';
+   const label=make('div','storySquadSlotLabel'),stars=make('span','storySquadSlotStars'),name=make('strong','storySquadSlotName'),state=make('span','storySquadSlotState');
+   label.append(stars,name,state);card.append(number,image,label);
+   card.addEventListener('click',()=>{if(i!==lockedCount)return;activeSlot=i;message.textContent='';render();});
+   const slotAction=make('div','storySquadSlotAction');holder.append(card,slotAction);lineup.appendChild(holder);
+   cards.push({holder,card,image,name,stars,state,slotAction});
+  }
+  const ready=make('button','storySquadAction primary storySquadReadyBtn','READY');ready.type='button';ready.id='waiReady';
+  stage.append(heading,lineup);
+  const side=make('aside','storySquadPickerRoster'),sideHeading=make('div','storySquadRosterHeading');sideHeading.append(make('strong','','OPERATORS'));
+  const searchBox=make('input','storySquadSearch');searchBox.type='search';searchBox.placeholder='Search operators';searchBox.autocomplete='off';
+  const filters=make('div','storySquadFilters'),filterButtons=[];
+  for(const [value,title] of [['all','ALL'],['6','6★'],['5','5★'],['4','4★']]){const btn=make('button','storySquadFilter',title);btn.type='button';btn.addEventListener('click',()=>{rarityFilter=value;renderRoster();});filters.appendChild(btn);filterButtons.push({btn,value});}
+  const rosterList=make('div','storySquadPickerList'),message=make('div','storySquadPickerError');message.setAttribute('role','status');
+  side.append(sideHeading,searchBox,filters,rosterList);
+  const footer=make('div','storySquadPickerActions'),back=make('button','storySquadAction secondary','BACK'),reset=make('button','storySquadAction secondary','RESET');
+  back.type=reset.type='button';reset.id='waiReset';back.disabled=true;footer.append(message,reset,back);
+  wrap.append(stage,side,footer);mount.appendChild(wrap);
+  function renderRoster(){
+   filterButtons.forEach(({btn,value})=>btn.classList.toggle('active',value===rarityFilter));
+   rosterList.replaceChildren();
+   for(const op of roster.filter(o=>(rarityFilter==='all'||String(o.rarity)===rarityFilter)&&o.name.toLowerCase().includes(search.toLowerCase().trim()))){
+    const card=make('button','storySquadRosterCard');card.type='button';card.id=`waiCard_${op.id}`;
+    const pos=selected.indexOf(op.id);card.classList.toggle('inSquad',pos!==-1);card.classList.toggle('highlighted',selected[activeSlot]===op.id);
+    const pic=make('img','');pic.alt='';pic.src=`assets/profile-icons/${op.id}.webp`;
+    const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):`${op.rarity}★`);
+    card.append(pic,make('span','storySquadRosterName',op.name),status);
+    const kuroneBlocked=op.id==='kurone'&&lockedCount!==0&&pos<0;
+    if(kuroneBlocked){card.classList.add('kurone-blocked');status.textContent='1ST ONLY';}
+    card.addEventListener('click',()=>{
+     if(lockedCount>SLOTS-1)return;
+     if(kuroneBlocked){message.textContent='Kurone must be 1st!';window.RPG_KURONE_NOTIFY?.();tried=true;step();return;}
+     const occupied=selected.indexOf(op.id);if(occupied>=0&&occupied!==lockedCount){message.textContent='Already selected.';return;}
+     selected[lockedCount]=op.id;activeSlot=lockedCount;message.textContent='';render();step();
+    });
+    rosterList.appendChild(card);
+   }
+  }
+  function render(){
+   cards.forEach(({holder,card,image,name,stars,state,slotAction},i)=>{
+    const id=selected[i],op=roster.find(o=>o.id===id),confirmed=i<lockedCount,locked=i!==lockedCount;
+    holder.classList.toggle('selected',i===lockedCount);holder.classList.toggle('confirmed',confirmed);holder.classList.toggle('empty',!id);holder.classList.toggle('locked',locked&&!confirmed);
+    card.disabled=locked;
+    if(id){const art=`assets/deployment/${id}.webp`;image.hidden=false;if(image.dataset.src!==art){image.dataset.src=art;image.src=art;}}
+    else{image.hidden=true;image.removeAttribute('src');delete image.dataset.src;}
+    name.textContent=op?.name||(locked?'LOCKED':`SELECT ${['FIRST','SECOND','THIRD'][i]}`);
+    stars.textContent=op?'★'.repeat(op.rarity):'';
+    state.textContent=confirmed?'LOCKED IN':op?'SELECTED':(locked?'':'PICK AN OPERATOR');
+    slotAction.replaceChildren();if(i===lockedCount)slotAction.appendChild(ready);
    });
-  };
-  document.body.appendChild(box);draw();
-  let stage=0;
-  const step=()=>{
-   if(stage===0&&!tried){say({title:'Squad rule',formula:'2️⃣ = Kurone ?',text:'Let\'s try! Put me in slot 2. Click me.',arrows:[{sel:'#waiCard_kurone',dir:'up'}],focus:['#waiSquad']});return;}
-   if(stage<=1&&slots[0]!=='kurone'){stage=1;say({formula:'💢 1️⃣ ONLY!',text:'I got angry! I must be 1st. Click slot 1, then click me.',arrows:[{sel:active===0?'#waiCard_kurone':'#waiSlot1',dir:active===0?'up':'down'}],focus:['#waiSquad']});return;}
-   if(stage<2){stage=2;
-    say({formula:'1️⃣ Kurone ✓',text:'Yes! I lead the squad. Then my Shoutout always has teammates!',next:true,focus:['#waiSquad']}).then(()=>{box.remove();done();});}
-  };
-  step();
+   countText.textContent=`${lockedCount} / ${SLOTS} LOCKED IN`;ready.disabled=!selected[lockedCount];renderRoster();
+  }
+  searchBox.addEventListener('input',()=>{search=searchBox.value;renderRoster();});
+  reset.addEventListener('click',()=>{selected=[];lockedCount=0;activeSlot=0;message.textContent='';render();step();});
+  ready.addEventListener('click',()=>{if(!selected[lockedCount])return;lockedCount++;activeSlot=lockedCount;render();step();});
+  const talk=o=>{const p=say(o);stopSpot();return p;};
+  function finish(){
+   coach.classList.remove('wai-squad-coach');coachHome.insertBefore(coach,coachNext);
+   mount.replaceChildren();screen.hidden=true;screen.setAttribute('aria-hidden','true');document.body.classList.remove('story-squad-picker-open','wai-squad-demo');
+   setArrows([]);done();
+  }
+  function step(){
+   if(phase===0&&!tried){talk({title:'Squad rule',formula:'02 = Kurone ?',text:'Let\'s try! Put me 2nd. Click me.',arrows:[{sel:'#waiCard_kurone',dir:'right'}]});return;}
+   if(phase<=1&&lockedCount>0&&selected[0]!=='kurone'){phase=1;talk({formula:'💢 01 ONLY!',text:'I got angry! I must be 1st. Press RESET.',arrows:[{sel:'#waiReset',dir:'down'}]});return;}
+   if(phase<=2&&selected[0]!=='kurone'){phase=2;talk({formula:'01 = Kurone',text:'Now click me for slot 01.',arrows:[{sel:'#waiCard_kurone',dir:'right'}]});return;}
+   if(phase<=3&&lockedCount===0){phase=3;talk({formula:'READY ▸',text:'Press READY.',arrows:[{sel:'#waiReady',dir:'up'}]});return;}
+   if(phase<=4){phase=5;talk({formula:'01 Kurone ✓',text:'Yes! I lead the squad. Then my Shoutout always has teammates!',next:true}).then(finish);}
+  }
+  render();step();
  });
 }
 

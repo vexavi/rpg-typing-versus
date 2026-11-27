@@ -11,7 +11,7 @@
     box.querySelector('.kurone-notify-text').textContent=`${text} 💢`;
     box.querySelector('.kurone-notify-sub').textContent=sub;
     box.classList.remove('show');void box.offsetWidth;box.classList.add('show');
-    clearTimeout(timer);timer=setTimeout(()=>box?.classList.remove('show'),2800);
+    clearTimeout(timer);timer=setTimeout(()=>box?.classList.remove('show'),3200);
   }
   window.RPG_KURONE_NOTIFY=notify;
 })();
