@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja" class="ak-theme"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="referrer" content="no-referrer"><title>RPG Typing Versus — Who Am I?</title>
+<!-- v148.9: the tutorial battle uses EXACTLY the Normal Mode look (same stylesheets and layout). -->
+<link rel="stylesheet" href="adventure-core.css?v=148.9">
+<link rel="stylesheet" href="rpg-theme.css">
+<link rel="stylesheet" href="adventure-ui.css?v=143.0">
+<link rel="stylesheet" href="story-mode.css?v=131.0"><link rel="stylesheet" href="chapter-special.css?v=141.0">
+<link rel="stylesheet" href="student-ui.css?v=140.0">
+<link rel="stylesheet" href="guild-coins.css?v=73">
+<link rel="stylesheet" href="ak-theme.css?v=8">
+<link rel="stylesheet" href="battle-fx.css?v=3">
+<link rel="stylesheet" href="tutorial-guide.css?v=7"><link rel="stylesheet" href="who-am-i.css?v=1">
+<link rel="preload" as="image" href="assets/bosses/tutorial-bg.webp">
+<link rel="preload" as="image" href="assets/bosses/tutorial.webp">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/ak-roboto-var.woff2" crossorigin>
+<script src="operator-passives.js?v=147.0"></script><script src="gacha-catalog.js?v=106.0"></script></head>
+<body class="adventure-client tutorial-client tutorial-battle wai-page story-squad-layout">
+<div id="loading" class="tutorial-loading">CONNECTING TO FIREBASE…</div>
+<div class="frame pixel" id="tutorialApp" hidden>
+  <header class="adventure-topbar">
+    <span class="adventure-brand">RPG TYPING VERSUS</span>
+    <span class="adventure-mode-tag">WHO AM I? <span class="top-stage-name" id="stageName">—</span><span class="top-stage-separator">·</span><span id="bossName">Target: Pip</span></span><button type="button" class="wai-exit" id="waiExit">✕ EXIT</button>
+  </header>
+  <div class="battlefield" id="battlefield">
+    <div class="bgFallback" id="bgFallback"></div>
+    <img class="bgImg pixel" id="bgImg" alt="Stage background" src="assets/bosses/tutorial-bg.webp" style="display:block">
+    <div class="damageFlash" id="damageFlash"></div>
+    <aside class="storySquadVisual" id="storySquadVisual" aria-label="Operator">
+      <div class="storySquadHeading">OPERATOR <span id="storySquadCount">1/1</span></div>
+      <div class="storySquadHero"><img id="storySquadArt" alt="" decoding="async" /><div class="storySquadHeroName" id="storySquadHeroName">—</div></div>
+      <div class="storySquadRoster" id="storySquadRoster"></div>
+      <div class="storySquadDeploy" id="storySquadDeploy" aria-live="polite"></div>
+    </aside>
+    <div class="laneLabel" aria-hidden="true">Words</div>
+    <div class="wordLane" id="wordLane"></div>
+    <div class="inputBar" id="inputBar">
+      <form id="answerForm" autocomplete="off">
+        <div class="promptChar">&gt;</div>
+        <input id="answerInput" type="text" placeholder="TYPE ENGLISH" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="done">
+        <button type="submit" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">OK</button>
+      </form>
+    </div>
+    <div class="bossWrap" id="bossWrap">
+      <div class="bossInner">
+        <div class="bossBubble" id="bossBubble"></div>
+        <img class="bossImg pixel" id="bossImg" alt="Pip" src="assets/bosses/tutorial.webp" style="display:block;image-rendering:auto">
+        <div class="bossFallback" id="bossFallback" style="display:none">BOSS</div>
+      </div>
+    </div>
+    <div class="overflowBadge" id="overflowBadge">OVERFLOW! 1 dmg/sec</div>
+    <div class="wai-chip" id="passiveChip" hidden><small id="chipName">PASSIVE</small><b id="chipCount">0 / 6</b></div>
+    <div class="wai-banner" id="waiBanner" hidden></div>
+    <!-- Tutorial coach: the only element that is not part of the real battle screen. -->
+    <section class="tutorial-coach" id="trainingCoach" aria-live="polite">
+      <div class="tutorial-coach-kicker">WHO AM I? · <span id="stepCounter">STEP 1</span></div>
+      <div class="wai-formula" id="coachFormula" hidden></div>
+      <h3 id="lessonTitle">Type a word</h3>
+      <p id="lessonObjective">Type the English translation shown beside the Japanese word.</p>
+      <p class="tutorial-coach-feedback" id="messageLog" role="status"></p>
+      <div class="tutorial-coach-progress" id="progressText">0 / 1 words cleared</div>
+      <div class="tutorial-coach-status" id="status"></div>
+      <div class="tutorial-enter" id="enterKey" hidden aria-hidden="true"><span class="tutorial-keycap"><span>enter</span></span><b>Press ENTER</b></div>
+      <button class="tutorial-coach-btn" type="button" id="coachNext" hidden>NEXT ▸</button>
+      <button class="tutorial-coach-btn" type="button" id="retryTutorialSave" hidden>RETRY SAVING</button>
+    </section>
+    <div class="overlay" id="waiDone" aria-hidden="true"><div class="overlayBox" role="dialog" aria-modal="true"><h2 id="waiDoneTitle">PASSIVE LEARNED!</h2><p id="waiDoneText"></p><p id="waiDoneCoins" class="wai-coins"></p><div class="wai-done-actions"><button type="button" class="choiceBtn" id="waiAgain"><span class="title">TRY AGAIN</span></button><button type="button" class="choiceBtn tutorial-finish-btn" id="waiBack"><span class="title">BACK TO COLLECTION ▶</span></button></div></div></div>
+  </div>
+
+  <div class="uiRow">
+    <div class="panel storyPlayerPanel" id="storyPlayerPanel">
+      <div class="panelHeader">
+        <span class="playerHeaderWrap"><img id="playerIcon" class="playerIcon" alt="icon" src="assets/profile-icons/mc.webp"><span class="playerMeta"><span class="playerNameRow"><b id="playerLabel">Player</b><span class="playerLevel muted" id="playerLevelText">Lv.1</span></span><span class="playerExp muted" id="playerExpText">OPERATOR</span></span></span>
+        <span class="muted">PLAYER</span>
+      </div>
+      <ul class="menuList">
+        <li><button class="menuItem" type="button" id="pauseCmd" disabled><span class="arrow">▶</span><span id="pauseCmdText">Pause (ESC)</span></button></li>
+        <li><button class="menuItem" type="button" id="runCmd" disabled><span class="arrow">▶</span><span>Mode Select</span></button></li>
+      </ul>
+    </div>
+    <div class="panel storyStatusPanel" id="storyStatusPanel">
+      <div class="panelHeader">
+        <span>STATUS <strong id="storyActiveLabel" class="storyActiveLabel"></strong></span>
+        <span>Miss: <b id="mistakesText">0</b></span>
+      </div>
+      <div class="statusList">
+        <div id="conquestStats" class="conquest-mini" hidden></div>
+        <div class="statRow" id="tutorialPlayerRow">
+          <div class="name">Player</div>
+          <div class="bars"><div class="barLine"><span>HP</span><div class="meter" id="playerMeter"><div class="fillHP" id="playerFill" style="width:100%"></div></div><span><b id="playerHpText">10/10</b></span></div></div>
+        </div>
+        <div class="small" id="storyContinuesLine"><span id="shieldLine" hidden>Shield: <b id="shieldText">0 / 5</b> </span><span id="statusLine"></span></div>
+        <div class="small">Score (<b id="scoreModeLabel">Normal</b>): <b id="scoreText">0</b> / Best: <b id="bestScoreText">0</b></div>
+        <div class="bgmRow"><span>BGM:</span><input id="bgmVol" type="range" min="0" max="100" value="35" disabled><span><b id="bgmVolText">35%</b></span><button class="bgmBtn" id="bgmMuteBtn" type="button" disabled>MUTE</button></div>
+      </div>
+    </div>
+    <div class="panel storyEnemyPanel" id="storyEnemyPanel" aria-label="Enemy status">
+      <div class="panelHeader"><span>ENEMY STATUS</span></div>
+      <div class="storyEnemySlot" id="storyEnemySlot">
+        <div class="statRow" id="storyBossHpRow">
+          <div class="name">Boss</div>
+          <div class="bars"><div class="barLine bossHpLine" id="bossHpLine"><span>HP</span><div class="meter" id="bossMeter"><div class="fillBoss" id="bossFill" style="width:100%"></div></div><span><b id="bossHpText">3/3</b></span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<canvas id="tutorialSpotlight" hidden aria-hidden="true"></canvas>
+<script type="module">await import('./online-spark.js?v=148.9');await import('./who-am-i.js?v=1');</script>
+</body></html>
