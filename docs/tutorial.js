@@ -36,7 +36,8 @@ function status(message){$('status').textContent=message||'';}
 const input=()=>$('answerInput');
 
 // ---- coach + spotlight -----------------------------------------------------------
-function coach({title,text,next=null,enter=false,focus=[]}){
+function coach({title,text,next=null,enter=false,focus=[],arrows=[]}){
+ setArrows(arrows);
  if(title)$('lessonTitle').textContent=title;
  $('lessonObjective').textContent=text||'';
  $('enterKey').hidden=!enter;$('enterKey').querySelector('.tutorial-keycap').classList.remove('is-pressed');
@@ -49,6 +50,37 @@ const spotlightCanvas=$('tutorialSpotlight');
 const spotlightContext=spotlightCanvas?.getContext('2d');
 let spotlightFrame=null,lastSpotlightPaint=0;
 const OUTLINED=new Set(['#trainingWord','.inputBar','#trainingWord .answer','#tutorialPlayerRow','#overflowBadge','#storyBossHpRow']);
+// Big animated arrows (and a "?" badge) pointing at the lesson targets.
+// Each entry: {sel, dir:'up'|'down'|'left'|'right'} (dir = where the arrow POINTS) or {sel, mark:'?'}.
+let arrowSpecs=[],arrowEls=[];
+function setArrows(list){
+ arrowEls.forEach(el=>el.remove());arrowEls=[];arrowSpecs=list||[];
+ for(const a of arrowSpecs){
+  const el=document.createElement('div');
+  if(a.mark){el.className='tut-q';el.innerHTML='<span>?</span>';}
+  else{el.className='tut-arrow';el.dataset.dir=a.dir;
+   el.innerHTML='<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 4 60 34H43v26H21V34H4z"/></svg>';}
+  el.setAttribute('aria-hidden','true');el.style.visibility='hidden';
+  document.body.append(el);arrowEls.push(el);
+ }
+ placeArrows();
+}
+function placeArrows(){
+ arrowSpecs.forEach((a,i)=>{
+  const el=arrowEls[i],t=document.querySelector(a.sel);
+  if(!el)return;
+  if(!t||!t.getClientRects().length){el.style.visibility='hidden';return;}
+  const r=t.getBoundingClientRect(),S=a.mark?56:66,g=a.gap??10;
+  let x,y;
+  if(a.mark){x=r.right-S-(a.inset??14);y=r.top+r.height/2-S/2;}
+  else if(a.dir==='up'){x=r.left+r.width/2-S/2;y=r.bottom+g;}
+  else if(a.dir==='down'){x=r.left+r.width/2-S/2;y=r.top-S-g;}
+  else if(a.dir==='left'){x=r.right+g;y=r.top+r.height/2-S/2;}
+  else{x=r.left-S-g;y=r.top+r.height/2-S/2;}
+  el.style.transform=`translate(${Math.round(x)}px,${Math.round(y)}px)`;el.style.visibility='visible';
+ });
+}
+addEventListener('resize',placeArrows,{passive:true});
 function stopSpotlight(){
  if(spotlightFrame!==null)cancelAnimationFrame(spotlightFrame);
  spotlightFrame=null;
@@ -78,6 +110,7 @@ function drawSpotlight(timestamp=0){
  for(const r of targets)spotlightContext.clearRect(r.x,r.y,r.w,r.h);
  spotlightContext.strokeStyle='#fff200';spotlightContext.lineWidth=3;
  for(const r of targets)if(r.outline)spotlightContext.strokeRect(r.x+1.5,r.y+1.5,r.w-3,r.h-3);
+ placeArrows();
  spotlightFrame=requestAnimationFrame(drawSpotlight);
 }
 function startSpotlight(){
@@ -168,20 +201,20 @@ function overflowDemo(){
 }
 function startOverflow(){
  $('overflowBadge').classList.add('show');
- coach({focus:['.wordLane','#overflowBadge','#tutorialPlayerRow'],
+ coach({focus:['.wordLane','#overflowBadge','#tutorialPlayerRow'],arrows:[{sel:'#overflowBadge',dir:'up'},{sel:'#tutorialPlayerRow',dir:'down'}],
   text:'OVERFLOW! The pile reached the top, so you lose 1 HP every second until you clear words. Watch your HP…'});
  const tickHp=()=>{
   if(phase!=='l2-overflow')return;
   if(playerHP>1){playerHP--;updateBars();flashDamage();log(`OVERFLOW · HP ${playerHP}/10`);demoLater(tickHp,1000);return;}
   // Stop at 1 HP: the tutorial never makes them lose.
-  coach({focus:['#tutorialPlayerRow','#overflowBadge'],
+  coach({focus:['#tutorialPlayerRow','#overflowBadge'],arrows:[{sel:'#overflowBadge',dir:'up'},{sel:'#tutorialPlayerRow',dir:'down'}],
    text:'Your HP dropped to 1! In a real battle you would lose at 0. Clear words quickly so the pile never reaches the top.',
    next:()=>{
     demoTimers.forEach(clearTimeout);demoTimers=[];stop();
     $('overflowBadge').classList.remove('show');clearWord();
     playerHP=10;updateBars();log('HP restored for the tutorial.');
     spawnWord(samples[2][0]);phase='l2-fix';setInput({enabled:true});
-    coach({focus:['.inputBar','#trainingWord','#tutorialPlayerRow'],enter:true,text:'Your HP is back to 10. Now type apple correctly and press ENTER to clear it.'});
+    coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],enter:true,text:'Your HP is back to 10. Now type apple correctly and press ENTER to clear it.'});
    }});
  };
  demoLater(tickHp,900);
@@ -189,7 +222,7 @@ function startOverflow(){
 
 // ---- lessons ----------------------------------------------------------------------
 function lesson(i){
- stop();stage=i;stepCount=0;busy=false;phase='';
+ stop();stage=i;stepCount=0;busy=false;phase='';setArrows([]);
  bossHP=3;
  $('retryTutorialSave').hidden=true;$('overflowBadge').classList.remove('show');
  $('stepCounter').textContent=`LESSON ${String(i).padStart(2,'0')} / ${String(TOTAL).padStart(2,'0')}`;
@@ -220,24 +253,24 @@ function lesson1(){
 function lesson1Word(){
  spawnWord(samples[1][0]);setInput({enabled:false});
  phase='l1-answer';
- coach({title:'Type a word',focus:['#trainingWord .answer'],
+ coach({title:'Type a word',focus:['#trainingWord .answer'],arrows:[{sel:'#trainingWord .answer',dir:'up'}],
   text:'Every word shows Japanese on the left and its English answer on the right. The English word is important — it is exactly what you type!',
   next:()=>{
    phase='l1-type';setInput({enabled:true});
-   coach({focus:['.inputBar','#trainingWord'],text:'This is where you type. Click the box and type apple.'});
+   coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],text:'This is where you type. Click the box and type apple.'});
   }});
 }
 function lesson2(){
  spawnWord(samples[2][0]);
  phase='l2-wrong';
  setInput({enabled:true,value:'aple',readOnly:true});
- coach({title:'Taking damage',focus:['.inputBar','#trainingWord'],enter:true,
+ coach({title:'Taking damage',focus:['.inputBar','#trainingWord'],enter:true,arrows:[{sel:'#trainingWord .answer',dir:'up'},{sel:'.inputBar',dir:'left'},{sel:'.inputBar',mark:'?'}],
   text:'What happens if you make a mistake? Someone typed "aple" instead of "apple". Press ENTER and watch your HP.'});
 }
 function fallingLesson(){
  phase='falling';
  const isBoss=stage===4;
- coach({title:titles[stage],focus:isBoss?['#trainingWord','.inputBar','.wordLane','#bossWrap','#storyStatusPanel']:['#trainingWord','.inputBar','.wordLane'],
+ coach({title:titles[stage],arrows:isBoss?[{sel:'#storyBossHpRow',dir:'down'},{sel:'.inputBar',dir:'left'}]:[],focus:isBoss?['#trainingWord','.inputBar','.wordLane','#bossWrap','#storyStatusPanel']:['#trainingWord','.inputBar','.wordLane'],
   text:isBoss?'Every correct word hits the boss. Clear all three words to defeat it!':'Words fall toward the bottom. Type each English word and press ENTER to clear it.'});
  nextFallingWord();
 }
@@ -272,7 +305,7 @@ input().addEventListener('input',()=>{
  if(stage!==1)return;
  const ok=input().value.trim().toLowerCase()==='apple';
  if(phase==='l1-type'&&ok){phase='l1-enter';coach({focus:['.inputBar','#trainingWord'],enter:true,text:'Perfect! Now press the ENTER key on your keyboard.'});}
- else if(phase==='l1-enter'&&!ok){phase='l1-type';coach({focus:['.inputBar','#trainingWord'],text:'Type apple in the box.'});}
+ else if(phase==='l1-enter'&&!ok){phase='l1-type';coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],text:'Type apple in the box.'});}
 });
 
 $('answerForm').addEventListener('submit',e=>{

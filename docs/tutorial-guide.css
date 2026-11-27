@@ -97,3 +97,19 @@ body.tutorial-recruitment.tutorial-exit a.close{visibility:visible!important;poi
 @keyframes tiDisc{0%,66%{transform:scale(0)}73%{transform:scale(1)}84%{transform:scale(1);opacity:1}92%,100%{transform:scale(.6);opacity:0}}
 @keyframes tiHex{0%,73%{opacity:0;transform:scale(0)}77%{opacity:1;transform:scale(1.15)}80%{transform:scale(1)}86%{opacity:1}92%,100%{opacity:0}}
 @keyframes tiHatch{to{background-position:22px 0}}
+
+/* Tutorial pointer arrows + "?" badge (tutorial.js setArrows). */
+.tut-arrow,.tut-q{position:fixed;left:0;top:0;z-index:65;pointer-events:none;will-change:transform}
+.tut-arrow{width:66px;height:66px}
+.tut-arrow svg{width:100%;height:100%;fill:#fff200;stroke:#1a1a1a;stroke-width:3;stroke-linejoin:round;
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.55));animation:tutNudge .75s ease-in-out infinite alternate}
+.tut-arrow[data-dir="up"] svg{--nx:0px;--ny:12px;transform:rotate(0deg)}
+.tut-arrow[data-dir="down"] svg{--nx:0px;--ny:-12px;rotate:180deg}
+.tut-arrow[data-dir="left"] svg{--nx:12px;--ny:0px;rotate:-90deg}
+.tut-arrow[data-dir="right"] svg{--nx:-12px;--ny:0px;rotate:90deg}
+@keyframes tutNudge{from{translate:0 0}to{translate:var(--nx) var(--ny)}}
+.tut-q{width:56px;height:56px}
+.tut-q span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:#e5372f;color:#fff;
+  font:900 38px/1 system-ui,sans-serif;box-shadow:0 0 0 4px #fff,0 6px 14px rgba(0,0,0,.5);animation:tutWobble 1.1s ease-in-out infinite}
+@keyframes tutWobble{0%,100%{transform:rotate(0) scale(1)}15%{transform:rotate(-14deg) scale(1.08)}30%{transform:rotate(12deg) scale(1.08)}45%{transform:rotate(-8deg)}60%{transform:rotate(0) scale(1)}}
+@media (prefers-reduced-motion:reduce){.tut-arrow svg,.tut-q span{animation:none}}
