@@ -2944,6 +2944,7 @@ let modeSelectGuideTimer=0;
 function modeSelectVisible(){
   const ov=document.getElementById('overlay');
   return !!ov&&ov.classList.contains('show')&&ov.classList.contains('mode-select-active')&&
+    !document.body.classList.contains('story-squad-picker-open')&&
     !document.getElementById('introOverlay')?.classList.contains('show')&&!document.getElementById('adventureGate');
 }
 // Show the guide only once Mode Select is really on screen (not behind the title screen).
@@ -2954,6 +2955,32 @@ function whenModeSelectVisible(run){
     if(modeSelectVisible()){clearInterval(modeSelectGuideTimer);setTimeout(()=>{if(modeSelectVisible())run();},250);}
     else if(Date.now()-started>600000)clearInterval(modeSelectGuideTimer);
   },200);
+}
+// v148.9: Normal Mode starts with Operator Select (the Squad Assembly screen with one slot),
+// so students practise the same picker they later use for Adventure squads.
+let normalSelectOpen=false;
+async function startNormalWithOperatorSelect(){
+  if(normalSelectOpen)return;normalSelectOpen=true;
+  const g=window.RPG_TUTORIAL_GUIDE,guided=!!g&&g.pending(tutorialPlayerId()).includes('pause');
+  const K='GUIDE · NORMAL MODE';
+  let picked=null;
+  try{
+    picked=await chooseStorySquad(undefined,{slots:1,preselect:guided?null:getSelectedOperator(),
+      onOpen:({roster})=>{
+        if(!guided)return;
+        g.show({target:()=>{const box=roster.getBoundingClientRect();return [...roster.querySelectorAll('.storySquadRosterCard')].filter(c=>{const r=c.getBoundingClientRect();return r.bottom<=box.bottom+1&&r.top>=box.top-1;});},park:true,kicker:K,title:'Operator Select',
+          text:'Before every Normal battle you choose your operator. Tap the character you want to play as.'});
+      },
+      onPick:(id,ready)=>{
+        if(!guided)return;
+        g.show({target:()=>ready,kicker:K,title:'Ready',text:'Good choice! Tap READY to lock them in and start the battle. (You can tap another character first to change.)',
+          clearOnTarget:true});
+      }});
+  }finally{normalSelectOpen=false;if(guided&&!picked)g.clear();}
+  if(!picked?.[0])return; // BACK: stay on Mode Select
+  selectOperator(picked[0]);
+  setMode('normal');showOverlay(false);startGame();
+  runPauseGuide();
 }
 function tutorialPlayerId(){return String(window.ADVENTURE_PLAYER?.public_id||ADVENTURE_CONTEXT?.public_id||'');}
 // First Normal Mode run after the tutorial: Pause → Resume → Pause → Mode Select.
@@ -2993,9 +3020,9 @@ function startModeSelectTutorialGuide(){
   // Follow-up guides after the first-time tutorial (this device only, once each).
   const pending=guide?.pending?.(tutorialPlayerId())||[];
   if(guide&&pending.includes('pause')){
-    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Normal Mode'),kicker:'GUIDE · PAUSE & RETURN',
+    whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Normal Mode'),kicker:'GUIDE · NORMAL MODE',
       title:'Normal Mode',
-      text:'Tap NORMAL MODE. Before you play, we will show you how to pause and how to get back here.'}));
+      text:'Tap NORMAL MODE. First you will choose your character, then we will show you how to pause and how to get back here.'}));
     return;
   }
   if(guide&&pending.includes('collection')){
@@ -3199,10 +3226,7 @@ function showModeSelectScreen(){
   heroChange.addEventListener('click',openOperatorSelector);
   refreshHero();
 
-  addMode('Normal Mode', {onClick:()=>{
-    setMode('normal');showOverlay(false);startGame();
-    runPauseGuide();
-  }});
+  addMode('Normal Mode', {onClick:()=>{ void startNormalWithOperatorSelect(); }});
   addMode('Practice', {onClick:()=>{
     setMode('practice');showOverlay(false);startGame();
   }});
@@ -3621,14 +3645,17 @@ async function debugJumpTo(mode, idx){
     document.body.classList.remove('story-squad-layout');renderStorySquad();
   }
   async function chooseStorySquad(conquestConfig){
+    const opts=arguments[1]||{};
     // v117: cinematic party setup inspired by character-lineup RPGs.
     // Selection is restricted to genuinely owned operators plus the same three starter trials.
+    // v148.9: opts.slots=1 turns the same screen into Normal Mode's single Operator Select.
+    const SLOTS=opts.slots===1?1:3,single=SLOTS===1;
     const owned=ownedOperatorIds();
     const available=[...new Set(owned)];
-    for(const id of ['alden','livia','kade']){
+    if(!single)for(const id of ['alden','livia','kade']){
       if(available.length<3&&window.RPG_OPERATOR_PASSIVES?.RULES?.[id]&&!available.includes(id))available.push(id);
     }
-    if(available.length<3)return null;
+    if(available.length<SLOTS)return null;
     return await new Promise(resolve=>{
       // The squad picker is a dedicated pre-battle screen, not a child of
       // the gameplay overlay. This removes its clipping/height dependency.
@@ -3642,6 +3669,10 @@ async function debugJumpTo(mode, idx){
       selectScreen.hidden=false;
       selectScreen.setAttribute('aria-hidden','false');
       document.body.classList.add('story-squad-picker-open');
+      const eyebrowEl=selectScreen.querySelector('.storySquadSelectEyebrow'),titleEl=document.getElementById('storySquadSelectTitle');
+      const oldHead=[eyebrowEl?.textContent,titleEl?.textContent];
+      if(single){if(eyebrowEl)eyebrowEl.textContent=opts.eyebrow||'NORMAL MODE';if(titleEl)titleEl.textContent=opts.title||'OPERATOR SELECT';}
+      selectScreen.classList.toggle('single-select',single);
       const make=(tag,cls,text)=>{
         const el=document.createElement(tag);
         if(cls)el.className=cls;
@@ -3650,11 +3681,12 @@ async function debugJumpTo(mode, idx){
       };
       const roster=available.map(id=>({
         id,name:storyOperatorName(id),
-        rarity:Number(window.RPG_OPERATOR_PASSIVES?.RULES?.[id]?.rarity||4),
+        rarity:id==='mc'?0:Number(window.RPG_OPERATOR_PASSIVES?.RULES?.[id]?.rarity||4),
         trial:!owned.includes(id)
       })).sort((a,b)=>Number(a.trial)-Number(b.trial)||b.rarity-a.rarity||a.name.localeCompare(b.name));
       // Start with all three slots empty: selections must be made 1 -> 2 -> 3.
       let selected=[];
+      if(single&&opts.preselect&&available.includes(opts.preselect))selected=[opts.preselect];
       let activeSlot=0;
       let lockedCount=0; // number of confirmed operators; only the next slot can be edited
       let rarityFilter='all';
@@ -3663,13 +3695,13 @@ async function debugJumpTo(mode, idx){
       const wrap=make('div','storySquadPicker');
       const stage=make('section','storySquadPickerStage');
       const heading=make('div','storySquadPickerLegend');
-      const countText=make('span','storySquadSubhead','0 / 3 SELECTED');
-      heading.append(make('span','storySquadEyebrow','DEPLOYMENT ORDER'),countText);
+      const countText=make('span','storySquadSubhead',`0 / ${SLOTS} SELECTED`);
+      heading.append(make('span','storySquadEyebrow',single?'YOUR OPERATOR':'DEPLOYMENT ORDER'),countText);
       const lineup=make('div','storySquadStages');
       lineup.setAttribute('role','group');
-      lineup.setAttribute('aria-label','Three operator lives in deployment order');
+      lineup.setAttribute('aria-label',single?'Operator for this battle':'Three operator lives in deployment order');
       const cards=[];
-      for(let i=0;i<3;i++){
+      for(let i=0;i<SLOTS;i++){
         const holder=make('div','storySquadStage');
         const card=make('button','storySquadSlot');
         card.type='button';
@@ -3679,7 +3711,7 @@ async function debugJumpTo(mode, idx){
         const label=make('div','storySquadSlotLabel');
         const stars=make('span','storySquadSlotStars');
         const name=make('strong','storySquadSlotName');
-        const state=make('span','storySquadSlotState',i===0?'FIRST':'RESERVE');
+        const state=make('span','storySquadSlotState',single?'OPERATOR':i===0?'FIRST':'RESERVE');
         label.append(stars,name,state);
         card.append(number,image,label);
         card.addEventListener('click',()=>{if(i!==lockedCount)return;activeSlot=i;message.textContent='';render();});
@@ -3714,7 +3746,7 @@ async function debugJumpTo(mode, idx){
       const reset=make('button','storySquadAction secondary','RESET');reset.type='button';
       footer.append(message,reset,cancel);
       wrap.append(stage,side,footer);selectMount.appendChild(wrap);
-      const guide=window.RPG_SQUAD_TUTORIAL?.createPicker({screen:selectScreen,mount:selectMount,roster:side,ready,footer});
+      const guide=single?null:window.RPG_SQUAD_TUTORIAL?.createPicker({screen:selectScreen,mount:selectMount,roster:side,ready,footer});
 
       function renderRoster(){
         filterButtons.forEach(({btn,value})=>{btn.classList.toggle('active',value===rarityFilter);btn.setAttribute('aria-pressed',String(value===rarityFilter));});
@@ -3734,10 +3766,10 @@ async function debugJumpTo(mode, idx){
           const pic=make('img','');pic.alt='';pic.loading='lazy';pic.src=storyIconUrl(op.id);
           pic.onerror=()=>{pic.onerror=null;pic.src='assets/profile-icons/mc.webp';};
           const details=make('span','storySquadRosterName',op.name);
-          const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':`${op.rarity}★`);
+          const status=make('span','storySquadRosterBadge',pos>=0?String(pos+1):op.trial?'TRIAL':op.rarity?`${op.rarity}★`:'DEFAULT');
           card.append(pic,details,status);
           card.addEventListener('click',()=>{
-            if(lockedCount>2)return;
+            if(lockedCount>SLOTS-1)return;
             const occupied=selected.indexOf(op.id);
             if(occupied>=0 && occupied!==lockedCount){
               message.textContent='Already selected.';return;
@@ -3747,6 +3779,7 @@ async function debugJumpTo(mode, idx){
             selected[lockedCount]=op.id;
             activeSlot=lockedCount;
             message.textContent='';render();
+            opts.onPick?.(op.id,ready);
           });
           rosterList.appendChild(card);
         }
@@ -3765,7 +3798,7 @@ async function debugJumpTo(mode, idx){
           card.setAttribute('aria-label',`Life ${i+1}: ${op?.name||'Empty'}${locked?', select previous operator first':i===activeSlot?', selected':''}`);
           if(id){
             // Cropped lineup art centers faces and upper bodies even on wide 6-star illustrations.
-            const art=storyDeploymentArtUrl(id)||storyArtUrl(id);
+            const art=id==='mc'?storyArtUrl(id):(storyDeploymentArtUrl(id)||storyArtUrl(id)); // no lineup crop for the default character
             image.hidden=false;
             if(image.dataset.src!==art){
               image.dataset.src=art;image.src=art;
@@ -3774,14 +3807,14 @@ async function debugJumpTo(mode, idx){
           }else{
             image.hidden=true;image.removeAttribute('src');delete image.dataset.src;image.onerror=null;
           }
-          name.textContent=op?.name||(locked?'LOCKED':`SELECT ${['FIRST','SECOND','THIRD'][i]}`);
+          name.textContent=op?.name||(locked?'LOCKED':single?'SELECT OPERATOR':`SELECT ${['FIRST','SECOND','THIRD'][i]}`);
           stars.textContent=op?'★'.repeat(op.rarity):'';
           state.textContent=confirmed?'LOCKED IN':op?(op.trial?'TRIAL':'SELECTED'):(locked?'':'PICK AN OPERATOR');
           // There is only one READY button. It physically moves under the current slot.
           slotAction.replaceChildren();
           if(i===lockedCount)slotAction.appendChild(ready);
         });
-        countText.textContent=`${lockedCount} / 3 LOCKED IN`;
+        countText.textContent=`${lockedCount} / ${SLOTS} LOCKED IN`;
         ready.disabled=!selected[lockedCount];
         renderRoster();
         guide?.update(lockedCount,!!selected[lockedCount]);
@@ -3796,6 +3829,8 @@ async function debugJumpTo(mode, idx){
         selectScreen.hidden=true;
         selectScreen.setAttribute('aria-hidden','true');
         document.body.classList.remove('story-squad-picker-open');
+        selectScreen.classList.remove('single-select');
+        if(single){if(eyebrowEl)eyebrowEl.textContent=oldHead[0];if(titleEl)titleEl.textContent=oldHead[1];}
         resolve(result);
       };
       const keys=e=>{if(e.key==='Escape'){e.preventDefault();finish(null);}};
@@ -3812,6 +3847,7 @@ async function debugJumpTo(mode, idx){
           message.textContent='Already selected.';return;
         }
         lockedCount++;
+        if(single&&lockedCount===SLOTS){finish(selected.slice());return;}
         if(lockedCount===3){
           finish(selected.slice());return;
         }
@@ -3820,6 +3856,7 @@ async function debugJumpTo(mode, idx){
         cards[lockedCount].card.focus();
       });
       render();cards[0].card.focus();
+      opts.onOpen?.({roster:rosterList,ready});
     });
   }
   function swapToNextStoryOperator(){
