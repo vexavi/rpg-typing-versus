@@ -3959,6 +3959,10 @@ async function debugJumpTo(mode, idx){
   var kuroneHypeEl=document.getElementById('kuroneHype');
   var kuroneHypeLeftEl=document.getElementById('kuroneHypeLeft');
   var kuroneShoutBtn=document.getElementById('kuroneShoutout');
+  var kuroneDangerEl=document.getElementById('kuroneDanger');
+  var kuroneTakenEl=document.getElementById('kuroneTaken');
+  var kuroneSpeedEl=document.getElementById('kuroneSpeed');
+  var kuroneDangerShown=-1;     // stage index where the DANGER ZONE notification last showed
   var kuroneHype=0;            // words left with +1 damage for the operator after Kurone
   var kuroneHudKey='';
   var kuroneConquest=()=>currentMode==='story'?window.RPG_CONQUEST?.run||null:null;
@@ -3974,10 +3978,12 @@ async function debugJumpTo(mode, idx){
     storySquad.bench={...(st?.bench||{})};
     if(activeOperatorId==='kurone')operatorPassive?.setViewers?.(st?.viewers||0);
   }
-  function kuroneBonusLabel(tier){
+  function kuroneBonusLabel(tier,v){
     if(!tier)return '';
-    const r=window.RPG_OPERATOR_PASSIVES?.RULES?.kurone;if(!r)return '';
-    if(kuroneConquest())return `+${window.RPG_CONQUEST.displayed(r.bonus[tier])} / word`;
+    const P=window.RPG_OPERATOR_PASSIVES,r=P?.RULES?.kurone;if(!r)return '';
+    if(kuroneConquest())return `+${window.RPG_CONQUEST.displayed(P.kuroneBonus(v))} / word`;
+    const steps=P.kuroneSteps(v);
+    if(steps)return `+1 / word · +${steps+1} every 5th`;
     return r.every[tier]===1?'+1 / word':`+1 every ${r.every[tier]===2?'2nd':'3rd'} word`;
   }
   function kuroneHud(){
@@ -3985,15 +3991,25 @@ async function debugJumpTo(mode, idx){
     const on=activeOperatorId==='kurone'&&!!operatorPassive?.rule;
     const v=on?operatorPassive.getViewers():0,tier=window.RPG_OPERATOR_PASSIVES?.kuroneTier?.(v)||0;
     const canShout=on&&storySquad.enabled&&gameState==='playing'&&storyNextAvailable()>=0;
-    const key=`${on}|${v}|${kuroneHype}|${canShout}|${!!kuroneConquest()}|${activeOperatorId}`;
+    const key=`${on}|${v}|${kuroneHype}|${canShout}|${!!kuroneConquest()}|${activeOperatorId}|${Math.round(playerHp*10)}`;
     if(key===kuroneHudKey)return;kuroneHudKey=key;
+    const P=window.RPG_OPERATOR_PASSIVES;
+    const taken=on?P.kuroneTaken(v):1,speed=on?P.kuroneSpeed(v):1,danger=on&&v>30;
+    if(kuroneDangerEl){
+      kuroneDangerEl.hidden=!danger;
+      if(danger){kuroneTakenEl.textContent=taken>1?`×${taken} DMG TAKEN`:'TYPO = LOSE HALF';kuroneSpeedEl.textContent=speed>1?`+${Math.round((speed-1)*100)}% SPEED`:'';kuroneSpeedEl.hidden=speed<=1;}
+    }
+    wordLane?.classList.toggle('kurone-trending',on&&speed>1);
+    // Pulse her HP when one more ordinary hit would knock her out.
+    const nextHit=kuroneConquest()?taken*1:Math.ceil(taken-1e-9);
+    document.getElementById('playerMeter')?.classList.toggle('kurone-hp-danger',on&&playerHp>0&&playerHp<=nextHit);
     if(kuroneLiveEl){
       kuroneLiveEl.hidden=!on;
       if(on){
         kuroneViewersEl.textContent=String(v);
         kuroneLiveEl.querySelectorAll('.kurone-live-pips i').forEach(i=>i.classList.toggle('on',v>=Number(i.dataset.at)));
-        kuroneLiveEl.className=`kurone-live tier-${tier}`;
-        kuroneBonusEl.textContent=kuroneBonusLabel(tier);
+        kuroneLiveEl.className=`kurone-live tier-${tier}${v>30?' danger':''}`;
+        kuroneBonusEl.textContent=kuroneBonusLabel(tier,v);
         kuroneLiveEl.setAttribute('aria-label',`Live chat: ${v} viewers`);
       }
     }
@@ -4018,10 +4034,12 @@ async function debugJumpTo(mode, idx){
   function kuroneOnChat(effect){
     if(effect.type==='kurone-chat'){
       kuroneHud();kuroneReact(effect.tierUp?'tier':'happy',effect.tierUp?`${effect.viewers} VIEWERS`:'+1');
-      if(effect.tierUp)pushMsg(`KURONE · LIVE CHAT ${effect.viewers} VIEWERS (${kuroneBonusLabel(effect.tier).toUpperCase()})`,true);
+      if(effect.tierUp||effect.stepUp)pushMsg(`KURONE · LIVE CHAT ${effect.viewers} VIEWERS (${kuroneBonusLabel(effect.tier,effect.viewers).toUpperCase()})`,true);
+      if(effect.enteredDanger&&kuroneDangerShown!==stageIndex){kuroneDangerShown=stageIndex;window.RPG_KURONE_NOTIFY?.('DANGER ZONE!','A typo now = HALF my viewers leave!');}
+      if(effect.stepUp&&effect.viewers>=50)pushMsg(`KURONE · TRENDING: WORDS +${Math.round((window.RPG_OPERATOR_PASSIVES.kuroneSpeed(effect.viewers)-1)*100)}% FASTER`,true);
     }else if(effect.type==='kurone-leave'){
-      kuroneHud();if(effect.lost>0)kuroneReact('sad',`-${effect.lost}`);
-      pushMsg(`KURONE · ${effect.lost} VIEWERS LEFT (${effect.viewers})`,true);
+      kuroneHud();if(effect.lost>0)kuroneReact('sad',effect.half?`-${effect.lost} (HALF)`:`-${effect.lost}`);
+      pushMsg(`KURONE · ${effect.lost} VIEWERS LEFT${effect.half?' (HALF)':''} (${effect.viewers})`,true);
     }
     kuroneSave();
   }
@@ -5992,6 +6010,9 @@ function storyIncomingDamage(key,fallback){
   function storyHazardEnabled(key){return currentMode==='story'&&storySelectedStage?.battle?.[key]===true;}
   function damagePlayer(amount, reason){
     if(amount <= 0) return;
+    // Kurone's danger zone: past 30 viewers every 10 viewers adds +50% damage taken.
+    // (A typo's own hit is scaled by the viewer count before half of them left.)
+    const kuroneMult=activeOperatorId==='kurone'?(operatorPassive?.takeDamageMultiplier?.()||1):1;
     if(storySquad.enabled&&(gameState==='squad-deploy'||(gameState==='playing'&&stageElapsedSec()<storySquadGraceUntil)))return;
     if(operatorPassive?.isInvulnerable(stageElapsedSec())&&gameState==='playing'){
       // Invulnerability means no lost HP and no recorded damage (including
@@ -6001,7 +6022,7 @@ function storyIncomingDamage(key,fallback){
     }
 
     const conquest=currentMode==='story'&&window.RPG_CONQUEST?.run;
-    const scaled = conquest?window.RPG_CONQUEST.incomingDamage(amount,window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0)):Math.max(1, Math.round(amount));
+    const scaled = conquest?window.RPG_CONQUEST.incomingDamage(amount*kuroneMult,window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0)):(kuroneMult>1?Math.max(1,Math.ceil(amount*kuroneMult-1e-9)):Math.max(1, Math.round(amount)));
     // Wrath's Shield HP absorbs first; only the remainder reaches ordinary HP.
     // No player-damage stage hooks fire on a fully shielded hit.
     const shieldAbsorbed=operatorPassive?.nitrateAbsorbDamage?.(scaled)||0;

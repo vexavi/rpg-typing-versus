@@ -44,20 +44,26 @@
       description:'After 4 consecutive correct words, type the marked Prey within 6 seconds to start Blood Hunt: complete up to 3 timed Prey (3 seconds each) for +2 boss damage apiece.'}),
     cassian: Object.freeze({id:'cassian',name:'Cassian',rarity:6,title:"Sovereign’s Decree",every:6,maxEliminations:3,invulnerableSec:5,
       description:'Every 6 correct words, instantly eliminate up to 3 falling words. Missing eliminations deal 1 boss damage each; 4+ available words grant 5 seconds of invulnerability.'}),
-    // v148.10 Kurone. Viewers belong to the run (they carry across stages) and only
-    // leave on typos, a swap-out, a knockout or a brand-new run.
-    kurone: Object.freeze({id:'kurone',name:'Kurone',rarity:6,title:'Live Chat / Shoutout / Rage Quit',
-      maxViewers:30,typoLoss:5,tiers:Object.freeze([10,20,30]),
-      bonus:Object.freeze([0,0.3,0.5,1]),every:Object.freeze([0,3,2,1]),burst:Object.freeze([0,3,6,10]),hype:Object.freeze([0,3,6,10]),
-      description:'Live Chat: every correct word adds 1 viewer (max 30); a typo makes 5 viewers leave. At 10 / 20 / 30 viewers every word deals more damage. Shoutout (Adventure): swap Kurone out to any available squad member; the next operator gets Hype (+1 damage on its next 3 / 6 / 10 words) and the boss takes a half-strength parting post. Rage Quit: if Kurone is knocked out, the parting post deals full damage (3 / 6 / 10) and the next operator still gets Hype. Kurone must be the 1st squad member.'})
+    // v148.10 Kurone (glass cannon). Viewers belong to the run (they carry across stages)
+    // and have no cap. Past 30 every 10 viewers adds damage, damage TAKEN and (from 50) speed.
+    kurone: Object.freeze({id:'kurone',name:'Kurone',rarity:6,title:'Live Chat / Shoutout / Rage Quit',maxHpBonus:-2,
+      typoLoss:5,danger:30,tiers:Object.freeze([10,20,30]),
+      bonus:Object.freeze([0,0.3,0.5,1]),every:Object.freeze([0,3,2,1]),bonusStep:0.2,
+      takenStep:0.5,speedFrom:50,speedStep:0.15,
+      burst:Object.freeze([0,3,6,10]),burstStep:2,burstCap:20,hype:Object.freeze([0,3,6,10]),
+      description:'Glass cannon with the lowest HP. Live Chat: every correct word adds 1 viewer (no limit). Up to 30 viewers a typo makes 5 leave; past 30 a typo makes HALF leave. 10 / 20 / 30 viewers: more damage per word, and every 10 more viewers past 30 adds even more. DANGER past 30: every 10 viewers makes Kurone take +50% damage, and from 50 viewers words fall and appear 15% faster per 10. Shoutout (Adventure): swap out to any available squad member; the boss takes a half-strength parting post and the next operator gets Hype (+1 damage on up to 10 words). Rage Quit: if knocked out, the parting post is full strength (up to 20). Kurone must be the 1st squad member.'})
   });
-  // Kurone tier: 0 below 10 viewers, then 1 / 2 / 3.
+  // Kurone tier: 0 below 10 viewers, then 1 / 2 / 3 (30+). kuroneSteps: whole tens past 30.
   const kuroneTier=v=>{const t=RULES.kurone.tiers;return v>=t[2]?3:v>=t[1]?2:v>=t[0]?1:0;};
+  const kuroneSteps=v=>Math.max(0,Math.floor((Math.max(0,Number(v)||0)-30)/10));
+  const kuroneBonus=v=>{const r=RULES.kurone,t=kuroneTier(v);return t<3?r.bonus[t]:Math.round((r.bonus[3]+r.bonusStep*kuroneSteps(v))*10)/10;};
+  const kuroneTaken=v=>1+RULES.kurone.takenStep*kuroneSteps(v);
+  const kuroneSpeed=v=>{const r=RULES.kurone;return v>=r.speedFrom?Math.round((1+r.speedStep*(Math.floor((v-r.speedFrom)/10)+1))*100)/100:1;};
   // Parting post + Hype when Kurone leaves the field. A swap-out halves the post;
   // whole-number modes round the half UP (3 -> 2, 5 -> 3).
   function kuroneExit(viewers,kind,precise=false){
     const r=RULES.kurone,tier=kuroneTier(Math.max(0,Number(viewers)||0));
-    const full=r.burst[tier];
+    const full=tier<3?r.burst[tier]:Math.min(r.burstCap,r.burst[3]+r.burstStep*kuroneSteps(viewers));
     const burst=kind==='swap'?(precise?full/2:Math.ceil(full/2)):full;
     return {tier,burst,hype:r.hype[tier],viewers:Math.max(0,Number(viewers)||0)};
   }
@@ -75,7 +81,7 @@
     const lowHp=(hp,threshold)=>preciseHp?Number(hp)>0&&Number(hp)<=threshold:Number(hp)===threshold;
     let correct=0,activations=0,spawnPauseUntil=0,slowUntil=0,lastSlowAt=-Infinity;
     // Kurone's viewers are NOT cleared by reset(): the stream carries across stages.
-    let viewers=0,chatHits=0;
+    let viewers=0,chatHits=0,fifthHits=0,pendingTaken=0,speedNow=1,speedAt=-1;
     let frozen=null,freezeUntil=0,mistakeArmed=false,used=false;
     let streak=0,domainFreezeUntil=0,charged=false,marked=null,awaitingMark=false,executionPendingUntil=0;
     // 6★ state. Only one operator runs per game, so no inter-operator effect stacking.
@@ -193,7 +199,15 @@
       if(rule?.id!=='crossbow'||!adrenalineActive||!adrenalineTriggered)return 'off';
       return validTime(time)<adrenalineLastStandUntil?'last-stand':'overdrive';
     }
+    // Kurone's 'trending' speed-up eases in over about a second (no sudden jolt).
+    function kuroneSpeedAt(t){
+      const target=kuroneSpeed(viewers);
+      if(speedAt<0||t<speedAt)speedNow=target;else speedNow+=(target-speedNow)*Math.min(1,t-speedAt);
+      speedAt=t;if(Math.abs(target-speedNow)<.005)speedNow=target;
+      return speedNow;
+    }
     function getSpawnIntervalMultiplier(time){
+      if(rule?.id==='kurone')return 1/kuroneSpeedAt(validTime(time));
       const phase=getAdrenalinePhase(time);
       if(phase==='last-stand')return 1/rule.lastStandSpawnFrequency;
       if(phase==='overdrive')return 1/rule.overdriveSpawnFrequency;
@@ -384,6 +398,7 @@
       if(!rule)return 1;
       const t=validTime(time);
       if(rule.id==='livia')return rule.fallMultiplier;
+      if(rule.id==='kurone')return kuroneSpeedAt(t);
       if((rule.id==='alden'||rule.id==='elise')&&t<slowUntil)return 1-rule.slowPct/100;
       if(rule.id==='anodyne'&&t<slowUntil)return 1-rule.slowPct/100;
       if(rule.id==='crossbow'){
@@ -409,8 +424,10 @@
       }
       if(rule.id==='isolde'){streak=0;return null;}
       if(rule.id==='kurone'){
-        const before=viewers;viewers=Math.max(0,viewers-rule.typoLoss);chatHits=0;
-        return {type:'kurone-leave',viewers,lost:before-viewers,tier:kuroneTier(viewers),tierDown:kuroneTier(viewers)<kuroneTier(before),characterId:rule.id};
+        // The typo's own damage uses the viewer count BEFORE anyone leaves.
+        const before=viewers;pendingTaken=kuroneTaken(before);
+        viewers=before>rule.danger?Math.ceil(before/2):Math.max(0,before-rule.typoLoss);chatHits=0;fifthHits=0;
+        return {type:'kurone-leave',viewers,lost:before-viewers,half:before>rule.danger,tier:kuroneTier(viewers),tierDown:kuroneTier(viewers)<kuroneTier(before),characterId:rule.id};
       }
       if(rule.id==='tavi'){
         if(!foxfireActive)foxfireProgress=0;
@@ -526,18 +543,22 @@
       correct++;
       const t=validTime(time);
       if(rule.id==='kurone'){
-        const before=kuroneTier(viewers);
-        viewers=Math.min(rule.maxViewers,viewers+1);
-        const tier=kuroneTier(viewers);
+        const before=kuroneTier(viewers),beforeV=viewers;
+        viewers+=1;
+        const tier=kuroneTier(viewers),steps=kuroneSteps(viewers);
         if(tier!==before)chatHits=0;
         // Adventure (precise) adds a fractional bonus to every word; whole-number
-        // modes give +1 on every 3rd / 2nd / every word instead (same average).
+        // modes give +1 on every 3rd / 2nd / every word instead (same average), and past
+        // 30 each 10 viewers adds +1 more on every 5th word (= +0.2 per word).
         let bonusDamage=0;
         if(tier&&!context.nonBoss){
-          if(preciseHp)bonusDamage=rule.bonus[tier];
-          else if(++chatHits%rule.every[tier]===0)bonusDamage=1;
+          if(preciseHp)bonusDamage=kuroneBonus(viewers);
+          else{
+            if(++chatHits%rule.every[tier]===0)bonusDamage=1;
+            if(steps&&++fifthHits%5===0)bonusDamage+=steps;
+          }
         }
-        return {type:'kurone-chat',viewers,tier,tierUp:tier>before,bonusDamage,characterId:rule.id};
+        return {type:'kurone-chat',viewers,tier,steps,tierUp:tier>before,stepUp:steps>kuroneSteps(beforeV),danger:viewers>rule.danger,enteredDanger:viewers>rule.danger&&beforeV<=rule.danger,bonusDamage,characterId:rule.id};
       }
       if(rule.id==='nitrate'){
         const word=context.clearedWord;
@@ -874,13 +895,17 @@
     function isInvulnerable(time){return (rule?.id==='cassian'&&validTime(time)<cassianGuardUntil)||getAdrenalinePhase(time)==='last-stand';}
     function isFoxfireHidden(word){return rule?.id==='tavi'&&!!word?.foxfireHidden;}
     function getViewers(){return rule?.id==='kurone'?viewers:0;}
-    function setViewers(n){if(rule?.id==='kurone'){viewers=Math.max(0,Math.min(rule.maxViewers,Math.floor(Number(n)||0)));chatHits=0;}}
+    function setViewers(n){if(rule?.id==='kurone'){viewers=Math.max(0,Math.floor(Number(n)||0));chatHits=0;fifthHits=0;}}
+    // Damage-taken multiplier for the NEXT hit: a typo's own hit uses the count before
+    // half the viewers left; every other hit uses the current count.
+    function takeDamageMultiplier(){if(rule?.id!=='kurone')return 1;const m=pendingTaken||kuroneTaken(viewers);pendingTaken=0;return m;}
+    function kuroneState(){if(rule?.id!=='kurone')return null;return {viewers,tier:kuroneTier(viewers),steps:kuroneSteps(viewers),bonus:kuroneBonus(viewers),taken:kuroneTaken(viewers),speed:kuroneSpeed(viewers),danger:viewers>rule.danger};}
     // Kurone leaves the field: returns the parting post / Hype and ends the stream.
-    function kuroneLeave(kind){if(rule?.id!=='kurone')return null;const out=kuroneExit(viewers,kind,preciseHp);viewers=0;chatHits=0;return out;}
+    function kuroneLeave(kind){if(rule?.id!=='kurone')return null;const out=kuroneExit(viewers,kind,preciseHp);viewers=0;chatHits=0;fifthHits=0;pendingTaken=0;return out;}
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,onRevive,updateField,
       startLupa,markCrossbowWord,syncAdrenaline,protectDeadlines,onWordSpawn,nitrateAbsorbDamage,getNitrateShield,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
-      isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,getViewers,setViewers,kuroneLeave,debug});
+      isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,getViewers,setViewers,kuroneLeave,takeDamageMultiplier,kuroneState,debug});
   }
-  window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create,kuroneTier,kuroneExit});
+  window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create,kuroneTier,kuroneExit,kuroneSteps,kuroneBonus,kuroneTaken,kuroneSpeed});
 })();

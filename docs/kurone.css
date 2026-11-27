@@ -72,3 +72,20 @@
 .kurone-notify-text{margin:6px 0 0;font-size:46px;line-height:1.05;font-weight:900;color:#ff8cc6;letter-spacing:.02em}
 .kurone-notify-sub{margin:6px 0 0;font-size:20px;font-weight:700;color:#f1dfe8}
 @media (prefers-reduced-motion:reduce){.kurone-notify.show{animation:none;opacity:1;transform:translate(-50%,0)}.kurone-notify-sticker{animation:none}}
+
+/* Danger zone (past 30 viewers) */
+.kurone-live.danger{border-color:#ff2e2e;background:linear-gradient(90deg,#3a0610,#1a0508);animation:kuroneDangerBox 1s ease-in-out infinite}
+.kurone-live.danger .kurone-live-count{color:#ff5a5a}
+@keyframes kuroneDangerBox{50%{box-shadow:0 0 0 1px #ff2e2e,0 0 14px #ff2e2e99}}
+.kurone-danger{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:5px;padding:3px 8px;border:1px solid #ff2e2e;background:#2a0508;color:#ffd0d0;
+  font:800 11px/1.2 var(--ak-sans,'Roboto',system-ui,sans-serif);letter-spacing:.05em;border-radius:3px}
+.kurone-danger[hidden],.kurone-danger span[hidden]{display:none}
+.kurone-danger b{color:#ff5a5a;letter-spacing:.12em}
+.kurone-danger span{padding:1px 6px;background:#ff2e2e22;border:1px solid #ff2e2e66;border-radius:2px;white-space:nowrap}
+/* 50+ viewers: the lane is "trending" (words fall and spawn faster) */
+#wordLane.kurone-trending{box-shadow:inset 0 0 0 2px #ff2e86,inset 0 0 40px #ff2e8655;animation:kuroneTrend 1.4s ease-in-out infinite}
+@keyframes kuroneTrend{50%{box-shadow:inset 0 0 0 2px #ff2e86,inset 0 0 70px #ff2e8688}}
+/* One more hit would knock her out */
+#playerMeter.kurone-hp-danger{animation:kuroneHpPulse .6s ease-in-out infinite}
+@keyframes kuroneHpPulse{50%{filter:drop-shadow(0 0 6px #ff2e2e) brightness(1.3)}}
+@media (prefers-reduced-motion:reduce){.kurone-live.danger,#wordLane.kurone-trending,#playerMeter.kurone-hp-danger{animation:none}}
