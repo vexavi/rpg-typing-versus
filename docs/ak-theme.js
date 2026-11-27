@@ -23,9 +23,9 @@
     lock:'<rect x="5" y="11" width="14" height="10"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
   };
   const TILES={
-    'Conquest':{key:'conquest',code:'01',jp:'作戦',en:'CAMPAIGN'},
-    'Normal Mode':{key:'normal',code:'02',jp:'通常戦闘',en:'STANDARD OPERATION'},
-    'Practice':{key:'practice',code:'03',jp:'練習',en:'TRAINING'},
+    'Normal Mode':{key:'normal',code:'01',jp:'通常戦闘',en:'STANDARD OPERATION'},
+    'Adventure':{key:'conquest',code:'03',jp:'冒険',en:'CAMPAIGN'},
+    'Practice':{key:'practice',code:'02',jp:'練習',en:'TRAINING'},
     'All Grades Challenge':{key:'shared',code:'04',jp:'全学年チャレンジ',en:'SHARED RANKED'},
     'Recruitment':{key:'recruit',code:'05',jp:'採用',en:'RECRUIT OPERATORS'},
     'Collection':{key:'collection',code:'06',jp:'図鑑',en:'OPERATORS · AURAS'},
@@ -49,14 +49,15 @@
     const meta=TILES[title];
     card.dataset.akDecorated='1';
     if(meta)card.dataset.akTile=meta.key;
-    const icon=meta?meta.key:'generic';
+    const mystery=card.disabled&&card.dataset.mystery==='1';
+    const icon=meta&&!mystery?meta.key:'generic';
     card.prepend(span('ak-tile-code',meta?meta.code:'··'));
     card.appendChild(svg(icon,'ak-tile-icon'));
     card.appendChild(svg(icon,'ak-tile-mark'));
     if(meta){
       const sub=span('ak-tile-sub');
-      const jp=document.createElement('b');jp.textContent=meta.jp;
-      const en=document.createElement('small');en.textContent=meta.en;
+      const jp=document.createElement('b');jp.textContent=mystery?'???':meta.jp;
+      const en=document.createElement('small');en.textContent=mystery?'???':meta.en;
       sub.append(jp,en);card.appendChild(sub);
     }
     if(card.disabled){
@@ -65,9 +66,11 @@
       // Short badge text; the full reason stays in the button's tooltip / aria-label.
       const reason=card.title||'';
       const short=/online/i.test(reason)?'ONLINE ONLY':/clear normal/i.test(reason)?'CLEAR NORMAL MODE':/qr/i.test(reason)?'TEACHER QR':'LOCKED';
-      lock.appendChild(document.createTextNode(short));
+      lock.appendChild(document.createTextNode(mystery?'???':short));
       card.appendChild(lock);
     }
+    // Locked-until-Normal-is-cleared modes show only question marks.
+    if(mystery){card.classList.add('ak-mystery');const t=card.querySelector('.title');if(t)t.textContent='???';}
   }
 
   // Only write when the value changes: every DOM write re-triggers the observer.

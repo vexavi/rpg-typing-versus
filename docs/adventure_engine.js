@@ -2975,12 +2975,15 @@ function showModeSelectScreen(){
   overlayChoices.classList.add("show");
   overlayChoices.innerHTML = "";
 
-  const addMode = (title, {disabled=false, lockedReason='', onClick}={}) => {
+  const SHOW_TOURNAMENT_TILE = false;
+  const addMode = (title, {disabled=false, lockedReason='', onClick, mystery=false}={}) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'choiceBtn student-mode-card';
+    // v148.9: modes that unlock after clearing Normal Mode stay a mystery ("???") until then.
+    if(disabled && mystery) button.dataset.mystery = '1';
     button.disabled = !!disabled;
-    button.setAttribute('aria-label', disabled && lockedReason ? `${title} — ${lockedReason}` : title);
+    button.setAttribute('aria-label', disabled && mystery ? `Locked mode — ${lockedReason}` : disabled && lockedReason ? `${title} — ${lockedReason}` : title);
     if(disabled && lockedReason) button.title = lockedReason;
     const label = document.createElement('span');
     label.className = 'title';
@@ -3115,18 +3118,19 @@ function showModeSelectScreen(){
   heroChange.addEventListener('click',openOperatorSelector);
   refreshHero();
 
-  addMode('Conquest', {disabled:!normalCleared,lockedReason:'Clear Normal Mode to unlock',onClick:()=>{
-    if(!window.RPG_STORY){pushMsg('Story unavailable.',true);return;}
-    window.RPG_STORY.openMap(launchStoryStage);
+  addMode('Normal Mode', {onClick:()=>{
+    setMode('normal');showOverlay(false);startGame();
   }});
   addMode('Practice', {onClick:()=>{
     setMode('practice');showOverlay(false);startGame();
   }});
-  addMode('Normal Mode', {onClick:()=>{
-    setMode('normal');showOverlay(false);startGame();
+  addMode('Adventure', {disabled:!normalCleared,mystery:true,lockedReason:'Clear Normal Mode to unlock',onClick:()=>{
+    if(!window.RPG_STORY){pushMsg('Story unavailable.',true);return;}
+    window.RPG_STORY.openMap(launchStoryStage);
   }});
   // v148.9: Challenge Mode retired (like Extra in v147). All Grades Challenge stays.
-  addMode('All Grades Challenge', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
+  // All Grades Challenge also unlocks after clearing Normal Mode once.
+  addMode('All Grades Challenge', {disabled:!normalCleared||!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,mystery:!normalCleared,lockedReason:!normalCleared?'Clear Normal Mode to unlock':'Online Firebase required',onClick:()=>{
     setMode('shared');showOverlay(false);startGame();
   }});
   addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
@@ -3141,7 +3145,9 @@ function showModeSelectScreen(){
   addMode('Rankings', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
     void openRankings('normal');
   }});
-  addMode('Tournament', {disabled:true,
+  // v148.9: Tournament is hidden for now. Set SHOW_TOURNAMENT_TILE to true to show it again
+  // (the tournament code itself is unchanged).
+  if(SHOW_TOURNAMENT_TILE)addMode('Tournament', {disabled:true,
     lockedReason:'Scan your teacher’s tournament QR code to join'});
   if(!ADVENTURE_CONTEXT.online){
     const note=document.createElement('p');note.setAttribute('role','status');note.id='localPracticeNotice';
