@@ -74,7 +74,10 @@
   d.querySelectorAll('[data-step]').forEach(b=>b.disabled=items.length<2);
   if(!d.contains(document.activeElement))d.querySelector('[data-close]').focus({preventScroll:true});
   window.RPG_AURA?.refresh?.();
+  // v148.9: 5★/6★ operators have a "Who Am I?" lesson.
+  $('dWho').hidden=c.rarity<5;
   if(guideStep==='pick'){guideStep='aura';guideChar=c.id;setTimeout(guideAura,450);}
+  else if(guideStep==='pick56'&&c.rarity>=5){guideStep='who';setTimeout(guideWho,450);}
  }
 
  // ---- First-visit guide (runs once, right after the first-time tutorial) ------------
@@ -83,10 +86,13 @@
  const pid=()=>String(player?.public_id||'');
  function startGuide(){
   const g=G();if(!g||!pid()||!g.pending(pid()).includes('collection')||player?.tutorial?.collectionGuide===true)return;
+  // Coming back from the guided "Who Am I?": finish the tour.
+  let resume='';try{resume=sessionStorage.getItem('rpgCollectionGuideResume')||'';sessionStorage.removeItem('rpgCollectionGuideResume');}catch(_){}
+  if(resume==='after-whoami'){guideExit();return;}
   filter='all';ownedOnly=false;$('ownedOnly').checked=false;render();
   guideStep='owned';
   g.show({target:()=>$('grid').querySelector('.cl-card:not(.is-locked)'),kicker:KG,title:'Your characters',
-   text:'Cards in colour are characters you own. COPIES shows how many times you recruited them.',
+   text:'Color cards = your characters.',
    button:{label:'NEXT ▸',onClick:guideLocked}});
  }
  function guideLocked(){
@@ -94,7 +100,7 @@
   if(!locked){guidePick();return;}
   locked.scrollIntoView({block:'nearest'});
   G().show({target:()=>$('grid').querySelector('.cl-card.is-locked'),kicker:KG,title:'Not recruited yet',
-   text:'Grey cards with a lock are characters you have not recruited yet. Keep recruiting to unlock them!',
+   text:'Gray cards with a 🔒 = not yours yet.',
    button:{label:'NEXT ▸',onClick:guidePick}});
  }
  function guidePick(){
@@ -103,11 +109,11 @@
   const has4=catalog.some(c=>c.rarity===4&&owned(c.id)>0);
   filter=has4?'4':'all';ownedOnly=true;$('ownedOnly').checked=true;render();window.scrollTo({top:0});
   G().show({target:()=>[...$('grid').querySelectorAll('.cl-card:not(.is-locked)')],park:true,kicker:KG,title:'Open a character',
-   text:has4?'Tap any 4★ character you own to open their file.':'Tap any character you own to open their file.'});
+   text:has4?'Tap a 4★ character.':'Tap one of your characters.'});
  }
  function guideAura(){
   G().show({target:'#dAuras',kicker:KG,title:'Auras',
-   text:'AURAS make your character glow in battle. Unlocking one costs shards — you get shards when you recruit a character you already have.',
+   text:'AURA = a glow for your character. It costs ◆ shards. You get shards from the same character again.',
    button:{label:'NEXT ▸',onClick:guideFree}});
  }
  function guideFree(){
@@ -116,26 +122,38 @@
   if(!canGift){guideBack();return;}
   freeAura=true;renderAura(c);
   G().show({target:()=>$('dAuras').querySelector('[data-tier="1"]'),kicker:KG,title:'A free gift!',
-   text:'You don\'t have enough shards yet, so here is a FREE upgrade. Tap WHITE to unlock your first aura.'});
+   text:'A FREE gift for you! Tap WHITE.'});
  }
  function guideEquipped(){
   G().show({target:'#dArt',kicker:KG,title:'Aura unlocked!',
-   text:'Your character now glows with the WHITE aura in battle. Tap any unlocked aura to switch, or NONE to turn it off.',
+   text:'Your character glows now! Tap NONE to turn it off.',
    button:{label:'NEXT ▸',onClick:guideBack}});
  }
  function guideFreeFailed(){
-  G().show({kicker:KG,title:'Gift not saved',text:'The free aura could not be saved right now. Ask your teacher — you can still unlock auras later with shards.',
+  G().show({kicker:KG,title:'Gift not saved',text:'The gift did not save. Please tell your teacher.',
    button:{label:'NEXT ▸',onClick:guideBack}});
  }
  function guideBack(){
   guideStep='back';
-  G().show({target:'#detail [data-close]',kicker:KG,title:'Go back',text:'Tap ‹ to go back to all your characters.'});
+  G().show({target:'#detail [data-close]',kicker:KG,title:'Go back',text:'Tap ‹ to go back.'});
+ }
+ function guidePick56(){
+  const has=catalog.some(c=>c.rarity>=5&&owned(c.id)>0);
+  if(!has){guideExit();return;}
+  guideStep='pick56';filter='all';ownedOnly=true;$('ownedOnly').checked=true;render();window.scrollTo({top:0});
+  G().show({target:()=>[...$('grid').querySelectorAll('.cl-card.r5:not(.is-locked),.cl-card.r6:not(.is-locked)')],park:true,kicker:KG,title:'Your best characters',
+   text:'Now tap a 5★ or 6★ character.'});
+ }
+ function guideWho(){
+  G().show({target:'#dWho',kicker:KG,title:'Who am I?',
+   text:'WHO AM I? shows this character\'s skill. Finish it once = 🪙 +100 coins! Tap it, or tap LATER.',
+   button:{label:'LATER',onClick:()=>{guideStep='back2';G().show({target:'#detail [data-close]',kicker:KG,title:'Go back',text:'You can play WHO AM I? any time. Tap ‹ to go back.'});}}});
  }
  function guideExit(){
   guideStep='exit';filter='all';ownedOnly=false;$('ownedOnly').checked=false;render();
   G().done(pid(),'collection',code);
   try{sessionStorage.setItem('rpgTutorialJustDone','1');}catch(_){}
-  G().show({target:'.cl-back',kicker:KG,title:'Back to Mode Select',text:'That\'s it! Tap ‹ MODE SELECT to go back.'});
+  G().show({target:'.cl-back',kicker:KG,title:'Back to Mode Select',text:'All done! Tap ‹ MODE SELECT.'});
  }
 
  // ---- Aura row (former Aura Workshop) -------------------------------------------
@@ -200,7 +218,7 @@
   const d=$('detail');if(d.hidden)return;
   armed=-1;hover=null;clearTimeout(armTimer);showAura(null);
   d.classList.add('is-leaving');
-  setTimeout(()=>{d.hidden=true;d.classList.remove('is-leaving');document.body.classList.remove('cl-open');lastFocus?.focus?.({preventScroll:true});if(guideStep==='back')guideExit();},180);
+  setTimeout(()=>{d.hidden=true;d.classList.remove('is-leaving');document.body.classList.remove('cl-open');lastFocus?.focus?.({preventScroll:true});if(guideStep==='back')guidePick56();else if(guideStep==='back2')guideExit();},180);
  }
  function step(n){const items=viewable();if(items.length<2)return;openDetail(items[(current+n+items.length)%items.length].id);}
 
@@ -220,6 +238,7 @@
  // Hovering an aura previews it on the art without saving.
  $('dAuras').addEventListener('pointerover',e=>{const b=e.target.closest('[data-tier]');if(!b||armed>=0)return;const i=Number(b.dataset.tier);if(hover!==i){hover=i;showAura(i);}});
  $('dAuras').addEventListener('pointerleave',()=>{if(hover===null||armed>=0)return;hover=null;showAura(null);});
+ $('dWho').addEventListener('click',()=>{if(!openId)return;location.href=`who-am-i.html?op=${encodeURIComponent(openId)}${guideStep==='who'?'&from=guide':''}`;});
  $('dImg').addEventListener('error',e=>{const img=e.currentTarget;if(img.dataset.fallback&&!img.dataset.used){img.dataset.used='1';img.src=img.dataset.fallback;}});
  document.addEventListener('keydown',e=>{
   if($('detail').hidden)return;

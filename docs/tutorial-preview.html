@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="guild-coins.css?v=73">
 <link rel="stylesheet" href="ak-theme.css?v=8">
 <link rel="stylesheet" href="battle-fx.css?v=3">
-<link rel="stylesheet" href="tutorial-guide.css?v=6"><script src="tutorial-intro.js?v=1"></script>
+<link rel="stylesheet" href="tutorial-guide.css?v=7"><script src="tutorial-intro.js?v=1"></script>
 <link rel="preload" as="image" href="assets/bosses/tutorial-bg.webp">
 <link rel="preload" as="image" href="assets/bosses/tutorial.webp">
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/ak-roboto-var.woff2" crossorigin>
@@ -45,6 +45,7 @@
     <!-- Tutorial coach: the only element that is not part of the real battle screen. -->
     <section class="tutorial-coach" id="trainingCoach" aria-live="polite">
       <div class="tutorial-coach-kicker">TUTORIAL · <span id="stepCounter">LESSON 01 / 05</span></div>
+      <div class="wai-formula" id="coachFormula" hidden></div>
       <h3 id="lessonTitle">Type a word</h3>
       <p id="lessonObjective">Type the English translation shown beside the Japanese word.</p>
       <p class="tutorial-coach-feedback" id="messageLog" role="status"></p>

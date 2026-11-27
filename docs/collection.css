@@ -177,3 +177,11 @@ body.cl-open{overflow:hidden}
 .cl-d-art.is-flash::after{content:"";position:absolute;inset:0;background:radial-gradient(closest-side,#ffffffb3,transparent);animation:cl-flash .6s ease-out both;pointer-events:none}
 @keyframes cl-flash{from{opacity:1;transform:scale(.6)}to{opacity:0;transform:scale(1.25)}}
 @media (max-width:900px){.cl-d-panel{max-height:38vh}.cl-d-id{bottom:calc(38vh + 74px)}.cl-d-art{bottom:calc(38vh + 150px)}.cl-orb{width:24px;height:24px}.cl-hint{display:none}}
+
+/* v148.9 Who Am I? button on 5★/6★ operator pages */
+.cl-who{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;margin-top:10px;padding:11px 14px;border:0;cursor:pointer;
+  background:linear-gradient(90deg,#1f2226,#2d3238);color:#fff;border-left:6px solid #fff200;text-align:left;box-shadow:0 6px 14px #0003}
+.cl-who[hidden]{display:none}
+.cl-who b{font:900 18px/1 var(--display,system-ui);letter-spacing:.08em;color:#fff200}
+.cl-who small{font:600 12px/1.3 system-ui,sans-serif;color:#d7dce0}
+.cl-who:hover,.cl-who:focus-visible{background:linear-gradient(90deg,#2a2e33,#3a4048);outline:0}

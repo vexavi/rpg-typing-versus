@@ -403,9 +403,29 @@ async function rankSubmit(b){const p=await currentPlayer(b);if(!b.completed||!Nu
  * Claims are idempotent per ranking token / Story attempt; no daily cap. */
 const GUILD_MAX_BALANCE=1000000000;
 const guildUUID=x=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(String(x||''));
+// v148.9: finishing an operator's "Who Am I?" lesson pays once per operator (5★/6★ only).
+const WHOAMI_COINS=100;
 async function guildClaim(b){
  const p=await currentPlayer(b),mode=String(b.mode||'');
- if(!['normal','story'].includes(mode))err('This mode does not earn Guild Coins.');
+ if(!['normal','story'].includes(mode)&&mode!=='whoami')err('This mode does not earn Guild Coins.');
+ if(mode==='whoami'){
+  const id=String(b.character_id||'');
+  if(!auraId(id)||!p.player.recruitment?.owned?.[id])err('Recruit this operator first.');
+  if(await operatorRarity(id)<5)err('Who Am I? rewards are for 5★ and 6★ operators.');
+  const refKey=`whoami-${id}`,receiptRef=ref('guildClaims',`${p.id}__${refKey}`);
+  return {...await runTransaction(db,async tx=>{
+   const playerSnap=await tx.get(p.playerRef);
+   if(!playerSnap.exists()||playerSnap.data().disabled)err('Player no longer active.');
+   const oldCoins=Number(playerSnap.data().recruitment?.coins);
+   if(!Number.isSafeInteger(oldCoins)||oldCoins<0)err('Guild Coin wallet is invalid.');
+   if((await tx.get(receiptRef)).exists())return {ok:true,awarded:0,coins:oldCoins,duplicate:true};
+   if(oldCoins+WHOAMI_COINS>GUILD_MAX_BALANCE)err('Guild Coin storage limit reached.');
+   const correct=Math.max(1,Math.min(1000000,Math.trunc(Number(b.correct)||1))),incorrect=Math.max(0,Math.min(1000000,Math.trunc(Number(b.incorrect)||0)));
+   tx.set(receiptRef,{publicId:p.id,claimKey:refKey,mode,coins:WHOAMI_COINS,correct,incorrect,runToken:null,stageId:id,attemptId:null,firstClear:true,createdAt:serverTimestamp()});
+   tx.update(p.playerRef,{'recruitment.coins':oldCoins+WHOAMI_COINS,'recruitment.lastClaimId':`${p.id}__${refKey}`});
+   return {ok:true,awarded:WHOAMI_COINS,coins:oldCoins+WHOAMI_COINS,duplicate:false};
+  }),provisional:true};
+ }
  if(!p.player.recruitment||!Number.isInteger(p.player.recruitment.coins))err('Guild Coin wallet is missing. Ask teacher to migrate this card.');
  const correct=Number(b.correct),incorrect=Number(b.incorrect);
  if(!Number.isSafeInteger(correct)||!Number.isSafeInteger(incorrect)||correct<0||incorrect<0||correct>1000000||incorrect>1000000||!correct)err('Invalid run answer counts.');

@@ -2974,11 +2974,11 @@ async function startNormalWithOperatorSelect(){
       onOpen:({roster})=>{
         if(!guided)return;
         g.show({target:()=>{const box=roster.getBoundingClientRect();return [...roster.querySelectorAll('.storySquadRosterCard')].filter(c=>{const r=c.getBoundingClientRect();return r.bottom<=box.bottom+1&&r.top>=box.top-1;});},park:true,kicker:K,title:'Operator Select',
-          text:'Before every Normal battle you choose your operator. Tap the character you want to play as.'});
+          text:'Pick your character for this battle. Tap one!'});
       },
       onPick:(id,ready)=>{
         if(!guided)return;
-        g.show({target:()=>ready,kicker:K,title:'Ready',text:'Good choice! Tap READY to lock them in and start the battle. (You can tap another character first to change.)',
+        g.show({target:()=>ready,kicker:K,title:'Ready',text:'Good! Tap READY to start.',
           clearOnTarget:true});
       }});
   }finally{normalSelectOpen=false;if(guided&&!picked)g.clear();}
@@ -2997,14 +2997,14 @@ function runPauseGuide(){
   clearInterval(pauseGuideTimer);
   pauseGuideTimer=setInterval(()=>{
     if(step===0&&gameState==='playing'){step=1;
-      g.show({target:'#pauseCmd',allowKeys:['Escape'],kicker:K,title:'Pause',text:'Need a break? Tap PAUSE (or press ESC). The words stop falling while you are paused.'});}
+      g.show({target:'#pauseCmd',allowKeys:['Escape'],kicker:K,title:'Pause',text:'Need a break? Tap PAUSE (or press ESC). Words stop.'});}
     else if(step===1&&gameState==='paused'){step=2;
-      g.show({target:()=>overlayChoices.querySelector('[data-act="resume"]'),allowKeys:['Escape'],kicker:K,title:'Resume',text:'The game is paused. Tap RESUME (or press ESC again) to keep playing.'});}
+      g.show({target:()=>overlayChoices.querySelector('[data-act="resume"]'),allowKeys:['Escape'],kicker:K,title:'Resume',text:'Paused! Tap RESUME to play again.'});}
     else if(step===2&&gameState==='playing'){step=3;
-      g.show({target:'#pauseCmd',allowKeys:['Escape'],kicker:K,title:'Pause again',text:'Great! Now pause one more time.'});}
+      g.show({target:'#pauseCmd',allowKeys:['Escape'],kicker:K,title:'Pause again',text:'Great! Pause one more time.'});}
     else if(step===3&&gameState==='paused'){step=4;
       g.done(id,'pause',ADVENTURE_CONTEXT?.card_code);
-      g.show({target:'#runCmd',kicker:K,title:'Back to Mode Select',text:'To leave a battle, tap MODE SELECT. You will go back to the Mode Select screen.'});}
+      g.show({target:'#runCmd',kicker:K,title:'Back to Mode Select',text:'To leave the battle, tap MODE SELECT.'});}
     else if(step===4&&gameState==='modeselect'){clearInterval(pauseGuideTimer);}
     // Run ended another way (lost/won) or took too long: stop; the guide returns next Normal run.
     if(Date.now()-started>900000||(step<4&&['gameover','victory','stageclear'].includes(gameState))){clearInterval(pauseGuideTimer);g.clear();}
@@ -3019,7 +3019,7 @@ function startModeSelectTutorialGuide(){
     }
     whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Recruitment'),kicker:'TUTORIAL · LESSON 05 / 05',
       title:'Mode Select',
-      text:'This is Mode Select — you start every game from here. Tap RECRUITMENT to get your first ten characters for free.'}));
+      text:'This is Mode Select. Tap RECRUITMENT to get 10 free characters!'}));
     return;
   }
   // Follow-up guides after the first-time tutorial (this device only, once each).
@@ -3027,20 +3027,20 @@ function startModeSelectTutorialGuide(){
   if(guide&&pending.includes('pause')){
     whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Normal Mode'),kicker:'GUIDE · NORMAL MODE',
       title:'Normal Mode',
-      text:'Tap NORMAL MODE. First you will choose your character, then we will show you how to pause and how to get back here.'}));
+      text:'Tap NORMAL MODE. You will pick a character and learn PAUSE.'}));
     return;
   }
   if(guide&&pending.includes('collection')){
     whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Collection'),kicker:'GUIDE · COLLECTION',
       title:'Collection',
-      text:'Tap COLLECTION to see the characters you recruited — there is a free gift waiting!'}));
+      text:'Tap COLLECTION to see your characters. A free gift is waiting!'}));
     return;
   }
   let done=false;try{done=sessionStorage.getItem('rpgTutorialJustDone')==='1';sessionStorage.removeItem('rpgTutorialJustDone');}catch(_){}
   if(done&&guide){
     whenModeSelectVisible(()=>guide.show({target:()=>modeTile('Normal Mode'),kicker:'TUTORIAL COMPLETE',
       title:'You are ready!',
-      text:'Start with NORMAL MODE. Clear it once to unlock Adventure and All Grades Challenge.',
+      text:'Play NORMAL MODE. Win it once to open more modes!',
       button:{label:'GOT IT',onClick:()=>guide.clear()}}));
   }
 }

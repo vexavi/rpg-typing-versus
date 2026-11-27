@@ -159,13 +159,13 @@
  function guideCoins(){
   const g=G();if(!g){tutorialGuide('Select RECRUIT ×10 below. Your first pull costs 0 Guild Coins.');return;}
   g.show({target:()=>$('walletCoins')?.closest('.wallet-item')||$('walletCoins'),kicker:KICK,title:'Guild Coins',
-   text:'This shows your GUILD COINS. You earn them by playing Normal Mode and Adventure. A ×10 recruit normally costs 1,000 coins.',
+   text:'These are your COINS. Play games to get more. 10 characters = 1,000 coins.',
    button:{label:'NEXT ▸',onClick:guidePull}});
  }
  function guidePull(){
   const g=G();if(!g)return;
   g.show({target:'[data-pull="10"]',kicker:KICK,title:'Recruit ×10',
-   text:'Your first ×10 recruit is FREE. Tap RECRUIT ×10 to get your first ten characters.'});
+   text:'Your first time is FREE! Tap RECRUIT ×10.'});
  }
  function guideResults(){
   const g=G();if(!g)return;g.clear();
@@ -174,7 +174,7 @@
   const timer=setInterval(()=>{
    const back=document.querySelector('#revealRoot[data-stage="lineup"] .rv-lu-foot [data-reveal="close"]');
    if(back){clearInterval(timer);g.show({target:()=>document.querySelector('#revealRoot .rv-lu-foot [data-reveal="close"]'),kicker:KICK,title:'Your new characters!',dim:false,
-    text:'These ten characters are now yours. You can see them any time in COLLECTION. Tap BACK TO RECRUITMENT.'});}
+    text:'These 10 characters are yours now! Tap BACK TO RECRUITMENT.'});}
    else if(!document.getElementById('revealRoot')||Date.now()-started>600000)clearInterval(timer);
   },250);
  }
@@ -184,7 +184,7 @@
   try{const id=JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}').public_id;if(id)g.setPending(id,['pause','collection']);}catch(_){}
   document.body.classList.add('tutorial-exit'); // reveal the × that the tutorial hid
   g.show({target:'a.close[data-return-modes]',kicker:KICK,title:'Back to Mode Select',
-   text:'Great job! Tap × at the top right to go back to Mode Select.'});
+   text:'Great job! Tap × to go back.'});
  }
  function tutorialGuide(message='Select RECRUIT ×10 to get your first characters.',action='',callback=null){
   if(G()){

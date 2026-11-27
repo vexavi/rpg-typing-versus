@@ -36,8 +36,10 @@ function status(message){$('status').textContent=message||'';}
 const input=()=>$('answerInput');
 
 // ---- coach + spotlight -----------------------------------------------------------
-function coach({title,text,next=null,enter=false,focus=[],arrows=[]}){
+function coach({title,text,next=null,enter=false,focus=[],arrows=[],formula=''}){
  setArrows(arrows);
+ // Picture formula: the lesson makes sense even without reading the sentence.
+ const f=$('coachFormula');if(f){f.textContent=formula;f.hidden=!formula;if(formula){f.classList.remove('pop');void f.offsetWidth;f.classList.add('pop');}}
  if(title)$('lessonTitle').textContent=title;
  $('lessonObjective').textContent=text||'';
  $('enterKey').hidden=!enter;$('enterKey').querySelector('.tutorial-keycap').classList.remove('is-pressed');
@@ -157,7 +159,7 @@ function spawnWord(record,{falling=false}={}){
   if(!landed&&ts-startMs>=travel){
    landed=true;word.classList.add('landed');
    // Real rule: a landed word piles up at the bottom (no damage until OVERFLOW).
-   log('It landed at the bottom — you can still type it!');
+   log('It is at the bottom. You can still type it!');
   }
   frameId=landed?null:requestAnimationFrame(tick);
  }
@@ -174,7 +176,7 @@ let demoTimers=[];
 function demoLater(fn,ms){const t=setTimeout(fn,ms);demoTimers.push(t);return t;}
 function overflowDemo(){
  phase='l2-overflow';setInput({enabled:false});clearWord();
- coach({focus:['.wordLane','#tutorialPlayerRow'],text:'Words you do not clear fall to the bottom and pile up. Watch what happens when lots of words fall at once…'});
+ coach({focus:['.wordLane','#tutorialPlayerRow'],formula:'⬇️ ⬇️ ⬇️ → 📚',text:'Words you do not type fall down and pile up. Watch!'});
  const lane=$('wordLane'),rowH=30;
  const rows=Math.floor(lane.clientHeight/rowH);   // same OVERFLOW rule as the real game
  const words=[];let i=0;
@@ -202,19 +204,19 @@ function overflowDemo(){
 function startOverflow(){
  $('overflowBadge').classList.add('show');
  coach({focus:['.wordLane','#overflowBadge','#tutorialPlayerRow'],arrows:[{sel:'#overflowBadge',dir:'up'},{sel:'#tutorialPlayerRow',dir:'down'}],
-  text:'OVERFLOW! The pile reached the top, so you lose 1 HP every second until you clear words. Watch your HP…'});
+  formula:'📚 FULL → ❤️ -1 / sec',text:'OVERFLOW! The pile is full. You lose 1 HP every second. Look at your HP!'});
  const tickHp=()=>{
   if(phase!=='l2-overflow')return;
   if(playerHP>1){playerHP--;updateBars();flashDamage();log(`OVERFLOW · HP ${playerHP}/10`);demoLater(tickHp,1000);return;}
   // Stop at 1 HP: the tutorial never makes them lose.
   coach({focus:['#tutorialPlayerRow','#overflowBadge'],arrows:[{sel:'#overflowBadge',dir:'up'},{sel:'#tutorialPlayerRow',dir:'down'}],
-   text:'Your HP dropped to 1! In a real battle you would lose at 0. Clear words quickly so the pile never reaches the top.',
+   formula:'❤️ 0 = ✖',text:'Your HP is 1! At 0 HP, you lose. Type words fast so the pile stays small.',
    next:()=>{
     demoTimers.forEach(clearTimeout);demoTimers=[];stop();
     $('overflowBadge').classList.remove('show');clearWord();
     playerHP=10;updateBars();log('HP restored for the tutorial.');
     spawnWord(samples[2][0]);phase='l2-fix';setInput({enabled:true});
-    coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],enter:true,text:'Your HP is back to 10. Now type apple correctly and press ENTER to clear it.'});
+    coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],enter:true,formula:'❤️ 10 · ⌨️ apple ⏎',text:'Your HP is 10 again. Now type apple and press ENTER.'});
    }});
  };
  demoLater(tickHp,900);
@@ -244,20 +246,20 @@ function lesson1(){
  setInput({enabled:false});phase='pip';
  $('progressText').hidden=true;
  pipSays('Hello! My name is Pip.');
- coach({title:'Pip',focus:['#bossWrap'],text:'Hello! My name is Pip.',
+ coach({title:'Pip',focus:['#bossWrap'],formula:'👋',text:'Hello! My name is Pip.',
   next:()=>{
    pipSays('Let me help you!');
-   coach({title:'Pip',focus:['#bossWrap'],text:'Let me help you!',next:()=>{pipQuiet();$('progressText').hidden=false;lesson1Word();}});
+   coach({title:'Pip',focus:['#bossWrap'],formula:'🤝',text:'Let me help you!',next:()=>{pipQuiet();$('progressText').hidden=false;lesson1Word();}});
   }});
 }
 function lesson1Word(){
  spawnWord(samples[1][0]);setInput({enabled:false});
  phase='l1-answer';
  coach({title:'Type a word',focus:['#trainingWord .answer'],arrows:[{sel:'#trainingWord .answer',dir:'up'}],
-  text:'Every word shows Japanese on the left and its English answer on the right. The English word is important — it is exactly what you type!',
+  formula:'りんご → apple ⌨️',text:'Japanese is on the left. English is on the right. You type the ENGLISH word!',
   next:()=>{
    phase='l1-type';setInput({enabled:true});
-   coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],text:'This is where you type. Click the box and type apple.'});
+   coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],formula:'⌨️ apple',text:'Type here. Type apple.'});
   }});
 }
 function lesson2(){
@@ -265,13 +267,13 @@ function lesson2(){
  phase='l2-wrong';
  setInput({enabled:true,value:'aple',readOnly:true});
  coach({title:'Taking damage',focus:['.inputBar','#trainingWord'],enter:true,arrows:[{sel:'#trainingWord .answer',dir:'up'},{sel:'.inputBar',dir:'left'},{sel:'.inputBar',mark:'?'}],
-  text:'What happens if you make a mistake? Someone typed "aple" instead of "apple". Press ENTER and watch your HP.'});
+  formula:'aple ≠ apple ❌',text:'"aple" is wrong! Press ENTER. Watch your HP.'});
 }
 function fallingLesson(){
  phase='falling';
  const isBoss=stage===4;
  coach({title:titles[stage],arrows:isBoss?[{sel:'#storyBossHpRow',dir:'down'},{sel:'.inputBar',dir:'left'}]:[],focus:isBoss?['#trainingWord','.inputBar','.wordLane','#bossWrap','#storyStatusPanel']:['#trainingWord','.inputBar','.wordLane'],
-  text:isBoss?'Every correct word hits the boss. Clear all three words to defeat it!':'Words fall toward the bottom. Type each English word and press ENTER to clear it.'});
+  formula:isBoss?'✓ → 💥 BOSS':'⬇️ ⌨️ ⏎',text:isBoss?'Each correct word hits the boss. Type all 3 words to win!':'Words fall down. Type the English word, then press ENTER.'});
  nextFallingWord();
 }
 function nextFallingWord(){
@@ -304,8 +306,8 @@ $('retryTutorialSave').addEventListener('click',()=>{busy=false;void advance();}
 input().addEventListener('input',()=>{
  if(stage!==1)return;
  const ok=input().value.trim().toLowerCase()==='apple';
- if(phase==='l1-type'&&ok){phase='l1-enter';coach({focus:['.inputBar','#trainingWord'],enter:true,text:'Perfect! Now press the ENTER key on your keyboard.'});}
- else if(phase==='l1-enter'&&!ok){phase='l1-type';coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],text:'Type apple in the box.'});}
+ if(phase==='l1-type'&&ok){phase='l1-enter';coach({focus:['.inputBar','#trainingWord'],enter:true,formula:'⏎ ENTER',text:'Good! Now press ENTER.'});}
+ else if(phase==='l1-enter'&&!ok){phase='l1-type';coach({focus:['.inputBar','#trainingWord'],arrows:[{sel:'.inputBar',dir:'left'}],formula:'⌨️ apple',text:'Type apple.'});}
 });
 
 $('answerForm').addEventListener('submit',e=>{
@@ -313,9 +315,9 @@ $('answerForm').addEventListener('submit',e=>{
  const value=input().value.trim().toLowerCase();
  const keycap=$('enterKey').querySelector('.tutorial-keycap');keycap.classList.add('is-pressed');
  if(stage===1){
-  if(phase!=='l1-enter'||value!=='apple'){log('Type apple exactly, then press ENTER.');keycap.classList.remove('is-pressed');return;}
+  if(phase!=='l1-enter'||value!=='apple'){log('Type apple, then press ENTER.');keycap.classList.remove('is-pressed');return;}
   stepCount=1;score+=100;updateBars();updateProgress();clearWord();input().value='';
-  log('Correct! The word is cleared.');coach({focus:[],text:'Great job! Correct words disappear and give you points.'});
+  log('Correct! The word is cleared.');coach({focus:[],formula:'✓ → ✨ +100',text:'Great! The word is gone. You get points!'});
   void advance();return;
  }
  if(stage===2){
@@ -324,17 +326,17 @@ $('answerForm').addEventListener('submit',e=>{
    misses++;playerHP=Math.max(1,playerHP-1);updateBars();flashDamage();input().value='';input().readOnly=true;
    log('MISS: aple');phase='l2-hp';
    coach({focus:['#tutorialPlayerRow'],
-    text:'Ouch! A wrong answer is a MISS and costs 1 HP (10 → 9). If your HP reaches 0, the run is over.',
+    formula:'❌ → ❤️ -1',text:'Ouch! Wrong answer = -1 HP (10 → 9). At 0 HP, you lose.',
     next:()=>overflowDemo()});
    return;
   }
   if(phase!=='l2-fix')return;
-  if(value!=='apple'){log('Not quite! Type apple, then press ENTER.');keycap.classList.remove('is-pressed');input().select();return;}
+  if(value!=='apple'){log('Wrong. Type apple, then press ENTER.');keycap.classList.remove('is-pressed');input().select();return;}
   stepCount=1;score+=100;updateBars();clearWord();log('Correct!');void advance();return;
  }
  // Lessons 3–4: falling words. Mistakes here are free (practice).
  const current=samples[stage]?.[stepCount];if(!current)return;
- if(value!==current.answer){misses++;updateBars();log('Not quite! Check the English word and try again.');input().select();return;}
+ if(value!==current.answer){misses++;updateBars();log('Wrong. Look at the English word. Try again!');input().select();return;}
  stop();stepCount++;score+=100;
  if(stage===4){
   bossHP=Math.max(0,3-stepCount);
