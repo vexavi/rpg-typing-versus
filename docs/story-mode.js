@@ -282,11 +282,13 @@ function openStageSelect(territoryId,opts={}){
  const art=atlas.artPath(ch),emblem=EMBLEMS[id];
  let selected=Math.min(battles.length-1,opts.select??(complete?battles.length-1:shownDone));
  const status=()=>run?`OPERATION IN PROGRESS · ${doneRun} / ${battles.length}`:complete?'TERRITORY CAPTURED':captured?'CAPTURED · REPLAY FROM STAGE 01':'NOT STARTED';
+ // Teacher-named stages show their name; default "Stage 1-1" titles show "Level N".
+ const stageLabel=(st,i)=>{const t=String(st.title||'').trim();return !t||/^stage\s*[\d-]+$/i.test(t)?`Level ${i+1}`:esc(t);};
  const card=(st,i)=>{
   const state=i<shownDone?'cleared':i===(opts.anim==='fail'?shownDone:startable)&&!complete?'current':'locked';
   return `<li><button type="button" class="ss-stage is-${state}${i===selected?' is-selected':''}" data-i="${i}" style="--d:${i}" aria-pressed="${i===selected}">
    <span class="ss-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l3 5 6 1-4 5 1 7-6-3-6 3 1-7-4-5 6-1z"/></svg></span>
-   <span class="ss-txt"><small>STAGE ${stageNo(i)}</small><b>Level ${i+1}</b></span>
+   <span class="ss-txt"><small>STAGE ${stageNo(i)}</small><b>${stageLabel(st,i)}</b></span>
    <span class="ss-tag">${state==='cleared'?'✓ CLEARED':state==='current'?'CURRENT GOAL':'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>'}</span></button></li>`;
  };
  show(`<div class="ss-root ${opts.anim?'ss-anim-'+esc(opts.anim):''}" style="--territory:${esc(color)}">

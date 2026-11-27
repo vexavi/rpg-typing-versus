@@ -47,7 +47,7 @@ function render(){
   const st=statusOf(s);
   const card=st==='disabled'?'<span class="td-pill off">Disabled</span>':st==='blank'?'<span class="td-pill wait">Not registered</span>':'<span class="td-pill ok">Playing</span>';
   const progress=!s.hasPlayer?'<span class="td-sub">—</span>':!s.tutorialDone?`<span class="td-sub">Tutorial step ${s.tutorialStep}/5</span>`:
-   `${s.normalClear?'<span class="td-tag">Normal ✓</span>':'<span class="td-sub">Normal not cleared</span>'}${s.conquest?` <span class="td-tag" title="Conquest encounters cleared">Conquest ${s.conquest} cleared</span>`:''}`;
+   `${s.normalClear?'<span class="td-tag">Normal ✓</span>':'<span class="td-sub">Normal not cleared</span>'}${s.conquest?` <span class="td-tag" title="Adventure stages cleared">Adventure ${s.conquest} cleared</span>`:''}`;
   return `<tr data-id="${esc(s.id)}" class="${st}">
    <td><button type="button" class="td-name" data-open="${esc(s.id)}"><b>${esc(s.name||'(no name yet)')}</b><small>${esc(s.id)}</small></button></td>
    <td><select class="td-grade${s.grade?'':' missing'}" data-grade="${esc(s.id)}" aria-label="Grade for ${esc(s.name||s.id)}" ${s.disabled?'disabled':''}><option value="">— choose —</option>${Object.entries(GRADES).map(([v,l])=>`<option value="${v}" ${s.grade===v?'selected':''}>${l}</option>`).join('')}</select></td>
@@ -63,7 +63,7 @@ function openDrawer(id){
  $('drawer').hidden=false;document.body.classList.add('td-drawer-open');
  $('dName').textContent=s.name||'(no name yet)';
  $('dSub').textContent=`${s.id} · ${s.grade?GRADES[s.grade]:'no grade'} · ${statusOf(s)==='active'?'playing':statusOf(s)==='blank'?'card not registered yet':'card disabled'}`;
- $('dStats').innerHTML=[['Coins',fmt(s.coins)],['Shards 4★/5★/6★',`${s.s4} / ${s.s5} / ${s.s6}`],['Operators',s.operators],['XP',fmt(s.xp)],['Best Normal score',fmt(s.best)],['Conquest stages',s.conquest]]
+ $('dStats').innerHTML=[['Coins',fmt(s.coins)],['Shards 4★/5★/6★',`${s.s4} / ${s.s5} / ${s.s6}`],['Operators',s.operators],['XP',fmt(s.xp)],['Best Normal score',fmt(s.best)],['Adventure stages',s.conquest]]
   .map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
  $('dGrade').value=s.grade||'';
  $('dToggle').textContent=s.disabled?'Enable card':'Disable card';
@@ -127,7 +127,7 @@ async function health(){
  const config=await read('systemConfig','current');
  items.push(config?{text:'Game settings ready'}:{bad:true,text:'Game settings not set up',href:'setup-spark.html',link:'Run Firebase setup'});
  const story=await read('storyContent','published');
- items.push(story?{text:'Conquest published'}:{warn:true,text:'Conquest uses the built-in stages (nothing published yet)',href:'story-editor.html',link:'Open Conquest editor'});
+ items.push(story?{text:'Adventure published'}:{warn:true,text:'Adventure uses the built-in stages (nothing published yet)',href:'story-editor.html',link:'Open Adventure Editor'});
  $('metaStory').textContent=story?'Published':'Built-in stages (not published)';
  const banner=await read('recruitmentConfig','banners');
  const featured=banner?.banners?.[0]?.featured_character_id;

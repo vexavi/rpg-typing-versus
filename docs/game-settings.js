@@ -44,7 +44,7 @@ function refreshChoices(){
    w.append(l,input);if(f.help)input.title=f.help;grid.appendChild(w);
   }box.appendChild(grid);el('mechanics').appendChild(box);
  }
- el('mechanics-panel').hidden=!el('mechanics').children.length; // Conquest stage effects live in the Conquest editor
+ el('mechanics-panel').hidden=!el('mechanics').children.length; // Adventure stage effects live in the Adventure Editor
 }
 function initInputs(){
  const dest=el('difficulty');dest.replaceChildren();

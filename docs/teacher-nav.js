@@ -5,7 +5,7 @@
     ['cloud-cards.html','Player cards'],
     ['vocabulary-admin.html','Word lists'],
     ['game-settings.html','Difficulty'],
-    ['story-editor.html','Conquest Editor'],
+    ['story-editor.html','Adventure Editor'],
     ['recruitment-admin.html','Recruitment banner'],
     ['setup-spark.html','Firebase setup'],
     ['traffic-budget.html','Traffic']

@@ -33,7 +33,7 @@ html body.adventure-client #storyRoot .ss-stage.is-selected::after{opacity:1}
 html body.adventure-client #storyRoot .ss-ico{width:40px;height:40px;display:grid;place-items:center;border-right:1px solid currentColor;opacity:.85}
 html body.adventure-client #storyRoot .ss-ico svg{width:24px;height:24px;fill:currentColor}
 html body.adventure-client #storyRoot .ss-txt small{display:block;font:600 10px/1 var(--ak-mono,ui-monospace,monospace);letter-spacing:.14em;opacity:.7}
-html body.adventure-client #storyRoot .ss-txt b{display:block;margin-top:3px;font-size:clamp(16px,1.6vw,21px);font-weight:600}
+html body.adventure-client #storyRoot .ss-txt b{display:block;margin-top:3px;font-size:clamp(16px,1.6vw,21px);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
 html body.adventure-client #storyRoot .ss-tag{font:800 10px/1 var(--ak-mono,ui-monospace,monospace);letter-spacing:.1em;padding:5px 7px;white-space:nowrap}
 html body.adventure-client #storyRoot .ss-tag svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:middle}
 html body.adventure-client #storyRoot .ss-stage.is-current .ss-tag{background:#1d2126;color:#fff;box-shadow:inset 3px 0 0 var(--territory)}

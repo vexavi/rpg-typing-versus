@@ -56,3 +56,37 @@ img[data-missing]:not([src]){background-image:url("data:image/svg+xml,%3Csvg xml
 .mechanicgroup.is-off .grid>.field:not(:first-child){display:none}
 .mechanicgroup.is-off{opacity:.8}
 .mechanicgroup.is-off .muted{margin-bottom:6px}
+
+/* v148.9 Adventure Editor: calm cards + folded extras */
+.se-menu{position:relative}
+.se-menu>summary{list-style:none;cursor:pointer;padding:8px 14px;border:1px solid #ffffff2a;border-radius:8px;background:#ffffff0d;font-weight:600;user-select:none}
+.se-menu>summary::-webkit-details-marker{display:none}
+.se-menu[open]>summary{background:#ffffff1f}
+.se-menu-list{position:absolute;top:calc(100% + 6px);left:0;z-index:80;display:flex;flex-direction:column;gap:6px;min-width:190px;padding:8px;border:1px solid #ffffff22;border-radius:10px;background:#151a22;box-shadow:0 12px 28px #000a}
+.se-menu-list>*{width:100%;text-align:left;justify-content:flex-start}
+.se-stage{display:flex;flex-direction:column;gap:14px}
+.se-stage-head{align-items:flex-end}
+.se-stage-head h2{margin:2px 0 0}
+.se-card{padding:14px 16px;border:1px solid #ffffff1a;border-radius:12px;background:#ffffff08}
+.se-card>h3,.se-more-head>h3{margin:0 0 10px;font-size:15px;letter-spacing:.02em}
+.se-grid-3{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.se-art-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.se-art-row>*{margin:0}
+.se-more-head{display:flex;align-items:baseline;gap:10px;margin-top:6px;padding-top:12px;border-top:1px dashed #ffffff22}
+.se-more-head>h3{margin:0}
+.se-fold{border:1px solid #ffffff17;border-radius:10px;background:#ffffff05;overflow:hidden}
+.se-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:11px 14px;user-select:none}
+.se-fold>summary::-webkit-details-marker{display:none}
+.se-fold>summary::before{content:"▸";color:#8fa3bd;transition:transform .15s}
+.se-fold[open]>summary::before{transform:rotate(90deg)}
+.se-fold>summary small{color:#8f9aab;font-weight:400}
+.se-fold>summary:hover{background:#ffffff0a}
+.se-fold-body{padding:4px 14px 14px}
+.se-fold-body.grid{padding-top:4px}
+.se-id{margin:4px 0 0;font-size:12px}
+.se-more-territories{margin-top:8px}
+.se-more-territories .navrow{margin:4px 8px}
+.se-art-row img[id$="-preview"]:not([src]){display:block}
+.se-art-row .boss-sprite-panel>p.muted{margin:0 0 8px}
+.se-fold-body>.damage-settings>.editheading:first-child,.se-fold-body>.music-panel>h4:first-child{display:none}
+.se-fold-body>.damage-settings,.se-fold-body>.music-panel{border:0;padding:0;margin:0;background:none}

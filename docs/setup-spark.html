@@ -16,7 +16,7 @@ button.primary{background:#255ff0;border-color:#2352b3;color:#fff}button:disable
 #log:empty{display:none}
 ol.steps{margin:0;padding-left:20px}ol.steps li{margin:6px 0}code{background:#eef2f7;padding:1px 6px;border-radius:4px;font-size:13px}
 </style>
-<link rel="stylesheet" href="teacher-nav.css?v=148.9"><script defer src="teacher-nav.js?v=148.9"></script>
+<link rel="stylesheet" href="teacher-nav.css?v=148.9"><script defer src="teacher-nav.js?v=149.0"></script>
 </head><body><main>
 <h1>Firebase setup</h1>
 <p class="lead">Checks that everything the game needs exists in Firebase, and creates anything missing. It never changes or deletes existing data, so it is safe to run again.</p>
@@ -54,7 +54,7 @@ async function check(){
    const n=Array.isArray(p.words)?p.words.filter(w=>w.active!==false).length:0;
    items.push(n<20?row('warn',`Word list ${label}: ${n} active words`,'Fewer than 20 words — the game works, but words repeat a lot.','<a href="vocabulary-admin.html">Edit ›</a>'):row('ok',`Word list ${label}`,`${n} active words`,'<a href="vocabulary-admin.html">Edit ›</a>'));});
   const story=await get('storyContent','published');
-  items.push(story?row('ok','Conquest','Published from the Conquest editor.','<a href="story-editor.html">Open ›</a>'):row('warn','Conquest uses the built-in stages','Optional: publish from the Conquest editor to customise.','<a href="story-editor.html">Open ›</a>'));
+  items.push(story?row('ok','Adventure','Published from the Adventure Editor.','<a href="story-editor.html">Open ›</a>'):row('warn','Adventure uses the built-in stages','Optional: publish from the Adventure Editor to customise.','<a href="story-editor.html">Open ›</a>'));
   const banner=await get('recruitmentConfig','banners');
   items.push(banner?row('ok','Recruitment banner','Saved banner text is in use.','<a href="recruitment-admin.html">Open ›</a>'):row('warn','Recruitment banner uses the default text','Optional.','<a href="recruitment-admin.html">Open ›</a>'));
   $('checks').innerHTML=items.join('');
