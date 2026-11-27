@@ -4040,8 +4040,8 @@ async function debugJumpTo(mode, idx){
       if(effect.stepUp&&effect.viewers>=50)pushMsg(`KURONE · TRENDING: WORDS +${Math.round((window.RPG_OPERATOR_PASSIVES.kuroneSpeed(effect.viewers)-1)*100)}% FASTER`,true);
     }else if(effect.type==='kurone-leave'){
       kuroneHud();if(effect.lost>0)kuroneReact('sad',effect.half?`-${effect.lost} (HALF)`:`-${effect.lost}`);
-      // A typo during the danger pause: the shocked sticker (no extra pause, no timer).
-      if(effect.duringHold)window.RPG_KURONE_NOTIFY?.('NOOO!',effect.half?`Half my viewers left (−${effect.lost})!`:`${effect.lost} viewers left!`,{sticker:'shocked'});
+      // Any typo in the danger zone (half the viewers leave): the shocked sticker, no timer.
+      if(effect.half)window.RPG_KURONE_NOTIFY?.('NOOO!',`Half my viewers left (−${effect.lost})!`,{sticker:'shocked'});
       pushMsg(`KURONE · ${effect.lost} VIEWERS LEFT${effect.half?' (HALF)':''} (${effect.viewers})`,true);
     }
     kuroneSave();

@@ -29,6 +29,7 @@ const nextPair=(avoid=new Set())=>{for(let k=0;k<POOL.length;k++){const p=POOL[(
 const S={words:[],nextId:1,hp:10,maxHp:10,boss:30,bossMax:30,shield:0,
  base:26,speedMul:1,freezeUntil:0,slowUntil:0,slowMul:1,noSpawnUntil:0,auto:0,lastSpawn:0,invulnUntil:0,
  streak:0,correct:0,misses:0,counter:null,listeners:[],missHooks:[],raf:0,last:0,running:false,bonus:0};
+globalThis.__waiS=S; // debug handle for automated tests
 const lane=()=>$('wordLane');
 const H=()=>lane().clientHeight;
 function landedCount(){return S.words.filter(w=>w.state==='landed').length;}
@@ -195,7 +196,13 @@ function onCorrect(w){
 }
 function onMiss(){
  S.misses++;S.streak=0;
- const c=S.counter;if(c&&c.streak&&c.cur>0){c.cur=0;chip(c.label,`0 / ${c.n}`,'reset');log('A mistake reset the count to 0.');}
+ // Safeguard: after 3 resets the practice stops resetting (a real battle still would),
+ // so a student who keeps slipping is never stuck on a streak step.
+ const c=S.counter;if(c&&c.streak&&c.cur>0){
+  c.resets=(c.resets||0)+1;
+  if(c.resets>=3){c.streak=false;log('Practice mode: mistakes won\'t reset the count now. Keep going!');}
+  else{c.cur=0;chip(c.label,`0 / ${c.n}`,'reset');log('A mistake reset the count to 0.');}
+ }
  S.missHooks.forEach(f=>f());
  if(S.kurone)kuroneChat(S.kurone.onMistake(performance.now()/1000));
  hurtPlayer(1,'input miss');
@@ -256,11 +263,26 @@ function kuroneReact(kind,text=''){
 function kuroneChat(e){
  if(!e)return;kuroneHud();
  if(e.type==='kurone-chat'&&!e.paused){kuroneReact(e.tierUp?'tier':'happy',e.tierUp?`${e.viewers} VIEWERS`:'+1');if(e.tierUp)fxPassive(e);}
- // Same DANGER ZONE pause as battle: words stop while the notification counts down.
- const hold=(text,sub,sticker)=>{S.kurone?.startDangerHold(performance.now()/1000,3.2);window.RPG_KURONE_NOTIFY?.(text,sub,{sticker,seconds:3.2});};
- if(e.type==='kurone-chat'&&e.enteredDanger)hold('DANGER ZONE!','A typo now = HALF my viewers leave!','angry');
+ if(e.type==='kurone-chat'&&e.enteredDanger)kuroneDangerHold();
  else if(e.type==='kurone-leave'){if(e.lost>0)kuroneReact('sad',e.half?`-${e.lost} (HALF)`:`-${e.lost}`);
-  if(e.duringHold)window.RPG_KURONE_NOTIFY?.('NOOO!',e.half?`Half my viewers left (−${e.lost})!`:`${e.lost} viewers left!`,{sticker:'shocked'});}
+  // Any typo in the danger zone (half the viewers leave): the shocked sticker, no timer.
+  if(e.half)window.RPG_KURONE_NOTIFY?.('NOOO!',`Half my viewers left (−${e.lost})!`,{sticker:'shocked'});}
+}
+// Same DANGER ZONE pause as battle: words stop while the notification counts down.
+function kuroneDangerHold(){S.dangerShown=true;S.kurone?.startDangerHold(performance.now()/1000,3.2);window.RPG_KURONE_NOTIFY?.('DANGER ZONE!','A typo now = HALF my viewers leave!',{sticker:'angry',seconds:3.2});}
+// Safeguard: "reach N viewers" steps count correct WORDS, so mistakes (which make viewers
+// leave) can never trap a student. When the step ends, the counter is set to the goal.
+function reachViewers(target){
+ return new Promise(res=>{
+  const need=Math.max(1,target-S.kurone.getViewers());let got=0;
+  const oops=()=>log('Oops! Some viewers left. Keep typing — you can do it!');
+  S.missHooks.push(oops);chip('👁',`0 / ${Math.min(need,10)}`);
+  S.listeners.push({pred:()=>{got++;chip('👁',`${Math.min(got,10)} / ${Math.min(need,10)}`);return got>=need;},res:()=>{
+   S.missHooks=S.missHooks.filter(h=>h!==oops);chip('');
+   if(S.kurone&&S.kurone.getViewers()<target)S.kurone.setViewers(target);
+   if(S.kurone&&target>30&&!S.dangerShown)kuroneDangerHold();
+   kuroneHud();res();}});
+ });
 }
 // A pretend Shoutout picker with two squad mates (the real one lists your actual squad).
 function fakePicker(burst,hype){
@@ -497,7 +519,11 @@ const SCRIPTS={
   say({formula:'WRATH ×5 → 🛡️🛡️🛡️🛡️🛡️',text:'Type 5 WRATH words.',arrows:[{sel:'#nitrateShield',dir:'down'}]});
   chip('🛡️','0 / 5');
   const isWrath=x=>x.mark?.cls==='operator-nitrate-wrath';
-  while(S.shield<5){await waitCleared(isWrath);S.shield++;nitrateShieldUi();fxPassive({type:'nitrate-charge',shield:S.shield});chip('🛡️',`${S.shield} / 5`,S.shield>=5?'ready':'');}
+  // Safeguard: the step counts WRATH words typed, so mistakes (which use up shield, as in
+  // battle) can never trap a student here.
+  let charged=0;
+  while(charged<5){await waitCleared(isWrath);charged++;S.shield=Math.min(5,Math.max(S.shield+1,charged));nitrateShieldUi();fxPassive({type:'nitrate-charge',shield:S.shield});chip('🛡️',`${charged} / 5`,charged>=5?'ready':'');}
+  S.shield=5;nitrateShieldUi();
   // Full shield: the next Wrath word detonates it (+7), exactly as in battle.
   S.words.filter(isWrath).forEach(x=>{x.bonus={extra:7,effect:{type:'nitrate-release',characterId:opId}};});
   wrathMarks.full=true;
@@ -535,22 +561,22 @@ const SCRIPTS={
  },
  kurone:async()=>{
   const P=window.RPG_OPERATOR_PASSIVES;S.kurone=P.create('kurone','normal');S.hype=0;S.maxHp=8;S.hp=8;bars();kuroneHud();
-  const waitViewers=n=>new Promise(r=>{const t=setInterval(()=>{if(S.kurone.getViewers()>=n){clearInterval(t);r();}},100);});
+  S.dangerShown=false;
   await say({title:'Glass cannon',formula:'❤️ 8 = LOWEST HP',text:"I'm strong but fragile! I have the lowest HP of everyone.",next:true,arrows:[{sel:'#tutorialPlayerRow',dir:'down'}],focus:['#tutorialPlayerRow']});
   await say({title:'Live Chat',formula:'✓ → 👁 +1',text:"I'm streaming! Every word you type brings 1 viewer.",next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive','#tutorialPlayerRow']});
   S.auto=2400;say({formula:'👁 10 → 💥 more damage',text:'Type 10 words. Get 10 viewers!',arrows:[{sel:'#kuroneLive',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneLive']});
-  await waitViewers(10);
+  await reachViewers(10);
   await say({formula:'👁 10 · 20 · 30 → 💥💥💥',text:'More viewers = more damage. 10, 20, 30… and it keeps going up!',next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive']});
   await mistakeDemo();
   await say({formula:'❌ → 👁 −5 😢',text:'A mistake = 5 viewers leave.',next:true,arrows:[{sel:'#kuroneLive',dir:'down'}],focus:['#kuroneLive']});
   // DANGER ZONE: past 30
   S.kurone.setViewers(29);kuroneHud();
   say({title:'Danger zone',formula:'👁 30 → ⚠',text:'My stream is popular now! Type 2 words.',arrows:[{sel:'#kuroneLive',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneLive']});
-  await waitViewers(31);
+  await reachViewers(31);
   await say({formula:'⚠ 31+ : ❌ = 👁 ½',text:'DANGER! Past 30, one mistake = HALF my viewers leave! (Words stop while my message shows.)',next:true,arrows:[{sel:'#kuroneDanger',dir:'down'}],focus:['#kuroneLive','#kuroneDanger']});
   S.kurone.setViewers(49);kuroneHud();
   say({formula:'👁 50 → 💥💥 ❤️×2 ⏩',text:'Type 1 more word and watch.',arrows:[{sel:'#kuroneLive',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneLive','#kuroneDanger']});
-  await waitViewers(50);
+  await reachViewers(50);
   await say({formula:'💥 ↑ · ❤️ ×2 · ⏩ +15%',text:'50 viewers! Big damage… but I take DOUBLE damage, and words come FASTER!',next:true,arrows:[{sel:'#kuroneDanger',dir:'down'}],focus:['#kuroneLive','#kuroneDanger','.wordLane']});
   const hp0=S.hp;await mistakeDemo();
   await say({formula:`❌ → 👁 50→25 · ❤️ −${hp0-S.hp}`,text:`Ouch! Half my viewers left, and I lost ${hp0-S.hp} HP. Be careful!`,next:true,arrows:[{sel:'#tutorialPlayerRow',dir:'down'}],focus:['#kuroneLive','#tutorialPlayerRow']});
