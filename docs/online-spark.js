@@ -8,7 +8,7 @@ import {modeRevision,balanceScopes} from './dashboard-revisions.mjs?v=147.0';
 import {makePull,getJstDate} from './recruitment-core.mjs?v=148.6';
 import {getApp} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
-import {getFirestore,doc,collection,getDocFromServer,getDocsFromServer,query,where,orderBy,limit,onSnapshot,setDoc,updateDoc,serverTimestamp,runTransaction,deleteDoc,writeBatch} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
+import {getFirestore,doc,collection,getDocFromServer,getDocsFromServer,query,where,orderBy,limit,onSnapshot,setDoc,updateDoc as fsUpdateDoc,serverTimestamp as fsServerTimestamp,runTransaction as fsRunTransaction,deleteDoc,writeBatch} from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
 const db=getFirestore(getApp()),auth=getAuth(getApp());
 const TEACHER_UID='1BsaIx7kcfUSRO3rhNbHsJPRHkw1'; // Change together with firestore.rules if necessary.
 const $=id=>document.getElementById(id),ref=(c,id)=>doc(db,c,id),uid=()=>auth.currentUser?.uid;
@@ -32,6 +32,75 @@ const PLAYER_SNAPSHOT_MS=20000;
 const IDENTITY_MS=5*60*1000,IDENTITY_KEY='rpgSparkIdentity';
 let playerSnapshot=null,identity=null;
 const forgetPlayer=()=>{playerSnapshot=null;};
+// v148.9 quota saver: after a successful save, apply the same changes to the cached
+// player instead of downloading it again. Anything that cannot be reproduced exactly
+// on the Chromebook (unknown special values, field-path argument forms) falls back to
+// forgetting the copy, so the next request re-reads it as before.
+const SERVER_TIMES=new WeakSet();
+function serverTimestamp(){const v=fsServerTimestamp();try{SERVER_TIMES.add(v);}catch(_){}return v;}
+const PLAYER_DOC=/^players\/[^/]+$/;
+function localTime(){const ms=Date.now();return {seconds:Math.floor(ms/1000),nanoseconds:(ms%1000)*1e6,toMillis:()=>ms,toDate:()=>new Date(ms)};}
+function plainValue(v){
+ if(v===null||typeof v!=='object')return {ok:true,v};
+ if(SERVER_TIMES.has(v))return {ok:true,v:localTime()};
+ if(Array.isArray(v)){const out=[];for(const x of v){const r=plainValue(x);if(!r.ok)return r;out.push(r.v);}return {ok:true,v:out};}
+ const proto=Object.getPrototypeOf(v);
+ if(proto===Object.prototype||proto===null){const out={};for(const [k,x] of Object.entries(v)){const r=plainValue(x);if(!r.ok)return r;out[k]=r.v;}return {ok:true,v:out};}
+ if(typeof v.toMillis==='function')return {ok:true,v}; // an existing Timestamp copied into the patch
+ return {ok:false};
+}
+const clone=v=>v&&typeof v==='object'?(Array.isArray(v)?v.map(clone):Object.fromEntries(Object.entries(v).map(([k,x])=>[k,typeof x?.toMillis==='function'?x:clone(x)]))):v;
+function applyPlayerWrite(base,w){
+ if(w.type==='delete')return null;
+ const r=plainValue(w.data);if(!r.ok||!r.v||typeof r.v!=='object'||Array.isArray(r.v))return undefined;
+ if(w.type==='set'&&!w.merge)return r.v;
+ const next=clone(base||{});
+ if(w.type==='set'){ // merge: deep-merge plain objects
+  const merge=(t,s)=>{for(const [k,x] of Object.entries(s)){if(x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.toMillis!=='function'&&t[k]&&typeof t[k]==='object'&&!Array.isArray(t[k]))merge(t[k],x);else t[k]=x;}};
+  merge(next,r.v);return next;
+ }
+ for(const [path,x] of Object.entries(r.v)){ // update: dotted field paths replace that field
+  const keys=path.split('.');let t=next;
+  for(const k of keys.slice(0,-1)){if(!t[k]||typeof t[k]!=='object'||Array.isArray(t[k]))t[k]={};t=t[k];}
+  t[keys[keys.length-1]]=x;
+ }
+ return next;
+}
+async function cachedPlayerFor(path){
+ try{const s=playerSnapshot&&await playerSnapshot.promise;return s&&s.playerRef?.path===path?s:null;}catch(_){return null;}
+}
+async function rememberSavedPlayer(path,base,writes){
+ const snap=await cachedPlayerFor(path);
+ let data=base!==undefined?base:snap?snap.player:undefined;
+ if(data===undefined){forgetPlayer();return;}
+ for(const w of writes){data=applyPlayerWrite(data,w);if(data===undefined||data===null){forgetPlayer();return;}}
+ if(data.disabled){forgetPlayer();return;}
+ const owner=uid(),known=snap||(identity&&identity.uid===owner&&identity.session?.publicId===path.split('/')[1]?{session:identity.session,card:identity.card,id:identity.session.publicId,playerRef:ref('players',identity.session.publicId)}:null);
+ if(!known){forgetPlayer();return;}
+ playerSnapshot={uid:owner,at:Date.now(),promise:Promise.resolve({...known,player:data})};
+}
+async function updateDoc(r,...args){
+ const out=await fsUpdateDoc(r,...args);
+ if(PLAYER_DOC.test(r?.path||''))await (args.length===1?rememberSavedPlayer(r.path,undefined,[{type:'update',data:args[0]}]):Promise.resolve(forgetPlayer()));
+ return out;
+}
+async function runTransaction(database,fn,options){
+ const reads=new Map(),writes=new Map();let untracked=false;
+ const result=await fsRunTransaction(database,async tx=>{
+  reads.clear();writes.clear();untracked=false; // a retried transaction starts over
+  const track=(r,w)=>{if(PLAYER_DOC.test(r?.path||'')){if(!writes.has(r.path))writes.set(r.path,[]);writes.get(r.path).push(w);}};
+  const wrapped={
+   get:async r=>{const s=await tx.get(r);if(PLAYER_DOC.test(r?.path||''))reads.set(r.path,s.exists()?s.data():null);return s;},
+   update:(r,...a)=>{if(a.length!==1&&PLAYER_DOC.test(r?.path||''))untracked=true;track(r,{type:'update',data:a[0]});tx.update(r,...a);return wrapped;},
+   set:(r,d,o)=>{track(r,{type:'set',data:d,merge:!!o?.merge});tx.set(r,d,o);return wrapped;},
+   delete:r=>{track(r,{type:'delete'});tx.delete(r);return wrapped;}
+  };
+  return fn(wrapped);
+ },options);
+ if(untracked)forgetPlayer();
+ else for(const [path,list] of writes){const base=reads.has(path)?reads.get(path):undefined;await rememberSavedPlayer(path,base===null?undefined:base,list);}
+ return result;
+}
 const forgetIdentity=()=>{identity=null;try{sessionStorage.removeItem(IDENTITY_KEY);}catch(_){}};
 function cachedIdentity(owner){
  if(!identity){try{const v=JSON.parse(sessionStorage.getItem(IDENTITY_KEY)||'null');if(v)identity=v;}catch(_){}}
@@ -94,7 +163,7 @@ async function openCard(b){
  // The QR code is a bearer credential. Auth UID sessions can be re-established on another Chromebook.
  await setDoc(ref('cardSessions',uid()),{code,publicId:c.publicId,linkedAt:serverTimestamp()});forgetIdentity();forgetPlayer();
  if(!await read('players',c.publicId)){
-  try{await setDoc(ref('players',c.publicId),defaultPlayer(c));}
+  try{await setDoc(ref('players',c.publicId),defaultPlayer(c));forgetPlayer();}
   catch(e){if(!await read('players',c.publicId))throw e;}
  }
  return {ok:true,public_id:c.publicId,name:c.username,grade:c.grade||null,card_code:code,online:true,cloud:true};
@@ -545,11 +614,26 @@ async function adventureProgress(b){const p=await currentPlayer(b);if(b.action==
  return {ok:true,...up};});}
 // Per-player, per-territory subcollection; independent from the wallet and profile.
 const territoryRef=(playerId,id)=>doc(db,'players',playerId,'conquestProgress',id);
+// v148.9 quota saver: the territory progress list is kept on the Chromebook for 30 min
+// per student and updated locally after each saved battle, so re-opening the Adventure
+// map does not download every territory again.
+const TERRITORY_KEY='rpgSparkTerritories',TERRITORY_MS=30*60*1000;
+function territoryCache(playerId){
+ try{const c=JSON.parse(localStorage.getItem(TERRITORY_KEY)||'null');
+  if(c&&c.playerId===playerId&&c.uid===uid()&&Date.now()-c.at>=0&&Date.now()-c.at<TERRITORY_MS&&c.list&&typeof c.list==='object')return c;}catch(_){}
+ return null;
+}
+function saveTerritories(playerId,list,at=Date.now()){try{localStorage.setItem(TERRITORY_KEY,JSON.stringify({playerId,uid:uid(),at,list}));}catch(_){}}
 async function storyProgress(b){
  const p=await currentPlayer(b);
  if(!b.action||b.action==='load'){
-  const snap=await getDocsFromServer(collection(db,'players',p.id,'conquestProgress'));
-  return {ok:true,...combineProgress(p.player.story,snap.docs.map(d=>({id:d.id,stages:d.data().stages})))};
+  let cached=territoryCache(p.id);
+  if(!cached){
+   const snap=await getDocsFromServer(collection(db,'players',p.id,'conquestProgress'));
+   const list=Object.fromEntries(snap.docs.map(d=>[d.id,d.data().stages]));
+   saveTerritories(p.id,list);cached={list};
+  }
+  return {ok:true,...combineProgress(p.player.story,Object.entries(cached.list).map(([id,stages])=>({id,stages})))};
  }
  if(b.action!=='save')err('Invalid progress action.');
  const {id,stages:delta}=validateDelta(b),target=territoryRef(p.id,id);
@@ -558,15 +642,22 @@ async function storyProgress(b){
   if(!player.exists()||player.data().disabled)err('Player no longer active.');
   const plan=planTerritorySave(id,player.data().story,old.data()?.stages,delta);
   if(plan.changed)tx.set(target,{version:1,territoryId:id,stages:plan.stages,updatedAt:serverTimestamp()});
-  return {ok:true,territory_id:id,...progressResponse(plan.stages),first_clears:plan.firstClears};
- });
+  return {ok:true,territory_id:id,...progressResponse(plan.stages),first_clears:plan.firstClears,_stages:plan.stages};
+ }).then(out=>{
+  // Keep the saved territory in the local list (the list keeps its original age, so
+  // another Chromebook's progress is still picked up within 30 minutes).
+  const cached=territoryCache(p.id);if(cached){cached.list[id]=out._stages;saveTerritories(p.id,cached.list,cached.at);}
+  delete out._stages;return out;
+ },e=>{try{localStorage.removeItem(TERRITORY_KEY);}catch(_){}throw e;});
 }
 const READ_ONLY_PATHS=new Set(['ping','/api/config/version','/api/adventure/resume','/api/adventure/bootstrap','/api/profile','/api/tutorial/state','/api/recruitment/state','/api/vocab/load','/api/rankings','/api/recruitment/banners']);
 const readOnly=(path,body)=>READ_ONLY_PATHS.has(path)||(path==='/api/rankings/icon'&&body?.action!=='set')||(path==='/api/adventure/progress'&&body?.action==='load');
 async function call(path,body={}){
  if(readOnly(path,body))return route(path,body);
- forgetPlayer();
- try{return await route(path,body);}finally{forgetPlayer();}
+ // v148.9: saves reuse the ≤20 s player copy (every transaction re-reads the player
+ // itself, and the Firestore rules check each save), and keep it up to date afterwards.
+ // A failed save drops the copy so the next request sees the real state.
+ try{return await route(path,body);}catch(e){forgetPlayer();throw e;}
 }
 async function route(path,body={}){
  if(!navigator.onLine || blocked)err('Online Firestore session required. Reconnect and reload.');
