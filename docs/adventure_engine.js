@@ -724,7 +724,7 @@ const STAGES_PRACTICE = [
     return {
       ...base,
       stageName: "Practice",
-      bossName: "W",
+      bossName: "Bullseye Bun",
       bossDialogue: "Let's practice！",
       midFightDialogue: "",
       // 85% fall speed; spawn rate reduced by an additional 50% (interval x2 vs prior practice):
