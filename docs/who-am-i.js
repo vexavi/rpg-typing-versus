@@ -32,27 +32,28 @@ const S={words:[],nextId:1,hp:10,maxHp:10,boss:30,bossMax:30,shield:0,
 const lane=()=>$('wordLane');
 const H=()=>lane().clientHeight;
 function landedCount(){return S.words.filter(w=>w.state==='landed').length;}
-function spawn(pair,{y=-30,mark=null,hex=false}={}){
+function spawn(pair,{y=-30,mark=null}={}){
  const [jp,en]=pair||nextPair(new Set(S.words.map(w=>w.answer)));
  const el=document.createElement('div');el.className='word';
  el.innerHTML=`<div class="prompt">${esc(jp)}</div><div class="right"><span class="tag"></span><span class="answer muted">${esc(en)}</span></div>`;
  lane().appendChild(el);
  const w={id:S.nextId++,el,prompt:jp,answer:en,y,state:'fall',frozenUntil:0,mark:null};
  el.dataset.wid=String(w.id);
- S.words.push(w);setY(w);if(mark)setMark(w,mark);if(hex)el.classList.add('wai-hex');
+ S.words.push(w);setY(w);if(mark)setMark(w,mark);
  return w;
 }
 function setY(w){w.el.style.setProperty('--y',`${Math.round(w.y)}px`);}
-function setMark(w,mark){ // mark: {label,color,timer}
- w.mark=mark;w.el.classList.toggle('wai-mark',!!mark);
- if(mark){w.el.dataset.mark=mark.label;w.el.style.setProperty('--mk',mark.color||'#fff200');
-  if(mark.timer){w.el.style.setProperty('--t',mark.timer+'s');w.el.classList.remove('wai-timer');void w.el.offsetWidth;w.el.classList.add('wai-timer');}}
- else{delete w.el.dataset.mark;w.el.classList.remove('wai-timer');}
+// v148.10: marks use the SAME classes as a real battle (battle-marks.css), so a word
+// looks exactly like it will in Normal / Adventure. mark = {cls, kind, bonus}.
+function setMark(w,mark){
+ if(w.mark?.cls)w.el.classList.remove(...w.mark.cls.split(' '));
+ w.mark=mark||null;w.bonus=mark?.bonus||null;
+ if(mark?.cls)w.el.classList.add(...mark.cls.split(' '));
+ if(!mark){w.el.removeAttribute('data-hunt-time');w.el.removeAttribute('data-lupa-time');}
 }
 function setText(w,[jp,en]){w.prompt=jp;w.answer=en;w.el.querySelector('.prompt').textContent=jp;w.el.querySelector('.answer').textContent=en;}
-function removeWord(w,fx=true){
- S.words=S.words.filter(x=>x!==w);
- if(fx){w.el.classList.add('wai-gone');setTimeout(()=>w.el.remove(),460);}else w.el.remove();
+function removeWord(w){
+ S.words=S.words.filter(x=>x!==w);w.el.remove();
  restack();
 }
 function restack(){const landed=S.words.filter(w=>w.state==='landed');landed.forEach((w,i)=>{w.y=H()-30*(i+1)-6;setY(w);});}
@@ -64,12 +65,14 @@ function tick(t){
  const mul=S.speedMul*(now<S.slowUntil?S.slowMul:1);
  for(const w of S.words){
   if(w.state!=='fall'||globalFrozen||now<w.frozenUntil)continue;
+  if(w.el.classList.contains('operator-shield-pushing')&&!w.pushT)w.pushT=setTimeout(()=>{w.el.classList.remove('operator-shield-pushing');w.pushT=0;},450);
   w.y+=S.base*mul*dt;
   const floor=H()-30*(landedCount()+1)-6;
   if(w.y>=floor){w.y=floor;w.state='landed';w.el.classList.add('landed');}
   setY(w);
  }
- S.words.forEach(w=>w.el.classList.toggle('wai-frozen',globalFrozen||now<w.frozenUntil));
+ lane().classList.toggle('operator-frozen-domain',globalFrozen);
+ S.words.forEach(w=>w.el.classList.toggle('operator-shield-hold',now<w.frozenUntil));
  if(S.auto&&!globalFrozen&&now>=S.noSpawnUntil&&now-S.lastSpawn>=S.auto&&S.words.length<9){S.lastSpawn=now;spawn();}
  S.raf=requestAnimationFrame(tick);
 }
@@ -81,27 +84,49 @@ function bars(){
  $('playerFill').style.width=`${Math.min(100,100*S.hp/S.maxHp)}%`;$('playerHpText').textContent=`${S.hp}/${S.maxHp}`;
  $('bossFill').style.width=`${100*S.boss/S.bossMax}%`;$('bossHpText').textContent=`${S.boss}/${S.bossMax}`;
  $('mistakesText').textContent=String(S.misses);$('scoreText').textContent=String(S.correct*100);
- $('shieldText').textContent=`${S.shield} / 5`;
 }
+const FX=()=>window.RPG_FX;
+const elOf=id=>S.words.find(w=>w.id===id)?.el||null;
+function fxPassive(effect){FX()?.passive?.({characterId:opId,...effect},elOf);}
 function flashDamage(){const f=$('damageFlash');f.classList.remove('show');void f.offsetWidth;f.classList.add('show');setTimeout(()=>f.classList.remove('show'),320);}
-function hurtPlayer(n=1){
- if(performance.now()<S.invulnUntil){pop('IMMUNE',$('tutorialPlayerRow'));return;}
- if(S.shield>0){const b=Math.min(S.shield,n);S.shield-=b;n-=b;pop(`BLOCKED ${b}`,$('tutorialPlayerRow'));}
- if(n>0){S.hp=Math.max(1,S.hp-n);flashDamage();}
+// Same calls the battle engine makes (damagePlayer / onCorrect in adventure_engine.js).
+function hurtPlayer(n=1,reason='input miss'){
+ if(performance.now()<S.invulnUntil){FX()?.guard?.('immune');return;}
+ if(S.shield>0){const b=Math.min(S.shield,n);S.shield-=b;n-=b;nitrateShieldUi();
+  const el=$('nitrateShield');el.classList.remove('nitrate-block-impact');void el.offsetWidth;el.classList.add('nitrate-block-impact');FX()?.guard?.('block',b);}
+ if(n>0){S.hp=Math.max(1,S.hp-n);flashDamage();FX()?.player?.({amount:n,reason,display:n});}
  bars();
 }
-function hitBoss(n=1,extra=0,anchor=null){
+function setHp(hp,reason='hit'){const n=S.hp-hp;S.hp=hp;bars();if(n>0){flashDamage();FX()?.player?.({amount:n,reason,display:n});}}
+function hitBoss(n=1,extra=0,o={}){
  S.boss=Math.max(1,S.boss-n-extra);bars();
  const b=$('bossImg');b.classList.remove('bossFlash');void b.offsetWidth;b.classList.add('bossFlash');
- if(extra)pop(`+${extra} DMG`,anchor||$('bossWrap'));
+ const dmg=n+extra;
+ FX()?.attack?.({rect:o.rect||null,classes:o.classes||'',operatorId:opId,damage:dmg,crit:false,effect:o.effect||null,score:dmg*100,display:String(dmg)});
 }
-function pop(text,anchor){
- const r=(anchor||$('battlefield')).getBoundingClientRect(),f=$('battlefield').getBoundingClientRect();
- const el=document.createElement('div');el.className='wai-pop';el.textContent=text;
- el.style.left=`${r.left-f.left+r.width/2-40}px`;el.style.top=`${r.top-f.top}px`;
- $('battlefield').appendChild(el);setTimeout(()=>el.remove(),1150);
+function nitrateShieldUi(){
+ const el=$('nitrateShield');if(!el)return;
+ el.querySelectorAll('.nitrate-shield-segment').forEach((seg,i)=>seg.classList.toggle('filled',i<S.shield));
+ el.classList.toggle('awakened',S.shield>=3);el.classList.toggle('charged',S.shield>=5);
+ el.setAttribute('aria-label',`Wrath Shield ${S.shield} of 5`);
+ lane().classList.toggle('operator-nitrate-ready',S.shield>=5);
 }
-function banner(text){const b=$('waiBanner');b.textContent=text;b.hidden=false;b.style.animation='none';void b.offsetWidth;b.style.animation='';clearTimeout(banner.t);banner.t=setTimeout(()=>{b.hidden=true;},1650);}
+// A word cleared by the operator itself (Seraphine / Cassian): slash, no boss damage.
+function autoClear(w,kind){
+ if(!w)return;FX()?.autoClear?.(w.el,opId);
+ const slash=document.createElement('span');slash.className=kind==='cassian'?'operator-sovereign-slash':'operator-phantom-slash';
+ slash.style.top=`${Math.max(0,w.y)}px`;slash.setAttribute('aria-hidden','true');lane().appendChild(slash);setTimeout(()=>slash.remove(),500);
+ removeWord(w);S.correct++;bars();
+}
+// The small in-lane status line the real battle shows (Chain Cleave, Last Stand, Ambush timer).
+let statusEl=null;
+function laneStatus(cls,text,title){
+ if(!cls){statusEl?.remove();statusEl=null;return;}
+ if(!statusEl||!statusEl.isConnected||statusEl.className!==cls){statusEl?.remove();statusEl=document.createElement('div');statusEl.className=cls;statusEl.setAttribute('aria-live','off');lane().appendChild(statusEl);}
+ if(title){statusEl.innerHTML=`<span class="operator-lupa-timer-title">${esc(title)}</span><span class="operator-lupa-timer-value">${esc(text)}</span>`;}
+ else statusEl.textContent=text;
+}
+function countdown(seconds,fn){const end=performance.now()+seconds*1000;fn(seconds);const t=setInterval(()=>{const left=Math.max(0,(end-performance.now())/1000);fn(left);if(left<=0)clearInterval(t);},100);return ()=>clearInterval(t);}
 function chip(name,text,state=''){const c=$('passiveChip');c.hidden=!name;$('chipName').textContent=name||'';
  const m=/^(\d+) \/ (\d+)$/.exec(text||'');
  $('chipCount').innerHTML=m?`${'<i class="on"></i>'.repeat(+m[1])}${'<i></i>'.repeat(Math.max(0,m[2]-m[1]))}<span>${m[1]}/${m[2]}</span>`:esc(text||'');
@@ -170,16 +195,21 @@ function onMiss(){
  S.misses++;S.streak=0;
  const c=S.counter;if(c&&c.streak&&c.cur>0){c.cur=0;chip(c.label,`0 / ${c.n}`,'reset');log('A mistake reset the count to 0.');}
  S.missHooks.forEach(f=>f());
- hurtPlayer(1);
+ hurtPlayer(1,'input miss');
 }
 $('answerForm').addEventListener('submit',e=>{
  e.preventDefault();if(input().disabled)return;
  const v=input().value.trim().toLowerCase();input().value='';input().readOnly=false;
  if(!v)return;
- const pool=S.words.slice().sort((a,b)=>(b.mark?1:0)-(a.mark?1:0));
+ const pool=S.words.filter(x=>x.state!=='hidden').sort((a,b)=>(b.mark?1:0)-(a.mark?1:0));
  const w=pool.find(x=>x.answer===v);
  if(!w){log(`MISS: ${v}`);onMiss();return;}
- log('Correct!');removeWord(w);hitBoss(1,0);onCorrect(w);
+ // One strike per word, like the real battle: the passive bonus rides on the same hit.
+ const rect=w.el.getBoundingClientRect(),classes=w.el.className;
+ let bonus=typeof w.bonus==='function'?w.bonus():w.bonus;
+ if(!bonus&&S.nextBonus){bonus=S.nextBonus;S.nextBonus=null;}
+ const extra=(bonus?.extra||0)+(S.perHit||0);
+ log('Correct!');removeWord(w);hitBoss(1,extra,{rect,classes,effect:bonus?.effect});onCorrect(w);
 });
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('button'))setTimeout(()=>input().focus({preventScroll:true}),0);});
 
@@ -202,9 +232,12 @@ const SCRIPTS={
   await say({title:'Weak Point',formula:'✓ ×6 → ⚡ +2',text:'Type 6 words. Then your next word hits harder: +2!',next:true});
   S.auto=2600;say({formula:'✓ ×6 → ⚡',text:'Type 6 words.',arrows:[{sel:'#passiveChip',dir:'up'}]});
   await count(6,{label:'⚡'});
-  chip('⚡','READY','ready');banner('⚡ CHARGED');
+  chip('⚡','READY','ready');
+  $('bossHpText').classList.add('operator-weak-point-ready');fxPassive({type:'charge'});
+  S.nextBonus={extra:2,effect:{type:'boss-bonus',characterId:opId}};
   say({formula:'⚡ → +2',text:'Charged! Type 1 more word.',arrows:[{sel:'.inputBar',dir:'left'}]});
-  const w=await waitCleared(()=>true);hitBoss(0,2,w.el);chip('⚡','');
+  await waitCleared(()=>true);
+  $('bossHpText').classList.remove('operator-weak-point-ready');fxPassive({type:'boss-bonus'});chip('⚡','');
   await say({formula:'⚡ +2 💥',text:'Boom! +2 damage to the boss.',next:true,arrows:[{sel:'#storyBossHpRow',dir:'down'}]});
  },
  isolde:async()=>{
@@ -216,9 +249,9 @@ const SCRIPTS={
   await say({formula:'❌ → 🔥 0',text:'A mistake = back to 0. Try 6 in a row!',next:true,arrows:[{sel:'#passiveChip',dir:'up'}]});
   say({formula:'🔥 ×6 → ❄️',text:'Type 6 words in a row.',arrows:[{sel:'#passiveChip',dir:'up'}]});
   await c;
-  banner('❄️ FREEZE');S.freezeUntil=performance.now()+2500;S.noSpawnUntil=S.freezeUntil;
+  S.freezeUntil=performance.now()+2500;S.noSpawnUntil=S.freezeUntil;fxPassive({type:'domain-freeze',seconds:2.5,slowSeconds:3});
   say({formula:'❄️ 2.5s',text:'Frozen! Words stop. Type them!',arrows:[{sel:'.wordLane',dir:'left'}]});
-  await wait(2500);S.slowMul=.85;S.slowUntil=performance.now()+3000;banner('🐢 SLOW');
+  await wait(2500);S.slowMul=.85;S.slowUntil=performance.now()+3000;
   await say({formula:'❄️ → 🐢 3s',text:'Then words fall slower for 3 seconds.',next:true});
  },
  shield:async()=>{
@@ -226,145 +259,189 @@ const SCRIPTS={
   await say({title:'More HP',formula:'❤️ 10 → 13',text:'You get 3 more HP. 13 instead of 10!',next:true,arrows:[{sel:'#tutorialPlayerRow',dir:'down'}],focus:['#tutorialPlayerRow']});
   for(let i=0;i<4;i++)spawn(null,{y:H()*(.5+i*.08)});run();
   await say({title:'Shield Advance',formula:'❤️ < 10 → ⬆️',text:'If your HP goes under 10, words go back UP. Watch!',next:true});
-  S.hp=9;bars();flashDamage();await wait(500);
-  pushUp(.10);banner('⬆️ PUSH');
+  setHp(9);await wait(400);
+  pushUp(.10);fxPassive({type:'shield-advance',percent:10,freezeSeconds:0});
   await say({formula:'❤️ 9 → ⬆️',text:'HP is 9. The words moved up!',next:true,arrows:[{sel:'.wordLane',dir:'left'}]});
-  S.hp=2;bars();flashDamage();await wait(500);
-  pushUp(.35);const until=performance.now()+4000;S.words.forEach(w=>{if(w.state==='fall')w.frozenUntil=until;});banner('⬆️⬆️ BIG PUSH ❄️');
-  await say({formula:'❤️ < 3 → ⬆️⬆️ + ❄️',text:'HP under 3: a BIG push, and the words freeze for 4 seconds!',next:true,arrows:[{sel:'.wordLane',dir:'left'}]});
+  setHp(2);await wait(400);
+  pushUp(.35);const until=performance.now()+4000;S.words.forEach(w=>{if(w.state==='fall')w.frozenUntil=until;});
+  fxPassive({type:'shield-advance',percent:35,freezeSeconds:4});
+  await say({formula:'❤️ < 3 → ⬆️⬆️ + ⛨',text:'HP under 3: a BIG push, and the words HOLD for 4 seconds!',next:true,arrows:[{sel:'.wordLane',dir:'left'}]});
   S.hp=13;bars();
  },
  hexaxe:async()=>{
-  await say({title:'Chain Cleave',formula:'✓ ×6 → 🔮 = short words',text:'Type 6 words. Then ALL words become short, easy words!',next:true});
+  await say({title:'Chain Cleave',formula:'✓ ×6 → ☾ = short words',text:'Type 6 words. Then ALL words become one short, easy word!',next:true});
   S.auto=3200;say({formula:'✓ ×6',text:'Type 6 words.',arrows:[{sel:'#passiveChip',dir:'up'}]});
-  await count(6,{label:'🔮',skipHexed:true});
-  banner('🔮 HEX');hexAll();
-  say({formula:'🔮 4s',text:'Easy words! Type them fast. 4 seconds!',arrows:[{sel:'.wordLane',dir:'left'}]});
-  await wait(4000);unhex();
-  await say({formula:'⏱️ → 🔮 ✖',text:'Time is up. The words go back to normal.',next:true});
+  await count(6,{label:'☾',skipHexed:true});
+  hexAll();fxPassive({type:'chain-cleave-start',seconds:4});
+  const stop=countdown(4,left=>laneStatus('operator-chain-hex-status',`CHAIN CLEAVE · ${left.toFixed(1)}s`));
+  say({formula:'☾ 4s',text:'Easy words! Type them fast. 4 seconds!',arrows:[{sel:'.wordLane',dir:'left'}]});
+  await wait(4000);stop();laneStatus(null);unhex();
+  await say({formula:'⏱️ → ☾ ✖',text:'Time is up. The words go back to normal.',next:true});
  },
  crossbow:async()=>{
-  await say({title:'Show-Off',formula:'🔥 ×5 → ⭐ long word',text:'Type 5 words in a row. I mark the LONGEST word. Type it for +1!',next:true});
+  await say({title:'Show-Off',formula:'🔥 ×5 → ◎ long word',text:'Type 5 words in a row. I mark the LONGEST word. Type it for +1!',next:true});
   S.auto=2600;say({formula:'🔥 ×5',text:'Type 5 words in a row.',arrows:[{sel:'#passiveChip',dir:'up'}]});
-  await count(5,{label:'⭐',streak:true});
+  await count(5,{label:'◎',streak:true});
   let w=longest();if(!w||w.answer.length<6)w=spawn(['ちょうちょ','butterfly'],{y:40});
-  setMark(w,{label:'⭐',color:'#ffd447'});banner('⭐');
-  say({formula:'⭐ → +1',text:'Type the ⭐ word!',arrows:[{sel:wordSel(w),dir:'left'}]});
-  const t=await waitCleared(x=>x===w);hitBoss(0,1,t.el);
+  setMark(w,{cls:'operator-crossbow-bullseye',bonus:{extra:1}});fxPassive({type:'crossbow-showoff',wordId:w.id});
+  say({formula:'◎ → +1',text:'Type the ◎ word!',arrows:[{sel:wordSel(w),dir:'left'}]});
+  await waitCleared(x=>x===w);
   await say({title:'Last Stand',formula:'❤️ 1 → 🛡️ 3s',text:'When your HP is 1, you are SAFE for 3 seconds.',next:true});
-  S.hp=1;bars();flashDamage();banner('🛡️ SAFE');S.invulnUntil=performance.now()+3000;S.slowMul=.1;S.slowUntil=S.invulnUntil;S.noSpawnUntil=S.invulnUntil;
-  $('tutorialPlayerRow').classList.add('wai-invuln');
+  setHp(1);S.invulnUntil=performance.now()+3000;S.slowMul=.1;S.slowUntil=S.invulnUntil;S.noSpawnUntil=S.invulnUntil;
+  fxPassive({type:'fletcher-last-stand',seconds:3});lane().classList.add('operator-fletcher-last-stand');
+  const stop=countdown(3,left=>laneStatus('operator-fletcher-status',`LAST STAND · ${left.toFixed(1)}s`));
   say({formula:'🛡️ 3s 🐢',text:'Safe! Words almost stop.',arrows:[{sel:'#tutorialPlayerRow',dir:'down'}],focus:['#tutorialPlayerRow','.wordLane']});
-  await wait(3000);$('tutorialPlayerRow').classList.remove('wai-invuln');
-  S.speedMul=1.25;S.auto=2100;banner('⚡ FAST');
+  await wait(3000);stop();
+  lane().classList.replace('operator-fletcher-last-stand','operator-fletcher-overdrive');
+  S.speedMul=1.25;S.auto=2100;laneStatus('operator-fletcher-status','OVERDRIVE · 0/3 WORDS');
   say({formula:'🔥 ×3 → +1 ⚡',text:'Now words are faster! Type 3 in a row.',arrows:[{sel:'#passiveChip',dir:'up'}]});
-  await count(3,{label:'⚡',streak:true});banner('+1 ⚡');S.speedMul=1;S.hp=10;bars();
+  const watch=setInterval(()=>laneStatus('operator-fletcher-status',`OVERDRIVE · ${Math.min(3,S.counter?.cur??3)}/3 WORDS`),150);
+  await count(3,{label:'⚡',streak:true});clearInterval(watch);
+  S.speedMul=1;S.perHit=1;laneStatus('operator-fletcher-status','ADRENALINE MOMENTUM · +1 DMG');
+  S.words.forEach(x=>x.el.classList.add('operator-crossbow-adrenaline'));
   await say({formula:'⚡ +1 every word',text:'Now every word hits +1 harder!',next:true});
+  S.perHit=0;laneStatus(null);lane().classList.remove('operator-fletcher-overdrive');S.words.forEach(x=>x.el.classList.remove('operator-crossbow-adrenaline'));S.hp=10;bars();
  },
  anodyne:async()=>{
   await say({title:'Medicine',formula:'✓ ×6 → 💊',text:'Type 6 words. Then you get a medicine!',next:true});
   S.hp=7;bars();S.auto=2600;say({formula:'✓ ×6',text:'Type 6 words.',arrows:[{sel:'#passiveChip',dir:'up'}]});
   await count(6,{label:'💊'});
-  await roulette(['💊❤️<br><small>+2 HP</small>','💊❄️<br><small>slow</small>','💊⛔<br><small>no new words</small>'],0);
-  S.hp+=2;bars();$('tutorialPlayerRow').classList.add('wai-heal');setTimeout(()=>$('tutorialPlayerRow').classList.remove('wai-heal'),900);banner('💊 +2 ❤️');
-  await say({formula:'💊 = ❤️ or ❄️ or ⛔',text:'You got +2 HP! Next time it may be: slow words, or no new words.',next:true,arrows:[{sel:'#tutorialPlayerRow',dir:'down'}]});
+  S.hp+=2;bars();fxPassive({type:'anodyne-serum',hp:2});
+  await say({formula:'💊 = ❤️ or 🐢 or ⛔',text:'You got +2 HP! Next time it may be: slow words, or no new words.',next:true,arrows:[{sel:'#tutorialPlayerRow',dir:'down'}]});
  },
  seraphine:async()=>{
-  await say({title:'Phantom',formula:'✓ ×5 → 🎯 → ✂️',text:'Type 5 words. I mark the LOWEST word. Type it, and I remove one more word!',next:true});
+  await say({title:'Phantom',formula:'✓ ×5 → ✦ → ✂️',text:'Type 5 words. I mark the LOWEST word. Type it, and I remove one more word!',next:true});
   S.auto=2300;say({formula:'✓ ×5',text:'Type 5 words.',arrows:[{sel:'#passiveChip',dir:'up'}]});
-  await count(5,{label:'🎯'});
-  ensureWords(3);const w=lowest();setMark(w,{label:'🎯',color:'#d49bff'});banner('🎯');
-  say({formula:'🎯 → ✂️',text:'Type the 🎯 word!',arrows:[{sel:wordSel(w),dir:'left'}]});
+  await count(5,{label:'✦'});
+  ensureWords(3);const w=lowest();setMark(w,{cls:'operator-phantom-mark'});fxPassive({type:'mark-word',wordId:w.id});
+  say({formula:'✦ → ✂️',text:'Type the ✦ word!',arrows:[{sel:wordSel(w),dir:'left'}]});
   await waitCleared(x=>x===w);
-  const other=lowest()||S.words[0];if(other){removeWord(other);hitBoss(1,0,other.el);pop('✂️',$('wordLane'));}
-  await say({formula:'🎯 ✓ + ✂️ 1 free',text:'One more word is gone for free!',next:true});
+  await wait(500);autoClear(lowest()||S.words[0],'seraphine');
+  await say({formula:'✦ ✓ + ✂️ 1 free',text:'One more word is gone for free!',next:true});
  },
  tavi:async()=>{
-  await say({title:'Rewind',formula:'🔥 ×6 → ⏪',text:'Type 6 words in a row. All words go away, then come back one by one. Short words first!',next:true});
+  await say({title:'Rewind',formula:'🔥 ×6 → ⏪',text:'Type 6 words in a row. All words go back up, then come back one by one. Short words first!',next:true});
   S.auto=2200;say({formula:'🔥 ×6',text:'Type 6 words in a row.',arrows:[{sel:'#passiveChip',dir:'up'}]});
   await count(6,{label:'⏪',streak:true});
   ensureWords(4);await rewind();
   await say({formula:'⏪ short → long',text:'Short words came back first. Easy!',next:true});
  },
  lupa:async()=>{
-  await say({title:'Ambush',formula:'🔥 ×6 → 🎯🎯🎯',text:'Type 6 words in a row. I mark 3 words at the BOTTOM. Type them in 6 seconds!',next:true});
+  await say({title:'Ambush',formula:'🔥 ×6 → ☾☾☾',text:'Type 6 words in a row. I mark 3 words at the BOTTOM. Type them in 6 seconds!',next:true});
   for(let i=0;i<4;i++){const w=spawn();w.state='landed';w.el.classList.add('landed');}restack();
   S.auto=3000;say({formula:'🔥 ×6',text:'Type 6 falling words in a row.',arrows:[{sel:'#passiveChip',dir:'up'}]});
-  await count(6,{label:'🎯',streak:true});
+  await count(6,{label:'☾',streak:true});
   let pile=S.words.filter(w=>w.state==='landed');while(pile.length<3){const w=spawn();w.state='landed';w.el.classList.add('landed');restack();pile=S.words.filter(x=>x.state==='landed');}
-  const targets=pile.slice(0,3);targets.forEach(w=>setMark(w,{label:'🎯',color:'#ff6f91',timer:6}));banner('🎯🎯🎯');
-  say({formula:'🎯 = +2 · 🎯🎯🎯 = +3 more',text:'Type all 3 🎯 words! 6 seconds!',arrows:[{sel:'.wordLane',dir:'left'}]});
-  let got=0;const done=Promise.all(targets.map(t=>waitCleared(x=>x===t).then(w=>{got++;hitBoss(0,2,w.el);})));
+  const targets=pile.slice(0,3);
+  // Each Weak Point is +2; the last one also carries the +3 full-clear bonus (lupa-complete).
+  const left=()=>targets.filter(t=>S.words.includes(t)).length;
+  targets.forEach(w=>setMark(w,{cls:'operator-lupa-weakpoint',bonus:()=>left()===1?{extra:5,effect:{type:'lupa-complete',characterId:opId}}:{extra:2,effect:{type:'lupa-hit',characterId:opId}}}));
+  document.body.classList.add('operator-lupa-focus');lane().classList.add('operator-lupa-focus');
+  fxPassive({type:'lupa-start',wordIds:targets.map(t=>t.id),seconds:6});
+  const stop=countdown(6,s=>laneStatus('operator-lupa-timer',`${s.toFixed(1)}s`,'MOONLIT AMBUSH'));
+  say({formula:'☾ = +2 · ☾☾☾ = +3 more',text:'Type all 3 ☾ words! 6 seconds!',arrows:[{sel:'.wordLane',dir:'left'}]});
+  let got=0;const done=Promise.all(targets.map(t=>waitCleared(x=>x===t).then(()=>{got++;})));
   await Promise.race([done,wait(6000)]);
-  if(got===3){hitBoss(0,3);banner('🎯🎯🎯 +3');await say({formula:'🎯🎯🎯 ✓ → +3',text:'All 3! +3 more damage!',next:true});}
-  else{const left=targets.filter(t=>S.words.includes(t));left.forEach(t=>setMark(t,null));hurtPlayer(2*left.length);
-   await say({formula:'⏱️ 🎯 → ❤️ -2',text:'Too slow! Each 🎯 left hurt you 2 HP.',next:true});}
+  stop();laneStatus(null);document.body.classList.remove('operator-lupa-focus');lane().classList.remove('operator-lupa-focus');
+  if(got===3){await say({formula:'☾☾☾ ✓ → +3',text:'All 3! +3 more damage!',next:true});}
+  else{const rest=targets.filter(t=>S.words.includes(t));rest.forEach(t=>setMark(t,null));hurtPlayer(2*rest.length,'Moonlit Ambush timeout');
+   await say({formula:'⏱️ ☾ → ❤️ -2',text:'Too slow! Each ☾ left hurt you 2 HP.',next:true});}
  },
  nitrate:async()=>{
-  $('shieldLine').hidden=false;bars();
-  await say({title:'Wrath',formula:'🔴 word → 🛡️ +1',text:'I make some words RED. Type a red word = +1 shield. Shields stop damage!',next:true,arrows:[{sel:'#storyContinuesLine',dir:'down'}],focus:['#storyContinuesLine']});
+  $('nitrateShield').hidden=false;nitrateShieldUi();
+  await say({title:'Wrath',formula:'WRATH word → 🛡️ +1',text:'I mark some words WRATH (yellow and black). Type one = +1 shield. Shields stop damage!',next:true,arrows:[{sel:'#nitrateShield',dir:'down'}],focus:['#nitrateShield']});
   S.auto=2400;wrathMarks(true);
-  say({formula:'🔴 ×5 → 🛡️🛡️🛡️🛡️🛡️',text:'Type 5 red words.',arrows:[{sel:'#passiveChip',dir:'up'}]});
+  say({formula:'WRATH ×5 → 🛡️🛡️🛡️🛡️🛡️',text:'Type 5 WRATH words.',arrows:[{sel:'#nitrateShield',dir:'down'}]});
   chip('🛡️','0 / 5');
-  while(S.shield<5){await waitCleared(x=>x.mark?.label==='🔴');S.shield++;bars();chip('🛡️',`${S.shield} / 5`,S.shield>=5?'ready':'');pop('🛡️ +1',$('tutorialPlayerRow'));}
-  say({formula:'🛡️ ×5 + 🔴 → 💥 +7',text:'Full! Type 1 more red word for a big hit!',arrows:[{sel:'#bossWrap',dir:'right'}]});
-  const w=await waitCleared(x=>x.mark?.label==='🔴');S.shield=0;bars();hitBoss(0,7,w.el);banner('💥 +7');wrathMarks(false);chip('🛡️','0 / 5');
+  const isWrath=x=>x.mark?.cls==='operator-nitrate-wrath';
+  while(S.shield<5){await waitCleared(isWrath);S.shield++;nitrateShieldUi();fxPassive({type:'nitrate-charge',shield:S.shield});chip('🛡️',`${S.shield} / 5`,S.shield>=5?'ready':'');}
+  // Full shield: the next Wrath word detonates it (+7), exactly as in battle.
+  S.words.filter(isWrath).forEach(x=>{x.bonus={extra:7,effect:{type:'nitrate-release',characterId:opId}};});
+  wrathMarks.full=true;
+  say({formula:'🛡️ ×5 + WRATH → 💥 +7',text:'Full! Type 1 more WRATH word for a big hit!',arrows:[{sel:'#bossWrap',dir:'right'}]});
+  await waitCleared(isWrath);
+  S.shield=0;nitrateShieldUi();fxPassive({type:'nitrate-release',damage:7});
+  const hit=document.createElement('div');hit.className='operator-nitrate-release';hit.setAttribute('aria-hidden','true');hit.textContent='WRATH · +7';lane().appendChild(hit);setTimeout(()=>hit.remove(),800);
+  wrathMarks(false);chip('🛡️','0 / 5');
   await say({formula:'💥 +7',text:'+7 damage! Wow!',next:true});
  },
  hound:async()=>{
-  await say({title:'Blood Hunt',formula:'🔥 ×4 → 🐾',text:'Type 4 words in a row. I mark a 🐾 word. Type it in 6 seconds!',next:true});
+  await say({title:'Blood Hunt',formula:'🔥 ×4 → PREY',text:'Type 4 words in a row. I mark a PREY word. Type it in 6 seconds!',next:true});
   S.auto=2400;say({formula:'🔥 ×4',text:'Type 4 words in a row.',arrows:[{sel:'#passiveChip',dir:'up'}]});
   await count(4,{label:'🐾',streak:true});
+  const prey=(p,sec,chain,bonus)=>{setMark(p,{cls:chain?'operator-hound-prey operator-hound-chain':'operator-hound-prey',bonus});
+   fxPassive({type:'hound-mark',wordId:p.id,seconds:sec,chain});
+   return countdown(sec,s=>{if(p.el.isConnected)p.el.setAttribute('data-hunt-time',s.toFixed(1));});};
   let ok=false;
   for(let tries=0;tries<3&&!ok;tries++){
-   ensureWords(2);const p=lowest()||S.words[0];setMark(p,{label:'🐾',color:'#ff5b4d',timer:6});banner('🐾');
-   say({formula:'🐾 ⏱️ 6s',text:'Type the 🐾 word! Quick!',arrows:[{sel:wordSel(p),dir:'left'}]});
-   ok=await Promise.race([waitCleared(x=>x===p).then(()=>true),wait(6000).then(()=>false)]);
-   if(!ok){setMark(p,null);await say({formula:'🐾 💨',text:'It got away! Try again.',next:true});}
+   ensureWords(2);const p=lowest()||S.words[0];const stop=prey(p,6,false,null);
+   say({formula:'PREY ⏱️ 6s',text:'Type the PREY word! Quick!',arrows:[{sel:wordSel(p),dir:'left'}]});
+   ok=await Promise.race([waitCleared(x=>x===p).then(()=>true),wait(6000).then(()=>false)]);stop();
+   if(!ok){setMark(p,null);await say({formula:'PREY 💨',text:'It got away! Try again.',next:true});}
   }
-  banner('🐾 HUNT!');let hits=0;
+  fxPassive({type:'hound-next',damage:0,chainHits:0});let hits=0;
   for(let i=0;i<3;i++){
-   ensureWords(2);const p=lowest()||S.words[0];setMark(p,{label:`🐾 ${i+1}/3`,color:'#ff5b4d',timer:3});
-   say({formula:`🐾 ${i+1}/3 → +2`,text:'Type it! 3 seconds!',arrows:[{sel:wordSel(p),dir:'left'}]});
-   const got=await Promise.race([waitCleared(x=>x===p).then(w=>{hitBoss(0,2,w.el);return true;}),wait(3000).then(()=>false)]);
+   ensureWords(2);const p=lowest()||S.words[0];
+   const stop=prey(p,3,true,{extra:2,effect:{type:'hound-next',damage:2,chainHits:i+1,characterId:opId}});
+   say({formula:`BLOOD HUNT ${i+1}/3 → +2`,text:'Type it! 3 seconds!',arrows:[{sel:wordSel(p),dir:'left'}]});
+   const got=await Promise.race([waitCleared(x=>x===p).then(()=>true),wait(3000).then(()=>false)]);stop();
    if(!got){setMark(p,null);break;}hits++;
   }
-  await say({formula:`🐾 ×${hits} → +${hits*2}`,text:hits===3?'Great hunt! +6 damage!':'The hunt ended. Be fast next time!',next:true});
+  if(hits===3)fxPassive({type:'hound-complete',damage:6});
+  await say({formula:`BLOOD HUNT ×${hits} → +${hits*2}`,text:hits===3?'Great hunt! +6 damage!':'The hunt ended. Be fast next time!',next:true});
  },
  cassian:async()=>{
   await say({title:'Decree',formula:'✓ ×6 → ✖✖✖',text:'Type 6 words. Then I remove 3 falling words at once!',next:true});
   S.auto=1600;say({formula:'✓ ×6',text:'Type 6 words.',arrows:[{sel:'#passiveChip',dir:'up'}]});
   await count(6,{label:'✖✖✖'});
-  ensureWords(5);const before=S.words.filter(w=>w.state==='fall').length;
-  const doomed=S.words.filter(w=>w.state==='fall').slice(0,3);doomed.forEach(w=>{removeWord(w);hitBoss(1,0);});banner('✖✖✖');
-  if(before>=4){S.invulnUntil=performance.now()+5000;$('tutorialPlayerRow').classList.add('wai-invuln');setTimeout(()=>$('tutorialPlayerRow').classList.remove('wai-invuln'),5000);}
+  ensureWords(5);const falling=S.words.filter(w=>w.state==='fall');const before=falling.length;
+  const doomed=falling.slice(0,3),invulnerable=before>=4;
+  fxPassive({type:'cassian-decree',wordIds:doomed.map(w=>w.id),invulnerable});
+  doomed.forEach(w=>{const slash=document.createElement('span');slash.className='operator-sovereign-slash';slash.style.top=`${Math.max(0,w.y)}px`;slash.setAttribute('aria-hidden','true');lane().appendChild(slash);setTimeout(()=>slash.remove(),500);removeWord(w);S.correct++;});bars();
+  if(invulnerable){S.invulnUntil=performance.now()+5000;lane().classList.add('operator-sovereign-guard');setTimeout(()=>lane().classList.remove('operator-sovereign-guard'),5000);}
   await say({formula:'✖✖✖ + 🛡️ 5s',text:'3 words gone! You are also SAFE for 5 seconds.',next:true,arrows:[{sel:'#tutorialPlayerRow',dir:'down'}]});
  }
 };
-function pushUp(frac){S.words.forEach(w=>{if(w.state==='fall'){w.y=Math.max(-20,w.y-H()*frac);setY(w);}});}
-function hexAll(){
- let field=S.words.filter(w=>w.state==='fall');
- if(field.length<=2)for(let i=0;i<4;i++)field.push(spawn(SHORT[i%SHORT.length],{y:10+i*40,hex:true}));
- field.forEach((w,i)=>{w.orig=[w.prompt,w.answer];if(!w.el.classList.contains('wai-hex')){setText(w,SHORT[i%SHORT.length]);w.el.classList.add('wai-hex');}w.hexed=true;});
+function pushUp(frac){
+ const moved=[];
+ S.words.forEach(w=>{if(w.state!=='fall')return;const before=w.y;w.y=Math.max(-20,w.y-H()*frac);const d=before-w.y;if(d<=0)return;
+  w.el.classList.remove('operator-shield-pushing');w.el.style.setProperty('--mara-shield-push-distance',`${d}px`);setY(w);moved.push(w);});
+ if(moved.length){void lane().offsetWidth;moved.forEach(w=>{w.el.classList.add('operator-shield-pushing');clearTimeout(w.pushT);w.pushT=0;});}
 }
-function unhex(){S.words.forEach(w=>{if(w.hexed){if(w.orig)setText(w,w.orig);else{removeWord(w);return;}w.hexed=false;w.el.classList.remove('wai-hex');}});}
+// Chain Cleave: like the battle, every word turns into the SAME shortest word.
+const HEX=['き','tree'];
+function hexAll(){
+ const field=S.words.filter(w=>w.state!=='hidden');
+ const hex=w=>{w.orig=w.orig||[w.prompt,w.answer];setText(w,HEX);w.el.querySelector('.tag').textContent='☾';w.el.classList.add('operator-chain-hex');w.hexed=true;};
+ field.forEach(hex);
+ if(field.length<=2)for(let i=0;i<4;i++){const w=spawn(HEX,{y:-30-i*32});w.summoned=true;hex(w);}
+}
+function unhex(){S.words.slice().forEach(w=>{if(!w.hexed)return;if(w.summoned){removeWord(w);return;}setText(w,w.orig);w.el.querySelector('.tag').textContent='';w.hexed=false;w.el.classList.remove('operator-chain-hex');});}
+// Foxfire Rewind: words fly back up the lane, then return one by one, shortest first.
 async function rewind(){
- banner('FOXFIRE REWIND');S.auto=0;lane().classList.add('wai-rewind');
- const list=S.words.slice();list.forEach(w=>{w.el.style.opacity='0';});
- await wait(600);list.forEach(w=>{w.el.remove();});S.words=[];lane().classList.remove('wai-rewind');
- say({text:'All words vanished… now watch them come back one at a time, shortest first.',arrows:[{sel:'.wordLane',dir:'left'}]});
- for(const w of list.sort((a,b)=>a.answer.length-b.answer.length)){spawn([w.prompt,w.answer],{y:-30});await wait(1100);}
- S.auto=2600;
+ S.auto=0;const list=S.words.slice();
+ fxPassive({type:'foxfire-start',wordIds:list.map(w=>w.id)});
+ lane().classList.add('operator-foxfire-active','operator-foxfire-rewinding');
+ list.forEach(w=>{const from=w.y;w.state='hidden';w.y=-30;w.el.classList.remove('landed','operator-foxfire-released');
+  w.el.classList.add('operator-foxfire-hidden','operator-foxfire-rewinding');w.el.style.setProperty('--tavi-rewind-distance',`${Math.max(0,from+30)}px`);setY(w);});
+ restack();
+ await wait(600);
+ list.forEach(w=>{w.el.classList.remove('operator-foxfire-rewinding');w.el.style.removeProperty('--tavi-rewind-distance');});
+ lane().classList.remove('operator-foxfire-rewinding');
+ say({text:'All words went back up… now watch them come back one at a time, shortest first.',arrows:[{sel:'.wordLane',dir:'left'}]});
+ for(const w of list.sort((a,b)=>a.answer.length-b.answer.length)){
+  if(!S.words.includes(w))continue;
+  w.state='fall';w.el.classList.remove('operator-foxfire-hidden');w.el.classList.add('operator-foxfire-released');setY(w);await wait(1100);
+ }
+ lane().classList.remove('operator-foxfire-active');S.auto=2600;
 }
 let wrathTimer=0;
-function wrathMarks(on){clearInterval(wrathTimer);if(!on)return;
- const mark=()=>{const free=S.words.filter(w=>!w.mark&&w.state==='fall');const n=Math.random()<.25?2:1;free.slice(0,n).forEach(w=>setMark(w,{label:'🔴',color:'#ff4d4d'}));if(!free.length)spawn(null,{mark:{label:'🔴',color:'#ff4d4d'}});};
+function wrathMarks(on){clearInterval(wrathTimer);wrathMarks.full=false;if(!on)return;
+ const markOne=w=>{setMark(w,{cls:'operator-nitrate-wrath',bonus:wrathMarks.full?{extra:7,effect:{type:'nitrate-release',characterId:opId}}:null});return w.id;};
+ const mark=()=>{const free=S.words.filter(w=>!w.mark&&w.state==='fall');const n=Math.random()<.25?2:1;
+  const ids=free.slice(0,n).map(markOne);if(!free.length){const w=spawn();ids.push(markOne(w));}
+  fxPassive({type:'nitrate-mark',wordIds:ids});};
  mark();wrathTimer=setInterval(mark,3000);}
-async function roulette(items,pick){
- const box=document.createElement('div');box.className='wai-roulette';box.innerHTML=items.map(t=>`<span>${t}</span>`).join('');$('battlefield').appendChild(box);
- const spans=[...box.children];for(let i=0;i<10+pick;i++){spans.forEach((s,k)=>s.classList.toggle('on',k===i%spans.length));await wait(110+i*12);}
- spans.forEach((s,k)=>s.classList.toggle('on',k===pick));await wait(900);box.remove();
-}
 
 // ---- page flow ----------------------------------------------------------------------
 function backToCollection(){
@@ -382,14 +459,15 @@ async function claim(){
 }
 async function start(){
  const rule=RULES[opId],cat=CATALOG.find(c=>c.id===opId);
- const loading=$('loading');
+ const loading=$('loading');let prof=null;
  try{
   if(!rule||!cat||cat.rarity<5||!SCRIPTS[opId])throw Error('This operator does not have a Who Am I? lesson.');
   if(!context.card_code)throw Error('Open Adventure with your card first.');
   if(!cloud||!await cloud.ready)throw Error('Firebase connection required.');
-  const prof=await cloud.call('/api/profile',{card_code:context.card_code});
+  prof=await cloud.call('/api/profile',{card_code:context.card_code});
   if(!prof?.collection?.owned?.includes(opId))throw Error('Recruit this operator first to unlock their Who Am I?.');
  }catch(e){loading.textContent=e?.message||String(e);loading.insertAdjacentHTML('beforeend','<p><a href="collection.html" style="color:#fff200">‹ Back to Collection</a></p>');return;}
+ FX()?.prepare?.(opId);window.RPG_AURA?.setPlayer?.(prof);
  $('playerLabel').textContent=rule.name||cat.name;$('playerIcon').src=`assets/profile-icons/${opId}.webp`;
  // Adventure layout: the operator stands between the words and the boss.
  const art=$('storySquadArt');art.onload=()=>art.classList.toggle('storySquadArtWide',art.naturalWidth/art.naturalHeight>=.78);
@@ -405,7 +483,7 @@ async function start(){
  await say({title:`Who am I? · ${rule.name||cat.name}`,formula:'👤 → ❓',text:`Hi! I'm ${rule.name||cat.name}. Let me show you my skill!`,next:true,
   arrows:[{sel:'#storySquadVisual',dir:'left'}],focus:['#storySquadVisual','#bossWrap']});
  await SCRIPTS[opId]();
- stopSim();stopSpot();setArrows([]);chip('');input().disabled=true;wrathMarks(false);
+ stopSim();stopSpot();setArrows([]);chip('');input().disabled=true;wrathMarks(false);laneStatus(null);
  $('waiDoneTitle').textContent=`✓ YOU KNOW ${String(rule.name||cat.name).toUpperCase()}!`;
  $('waiDoneText').textContent=rule.description;
  $('waiDoneCoins').textContent='Saving…';
