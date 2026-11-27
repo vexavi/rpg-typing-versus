@@ -10,7 +10,7 @@
   const reduced=()=>!!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   const RULES=()=>window.RPG_OPERATOR_PASSIVES?.RULES||{};
   // Face points (percent of deployment art) used to frame 6★ cut-ins.
-  const FACE={alden:[45.2,10.7],anodyne:[46.7,9.0],aveline:[59.8,10.2],cassian:[59.4,19.9],crossbow:[51.2,10.7],elise:[48.5,12.2],hexaxe:[51.7,10.0],hound:[65.2,33.7],isolde:[50.6,14.3],kade:[49.4,10.0],livia:[44.2,14.7],lupa:[79.2,20.0],mira:[51.7,10.2],nitrate:[40.8,19.7],nora:[48.1,12.4],seraphine:[57.3,9.9],shield:[38.5,12.2],tavi:[52.5,21.3],vern:[39.8,15.9],vex:[56.2,9.7],kurone:[49.5,22.1]};
+  const FACE={alden:[45.2,10.7],anodyne:[46.7,9.0],aveline:[59.8,10.2],cassian:[59.4,19.9],crossbow:[51.2,10.7],elise:[48.5,12.2],hexaxe:[51.7,10.0],hound:[65.2,33.7],isolde:[50.6,14.3],kade:[49.4,10.0],livia:[44.2,14.7],lupa:[79.2,20.0],mira:[51.7,10.2],nitrate:[40.8,19.7],nora:[48.1,12.4],seraphine:[57.3,9.9],shield:[38.5,12.2],tavi:[52.5,21.3],vern:[39.8,15.9],vex:[56.2,9.7],kurone:[55.0,22.8]};
   // 4★ operators (and the default character) share the standard strike.
   const THEMES={
     std:      {kind:'std',     c1:'#2cc5f6',c2:'#eafcff',c3:'#0b5f86',bg:'#06202c',band:'#06202c'},

@@ -17,7 +17,7 @@
  // Lineup cards use the portrait full-body art (assets/deployment, 480×900). Face centres
  // [x%, y%] were measured by matching each profile-icon portrait against that art, so the
  // crop can always keep the face in view. Characters not listed fall back to [50, 14].
- const FACE={alden:[45.2,10.7],anodyne:[46.7,9.0],aveline:[59.8,10.2],cassian:[59.4,19.9],crossbow:[51.2,10.7],elise:[48.5,12.2],hexaxe:[51.7,10.0],hound:[65.2,33.7],isolde:[50.6,14.3],kade:[49.4,10.0],livia:[44.2,14.7],lupa:[79.2,20.0],mira:[51.7,10.2],nitrate:[40.8,19.7],nora:[48.1,12.4],seraphine:[57.3,9.9],shield:[38.5,12.2],tavi:[52.5,21.3],vern:[39.8,15.9],vex:[56.2,9.7],kurone:[49.5,22.1]};
+ const FACE={alden:[45.2,10.7],anodyne:[46.7,9.0],aveline:[59.8,10.2],cassian:[59.4,19.9],crossbow:[51.2,10.7],elise:[48.5,12.2],hexaxe:[51.7,10.0],hound:[65.2,33.7],isolde:[50.6,14.3],kade:[49.4,10.0],livia:[44.2,14.7],lupa:[79.2,20.0],mira:[51.7,10.2],nitrate:[40.8,19.7],nora:[48.1,12.4],seraphine:[57.3,9.9],shield:[38.5,12.2],tavi:[52.5,21.3],vern:[39.8,15.9],vex:[56.2,9.7],kurone:[55.0,22.8]};
  const faceOf=id=>FACE[id]||[50,14];
  const deployArt=id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)&&id!=='unknown'?`assets/deployment/${id}.webp`:null;
  const safeArt=p=>typeof p==='string'&&/^assets\/recruitment\/[a-z0-9_-]+\.webp$/.test(p);
