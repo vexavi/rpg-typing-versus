@@ -197,7 +197,7 @@ function onMiss(){
  S.misses++;S.streak=0;
  const c=S.counter;if(c&&c.streak&&c.cur>0){c.cur=0;chip(c.label,`0 / ${c.n}`,'reset');log('A mistake reset the count to 0.');}
  S.missHooks.forEach(f=>f());
- if(S.kurone)kuroneChat(S.kurone.onMistake(0));
+ if(S.kurone)kuroneChat(S.kurone.onMistake(performance.now()/1000));
  hurtPlayer(1,'input miss');
 }
 $('answerForm').addEventListener('submit',e=>{
@@ -211,7 +211,7 @@ $('answerForm').addEventListener('submit',e=>{
  const rect=w.el.getBoundingClientRect(),classes=w.el.className;
  let bonus=typeof w.bonus==='function'?w.bonus():w.bonus;
  if(!bonus&&S.nextBonus){bonus=S.nextBonus;S.nextBonus=null;}
- const chat=S.kurone?S.kurone.onCorrect([],0,{}):null;
+ const chat=S.kurone?S.kurone.onCorrect([],performance.now()/1000,{}):null;
  const extra=(bonus?.extra||0)+(S.perHit||0)+(chat?.bonusDamage||0)+(S.hype>0?(S.hype--,1):0);
  if(chat)kuroneChat(chat);
  log('Correct!');removeWord(w);hitBoss(1,extra,{rect,classes,effect:bonus?.effect});onCorrect(w);
@@ -239,8 +239,8 @@ function kuroneHud(){
   $('kuroneBonus').textContent=!tier?'':steps?`+1 / word · +${steps+1} every 5th`:(r.every[tier]===1?'+1 / word':`+1 every ${r.every[tier]===2?'2nd':'3rd'} word`);}
  const taken=on?P.kuroneTaken(v):1,speed=on?P.kuroneSpeed(v):1;
  $('kuroneDanger').hidden=!(on&&v>30);
- $('kuroneTaken').textContent=taken>1?`×${taken} DMG TAKEN`:'TYPO = LOSE HALF';
- $('kuroneSpeed').textContent=speed>1?`+${Math.round((speed-1)*100)}% SPEED`:'';$('kuroneSpeed').hidden=speed<=1;
+ $('kuroneTaken').textContent=taken>1?`×${taken} DMG`:'TYPO = ½';
+ $('kuroneSpeed').textContent=speed>1?`⏩ +${Math.round((speed-1)*100)}%`:'';$('kuroneSpeed').hidden=speed<=1;
  lane().classList.toggle('kurone-trending',on&&speed>1);
  $('kuroneHype').hidden=!(S.hype>0);$('kuroneHypeLeft').textContent=String(S.hype||0);
 }
@@ -255,9 +255,12 @@ function kuroneReact(kind,text=''){
 }
 function kuroneChat(e){
  if(!e)return;kuroneHud();
- if(e.type==='kurone-chat'){kuroneReact(e.tierUp?'tier':'happy',e.tierUp?`${e.viewers} VIEWERS`:'+1');if(e.tierUp)fxPassive(e);}
- if(e.type==='kurone-chat'&&e.enteredDanger)window.RPG_KURONE_NOTIFY?.('DANGER ZONE!','A typo now = HALF my viewers leave!');
- else if(e.type==='kurone-leave'&&e.lost>0)kuroneReact('sad',e.half?`-${e.lost} (HALF)`:`-${e.lost}`);
+ if(e.type==='kurone-chat'&&!e.paused){kuroneReact(e.tierUp?'tier':'happy',e.tierUp?`${e.viewers} VIEWERS`:'+1');if(e.tierUp)fxPassive(e);}
+ // Same DANGER ZONE pause as battle: words stop while the notification counts down.
+ const hold=(text,sub,sticker)=>{S.kurone?.startDangerHold(performance.now()/1000,3.2);window.RPG_KURONE_NOTIFY?.(text,sub,{sticker,seconds:3.2});};
+ if(e.type==='kurone-chat'&&e.enteredDanger)hold('DANGER ZONE!','A typo now = HALF my viewers leave!','angry');
+ else if(e.type==='kurone-leave'){if(e.lost>0)kuroneReact('sad',e.half?`-${e.lost} (HALF)`:`-${e.lost}`);
+  if(e.duringHold)window.RPG_KURONE_NOTIFY?.('NOOO!',e.half?`Half my viewers left (−${e.lost})!`:`${e.lost} viewers left!`,{sticker:'shocked'});}
 }
 // A pretend Shoutout picker with two squad mates (the real one lists your actual squad).
 function fakePicker(burst,hype){
@@ -544,7 +547,7 @@ const SCRIPTS={
   S.kurone.setViewers(29);kuroneHud();
   say({title:'Danger zone',formula:'👁 30 → ⚠',text:'My stream is popular now! Type 2 words.',arrows:[{sel:'#kuroneLive',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneLive']});
   await waitViewers(31);
-  await say({formula:'⚠ 31+ : ❌ = 👁 ½',text:'DANGER! Past 30, one mistake = HALF my viewers leave!',next:true,arrows:[{sel:'#kuroneDanger',dir:'down'}],focus:['#kuroneLive','#kuroneDanger']});
+  await say({formula:'⚠ 31+ : ❌ = 👁 ½',text:'DANGER! Past 30, one mistake = HALF my viewers leave! (Words stop while my message shows.)',next:true,arrows:[{sel:'#kuroneDanger',dir:'down'}],focus:['#kuroneLive','#kuroneDanger']});
   S.kurone.setViewers(49);kuroneHud();
   say({formula:'👁 50 → 💥💥 ❤️×2 ⏩',text:'Type 1 more word and watch.',arrows:[{sel:'#kuroneLive',dir:'down'}],focus:[...DEFAULT_FOCUS,'#kuroneLive','#kuroneDanger']});
   await waitViewers(50);

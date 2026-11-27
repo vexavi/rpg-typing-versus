@@ -81,7 +81,7 @@
     const lowHp=(hp,threshold)=>preciseHp?Number(hp)>0&&Number(hp)<=threshold:Number(hp)===threshold;
     let correct=0,activations=0,spawnPauseUntil=0,slowUntil=0,lastSlowAt=-Infinity;
     // Kurone's viewers are NOT cleared by reset(): the stream carries across stages.
-    let viewers=0,chatHits=0,fifthHits=0,pendingTaken=0,speedNow=1,speedAt=-1;
+    let viewers=0,chatHits=0,fifthHits=0,pendingTaken=0,speedNow=1,speedAt=-1,holdUntil=0;
     let frozen=null,freezeUntil=0,mistakeArmed=false,used=false;
     let streak=0,domainFreezeUntil=0,charged=false,marked=null,awaitingMark=false,executionPendingUntil=0;
     // 6★ state. Only one operator runs per game, so no inter-operator effect stacking.
@@ -335,7 +335,7 @@
     function reset(){
       if(rule?.id==='nitrate')clearWrath();
       releaseFrozen();releaseMark();releaseHoundMark();correct=0;activations=0;spawnPauseUntil=0;slowUntil=0;
-      lastSlowAt=-Infinity;mistakeArmed=false;used=false;streak=0;domainFreezeUntil=0;
+      lastSlowAt=-Infinity;mistakeArmed=false;used=false;streak=0;domainFreezeUntil=0;holdUntil=0;pendingTaken=0;speedAt=-1;
       charged=false;awaitingMark=false;executionPendingUntil=0;
       foxfireProgress=0;foxfirePrimed=false;foxfireActive=false;foxfireQueue=[];foxfireCurrentId=null;
       endLupa();
@@ -385,20 +385,20 @@
     function isFieldFrozen(time){return rule?.id==='isolde'&&validTime(time)<domainFreezeUntil;}
     function isSpawnPaused(time){
       const t=validTime(time);
-      return (rule?.id==='mira'&&t<spawnPauseUntil)||(rule?.id==='isolde'&&t<domainFreezeUntil)
+      return (rule?.id==='kurone'&&t<holdUntil)||(rule?.id==='mira'&&t<spawnPauseUntil)||(rule?.id==='isolde'&&t<domainFreezeUntil)
         ||(rule?.id==='anodyne'&&t<spawnPauseUntil)
         ||(rule?.id==='tavi'&&foxfireActive);
     }
     function isWordFrozen(word,time){
       return (rule?.id==='nora'&&word===frozen&&validTime(time)<freezeUntil&&word.state==='falling')
         ||(rule?.id==='shield'&&word?.state==='falling'&&shieldFrozenWords.get(word?.id)?.word===word&&validTime(time)<(shieldFrozenWords.get(word?.id)?.until??0))
-        ||isFieldFrozen(time);
+        ||isFieldFrozen(time)||(rule?.id==='kurone'&&validTime(time)<holdUntil);
     }
     function getFallMultiplier(time){
       if(!rule)return 1;
       const t=validTime(time);
       if(rule.id==='livia')return rule.fallMultiplier;
-      if(rule.id==='kurone')return kuroneSpeedAt(t);
+      if(rule.id==='kurone')return t<holdUntil?0:kuroneSpeedAt(t);
       if((rule.id==='alden'||rule.id==='elise')&&t<slowUntil)return 1-rule.slowPct/100;
       if(rule.id==='anodyne'&&t<slowUntil)return 1-rule.slowPct/100;
       if(rule.id==='crossbow'){
@@ -427,7 +427,7 @@
         // The typo's own damage uses the viewer count BEFORE anyone leaves.
         const before=viewers;pendingTaken=kuroneTaken(before);
         viewers=before>rule.danger?Math.ceil(before/2):Math.max(0,before-rule.typoLoss);chatHits=0;fifthHits=0;
-        return {type:'kurone-leave',viewers,lost:before-viewers,half:before>rule.danger,tier:kuroneTier(viewers),tierDown:kuroneTier(viewers)<kuroneTier(before),characterId:rule.id};
+        return {type:'kurone-leave',viewers,lost:before-viewers,half:before>rule.danger,duringHold:t<holdUntil,tier:kuroneTier(viewers),tierDown:kuroneTier(viewers)<kuroneTier(before),characterId:rule.id};
       }
       if(rule.id==='tavi'){
         if(!foxfireActive)foxfireProgress=0;
@@ -544,6 +544,8 @@
       const t=validTime(time);
       if(rule.id==='kurone'){
         const before=kuroneTier(viewers),beforeV=viewers;
+        // DANGER ZONE pause: words still clear (normal damage), but no new viewers join.
+        if(t<holdUntil)return {type:'kurone-chat',viewers,tier:before,steps:kuroneSteps(viewers),tierUp:false,stepUp:false,danger:viewers>rule.danger,enteredDanger:false,paused:true,bonusDamage:0,characterId:rule.id};
         viewers+=1;
         const tier=kuroneTier(viewers),steps=kuroneSteps(viewers);
         if(tier!==before)chatHits=0;
@@ -551,7 +553,8 @@
         // modes give +1 on every 3rd / 2nd / every word instead (same average), and past
         // 30 each 10 viewers adds +1 more on every 5th word (= +0.2 per word).
         let bonusDamage=0;
-        if(tier&&!context.nonBoss){
+        // During the DANGER ZONE pause (notification on screen) words deal normal damage only.
+        if(tier&&!context.nonBoss&&!(t<holdUntil)){
           if(preciseHp)bonusDamage=kuroneBonus(viewers);
           else{
             if(++chatHits%rule.every[tier]===0)bonusDamage=1;
@@ -898,6 +901,9 @@
     function setViewers(n){if(rule?.id==='kurone'){viewers=Math.max(0,Math.floor(Number(n)||0));chatHits=0;fifthHits=0;}}
     // Damage-taken multiplier for the NEXT hit: a typo's own hit uses the count before
     // half the viewers left; every other hit uses the current count.
+    // DANGER ZONE pause: no spawns, no falling, for as long as Kurone's notification shows.
+    function startDangerHold(time,seconds){if(rule?.id!=='kurone')return 0;holdUntil=Math.max(holdUntil,validTime(time)+Math.max(0,Number(seconds)||0));return holdUntil;}
+    function isDangerHold(time){return rule?.id==='kurone'&&validTime(time)<holdUntil;}
     function takeDamageMultiplier(){if(rule?.id!=='kurone')return 1;const m=pendingTaken||kuroneTaken(viewers);pendingTaken=0;return m;}
     function kuroneState(){if(rule?.id!=='kurone')return null;return {viewers,tier:kuroneTier(viewers),steps:kuroneSteps(viewers),bonus:kuroneBonus(viewers),taken:kuroneTaken(viewers),speed:kuroneSpeed(viewers),danger:viewers>rule.danger};}
     // Kurone leaves the field: returns the parting post / Hype and ends the stream.
@@ -905,7 +911,7 @@
     return Object.freeze({rule,reset,tick,onCorrect,onMistake,onPlayerDamage,onStageStart,onRevive,updateField,
       startLupa,markCrossbowWord,syncAdrenaline,protectDeadlines,onWordSpawn,nitrateAbsorbDamage,getNitrateShield,
       isSpawnPaused,isWordFrozen,isFieldFrozen,getFallMultiplier,getSpawnIntervalMultiplier,getAdrenalinePhase,getMaxHpBonus,
-      isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,getViewers,setViewers,kuroneLeave,takeDamageMultiplier,kuroneState,debug});
+      isInvulnerable,isFoxfireHidden,isChainCleaveActive,getChainCleaveRemaining,getViewers,setViewers,kuroneLeave,takeDamageMultiplier,kuroneState,startDangerHold,isDangerHold,debug});
   }
   window.RPG_OPERATOR_PASSIVES=Object.freeze({RULES,ALLOWED_MODES,create,kuroneTier,kuroneExit,kuroneSteps,kuroneBonus,kuroneTaken,kuroneSpeed});
 })();

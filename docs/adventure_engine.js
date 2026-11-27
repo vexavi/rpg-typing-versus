@@ -3973,6 +3973,7 @@ async function debugJumpTo(mode, idx){
   }
   function kuroneRestore(){
     const run=kuroneConquest(),st=run?.kurone;
+    kuroneDangerShown=-1;
     if(!run){kuroneHype=0;storySquad.bench={};return;}
     kuroneHype=Math.max(0,Number(st?.hype)||0);
     storySquad.bench={...(st?.bench||{})};
@@ -3997,7 +3998,7 @@ async function debugJumpTo(mode, idx){
     const taken=on?P.kuroneTaken(v):1,speed=on?P.kuroneSpeed(v):1,danger=on&&v>30;
     if(kuroneDangerEl){
       kuroneDangerEl.hidden=!danger;
-      if(danger){kuroneTakenEl.textContent=taken>1?`×${taken} DMG TAKEN`:'TYPO = LOSE HALF';kuroneSpeedEl.textContent=speed>1?`+${Math.round((speed-1)*100)}% SPEED`:'';kuroneSpeedEl.hidden=speed<=1;}
+      if(danger){kuroneTakenEl.textContent=taken>1?`×${taken} DMG`:'TYPO = ½';kuroneTakenEl.title=taken>1?`Kurone takes ×${taken} damage`:'A typo makes half the viewers leave';kuroneSpeedEl.textContent=speed>1?`⏩ +${Math.round((speed-1)*100)}%`:'';kuroneSpeedEl.title='Words fall and appear faster';kuroneSpeedEl.hidden=speed<=1;}
     }
     wordLane?.classList.toggle('kurone-trending',on&&speed>1);
     // Pulse her HP when one more ordinary hit would knock her out.
@@ -4033,15 +4034,25 @@ async function debugJumpTo(mode, idx){
   }
   function kuroneOnChat(effect){
     if(effect.type==='kurone-chat'){
-      kuroneHud();kuroneReact(effect.tierUp?'tier':'happy',effect.tierUp?`${effect.viewers} VIEWERS`:'+1');
+      kuroneHud();if(!effect.paused)kuroneReact(effect.tierUp?'tier':'happy',effect.tierUp?`${effect.viewers} VIEWERS`:'+1');
       if(effect.tierUp||effect.stepUp)pushMsg(`KURONE · LIVE CHAT ${effect.viewers} VIEWERS (${kuroneBonusLabel(effect.tier,effect.viewers).toUpperCase()})`,true);
-      if(effect.enteredDanger&&kuroneDangerShown!==stageIndex){kuroneDangerShown=stageIndex;window.RPG_KURONE_NOTIFY?.('DANGER ZONE!','A typo now = HALF my viewers leave!');}
+      if(effect.enteredDanger&&kuroneDangerShown!==stageIndex){kuroneDangerShown=stageIndex;kuroneHold('DANGER ZONE!','A typo now = HALF my viewers leave!','angry');}
       if(effect.stepUp&&effect.viewers>=50)pushMsg(`KURONE · TRENDING: WORDS +${Math.round((window.RPG_OPERATOR_PASSIVES.kuroneSpeed(effect.viewers)-1)*100)}% FASTER`,true);
     }else if(effect.type==='kurone-leave'){
       kuroneHud();if(effect.lost>0)kuroneReact('sad',effect.half?`-${effect.lost} (HALF)`:`-${effect.lost}`);
+      // A typo during the danger pause: the shocked sticker (no extra pause, no timer).
+      if(effect.duringHold)window.RPG_KURONE_NOTIFY?.('NOOO!',effect.half?`Half my viewers left (−${effect.lost})!`:`${effect.lost} viewers left!`,{sticker:'shocked'});
       pushMsg(`KURONE · ${effect.lost} VIEWERS LEFT${effect.half?' (HALF)':''} (${effect.viewers})`,true);
     }
     kuroneSave();
+  }
+  // DANGER ZONE pause: spawning and falling stop for exactly as long as the notification
+  // shows (it carries a countdown). Typing still works: normal damage, scaled typo damage.
+  var KURONE_HOLD_SEC=3.2;
+  function kuroneHold(text,sub,sticker){
+    operatorPassive?.startDangerHold?.(stageElapsedSec(),KURONE_HOLD_SEC);
+    window.RPG_KURONE_NOTIFY?.(text,sub,{sticker,seconds:KURONE_HOLD_SEC});
+    pushMsg(`KURONE · ${text} (WORDS PAUSED ${KURONE_HOLD_SEC}s)`,true);
   }
   // Parting post (burst) and Hype once the next operator is on the field.
   function kuroneApplyExit(exit,kind){
@@ -7018,10 +7029,10 @@ if(gameState === "paused"){
       const overflowSpawnPaused = overflow || (ts < overflowSpawnGraceUntilMs);
       const operatorPause = operatorSpawnPaused(elapsed);
       const vesperDebug=window.RPG_VESPER?.active()?operatorPassive?.debug?.():null;
-      const vesperEvent=window.RPG_VESPER?.frame(elapsed,{words:wordsOnField,field:wordLane,height:readableHeight,lupaActive:!!vesperDebug?.lupaActive,lupaTargets:vesperDebug?.lupaTargets||[],paused:elapsed<storySquadGraceUntil||!!operatorPassive?.isFieldFrozen(elapsed),grace:elapsed<storySquadGraceUntil,damage:damagePlayer,notify:text=>pushMsg(text,true)})??false;
+      const vesperEvent=window.RPG_VESPER?.frame(elapsed,{words:wordsOnField,field:wordLane,height:readableHeight,lupaActive:!!vesperDebug?.lupaActive,lupaTargets:vesperDebug?.lupaTargets||[],paused:elapsed<storySquadGraceUntil||!!operatorPassive?.isFieldFrozen(elapsed)||!!operatorPassive?.isDangerHold?.(elapsed),grace:elapsed<storySquadGraceUntil,damage:damagePlayer,notify:text=>pushMsg(text,true)})??false;
       if(gameState!=='playing'){scheduleTick(true);return;}
       if(window.RPG_VESPER?.takeLupa()&&operatorPassive?.rule?.id==='lupa')operatorStartLupa();
-      const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:(window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec)*(operatorPassive?.getFallMultiplier(elapsed)||1),paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed),lupaActive:!!operatorPassive?.debug?.().lupaActive,spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
+      const valcrestEvent=window.RPG_VALCREST?.frame(elapsed,{words:wordsOnField,height:laneHeight(),fallSpeed:(window.RPG_BALANCE?.get('fallSpeedPxPerSec',stage.fallSpeedPxPerSec)??stage.fallSpeedPxPerSec)*(operatorPassive?.getFallMultiplier(elapsed)||1),paused:overflowSpawnPaused||operatorPause||chapterBlackout||!!operatorPassive?.isFieldFrozen(elapsed)||!!operatorPassive?.isDangerHold?.(elapsed),lupaActive:!!operatorPassive?.debug?.().lupaActive,spawn:spawnOneWord,notify:text=>pushMsg(text,true),field:wordLane})??false;
       const duelFrame=!!window.RPG_VALCREST?.dueling();
       if(!overflowSpawnPaused && !operatorPause && !valcrestEvent && !vesperEvent){
         spawnAccMs += spawnDt * 1000;
@@ -7192,6 +7203,7 @@ if(gameState === "paused"){
       if(overflow){
         overflowSpawnGraceUntilMs = 0;
         if(!vesperEvent&&!duelFrame&&!window.RPG_VALCREST?.dueling())overflowAcc += battleDt;
+        if(operatorPassive?.isDangerHold?.(elapsed))overflowAcc=0; // Kurone's DANGER pause: no overflow damage
         if(!vesperEvent&&!duelFrame&&!window.RPG_VALCREST?.dueling()&&overflowAcc >= 1){
           const ticks = Math.floor(overflowAcc);
           overflowAcc -= ticks;
