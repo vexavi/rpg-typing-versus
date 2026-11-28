@@ -286,6 +286,7 @@
     banners=window.RPG_RECRUITMENT_BANNERS.merge(banners,result.banners);
     paint();
     window.RPG_RECRUITMENT_REVEAL?.setFeatured?.(banners[0]?.featured_character_id);
+    window.RPG_RECRUIT_BGM?.play?.(banners[0]?.featured_character_id);
    }
   }catch(e){console.warn('Recruitment banner text unavailable; showing packaged titles.',e);}
 

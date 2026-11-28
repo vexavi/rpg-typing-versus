@@ -205,6 +205,7 @@
   const el=build(data,{arrive:true});active=el;
   (document.body||document.documentElement).appendChild(el);
   const player=String(data.player||playerKey()),runId=String(data.run||'');
+  window.RPG_RECRUIT_BGM?.play?.(data.id); // featured theme starts with the intro
   within(loadArt(data.art),1500,null).then(img=>run(el,img,data,{skippable:hasSeen(player,runId),onWatched:()=>markSeen(player,runId)}));
  }
  if(/recruitment\.html$/.test(location.pathname)&&!document.documentElement.dataset.v66Teacher)arrive();

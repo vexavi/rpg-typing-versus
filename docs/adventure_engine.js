@@ -2848,7 +2848,8 @@ async function launchStoryStage(stage){
       words:WORDS};
     // v148.9: stages without their own art yet use placeholder boss / background images.
     if(!storyBattleStage.bossFile)storyBattleStage.bossFile='story/images/boss-placeholder.svg';
-    if(!storyBattleStage.bgFile)storyBattleStage.bgFile='story/images/stage-bg-placeholder.svg';
+    // Territory battle backgrounds: Valcrest (2-x) and Vesper (3-x) unless a stage sets its own.
+    if(!storyBattleStage.bgFile){const tid=String(stage.id||'').split('-')[0];storyBattleStage.bgFile=tid==='2'?'story/images/bg-valcrest.webp':tid==='3'?'story/images/bg-vesper.webp':'story/images/stage-bg-placeholder.svg';}
   }else storyBattleStage=null;
   // Per-stage Story Editor values take priority over inherited Game Settings.
   // Behavior remains defined by static game modules; Firestore supplies only numeric/boolean options.
