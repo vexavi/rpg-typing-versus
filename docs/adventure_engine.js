@@ -1100,7 +1100,7 @@ const achOverlay = document.getElementById("achOverlay");
   }
   async function callCloudProfileApi(payload){
     if(!cloudSyncEnabled()){
-      throw new Error("Online profiles will be enabled with Firebase later.");
+      throw new Error("Online profiles need an internet connection.");
     }
 
     const url = String(PROFILE_CLOUD_WEB_APP_URL).trim();
@@ -3241,22 +3241,23 @@ function showModeSelectScreen(){
   }});
   // v148.9: Challenge Mode retired (like Extra in v147). All Grades Challenge stays.
   // All Grades Challenge also unlocks after clearing Normal Mode once.
-  addMode('All Grades Challenge', {disabled:!normalCleared||!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,mystery:!normalCleared,lockedReason:!normalCleared?'Clear Normal Mode to unlock':'Online Firebase required',onClick:()=>{
+  addMode('All Grades Challenge', {disabled:!normalCleared||!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,mystery:!normalCleared,lockedReason:!normalCleared?'Clear Normal Mode to unlock':'Needs internet',onClick:()=>{
     setMode('shared');showOverlay(false);startGame();
   }});
-  addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
+  addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Needs internet',onClick:()=>{
     // Lesson 4 of the first-time tutorial continues on the guided Recruitment page.
     window.location.assign(tutorialLesson4Pending()?'recruitment.html?tutorial=1':'recruitment.html');
   }});
   // v148.9: the Aura Workshop now lives inside Collection (each operator page has an Aura row).
   addMode('Collection', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
-    lockedReason:'Online Firebase required',onClick:()=>{
+    lockedReason:'Needs internet',onClick:()=>{
       window.location.assign('collection.html');
     }});
-  if(window.RPG_V66_DISCONNECTED||!ADVENTURE_CONTEXT.online)addMode('Reconnect', {onClick:()=>location.reload()});
-  addMode('Rankings', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Online Firebase required',onClick:()=>{
+  addMode('Rankings', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Needs internet',onClick:()=>{
     void openRankings('normal');
   }});
+  // Offline only, so it never appears together with Tournament (both use slot 08).
+  if(window.RPG_V66_DISCONNECTED||!ADVENTURE_CONTEXT.online)addMode('Reconnect', {onClick:()=>location.reload()});
   // v148.9: Tournament is hidden for now. Set SHOW_TOURNAMENT_TILE to true to show it again
   // (the tournament code itself is unchanged).
   startModeSelectTutorialGuide();
@@ -4249,7 +4250,8 @@ async function debugJumpTo(mode, idx){
     const phase=operatorPassive?.getAdrenalinePhase?.(time)||'off';
     if(phase==='off'){
       fletcherStatusEl?.remove();fletcherStatusEl=null;fletcherStatusLastText='';
-      wordLane?.classList?.remove('operator-fletcher-last-stand','operator-fletcher-overdrive');
+      // toggle(false) is a no-op when absent; remove() would rewrite the class every frame.
+      wordLane?.classList?.toggle('operator-fletcher-last-stand',false);wordLane?.classList?.toggle('operator-fletcher-overdrive',false);
       return;
     }
     wordLane?.classList?.toggle('operator-fletcher-last-stand',phase==='last-stand');
@@ -4815,10 +4817,11 @@ function updatePauseCmdUI(){
     label = "Pause";
   }
 
+  // Called on every UI tick: write only real changes so the HUD does not re-layout.
   pauseCmd.classList.toggle("disabled", disabled);
-  pauseCmd.disabled = disabled;
-  pauseCmd.classList.remove("crossedOut");
-  pauseCmdText.textContent = label;
+  if(pauseCmd.disabled !== disabled) pauseCmd.disabled = disabled;
+  if(pauseCmd.classList.contains("crossedOut")) pauseCmd.classList.remove("crossedOut");
+  if(pauseCmdText.textContent !== label) pauseCmdText.textContent = label;
 }
 
   function updateUIThrottled(){
@@ -4845,7 +4848,7 @@ function updateUI(){
     // Menu destinations are safe only outside an active run.
     const accountBlocked=['playing','paused','countdown','dialogue','stageclear','continuePrompt'].includes(gameState);
     if(profileCmd)profileCmd.disabled=accountBlocked;
-    if(achievementsCmd)achievementsCmd.disabled=accountBlocked;
+    if(achievementsCmd&&achievementsCmd.disabled!==!!accountBlocked)achievementsCmd.disabled=!!accountBlocked;
 
 
     // Practice Mode: hide the confusing "Start（モード選択）" command (it doesn't work during play anyway)
@@ -4888,9 +4891,9 @@ function updateUI(){
 
     const statsEl=document.getElementById('conquestStats');
     const operationEl=document.getElementById('conquestOperationHud');
-    const hitEl=document.getElementById('conquestLastHit');if(hitEl)hitEl.hidden=!conquest;
-    if(statsEl){statsEl.hidden=!conquest;if(conquest){const st=window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0);const label=`ATK ${Math.round(st.atk*100)}% · DEF ${Math.round(st.def*100)}% · CRIT ${Math.round(st.crit*100)}%`;if(statsEl.textContent!==label)statsEl.textContent=label;statsEl.title=`CRIT DMG ${Math.round(st.critDmg*100)}% · Recovery ${window.RPG_CONQUEST.displayed(st.recovery)} HP`;}}
-    if(operationEl){operationEl.hidden=!conquest;if(conquest){const c=window.RPG_CONQUEST.run;const label=`${c.position+1}/${c.encounters.length} · ENHANCEMENTS ${c.rewards.length}`;if(operationEl.textContent!==label)operationEl.textContent=label;operationEl.title=c.rewards.map(r=>`${r.label} ${r.display}`).join(' · ');}}
+    const hitEl=document.getElementById('conquestLastHit');if(hitEl&&hitEl.hidden!==!conquest)hitEl.hidden=!conquest;
+    if(statsEl){if(statsEl.hidden!==!conquest)statsEl.hidden=!conquest;if(conquest){const st=window.RPG_CONQUEST.stats(activeOperatorId,operatorPassive?.getMaxHpBonus?.()||0);const label=`ATK ${Math.round(st.atk*100)}% · DEF ${Math.round(st.def*100)}% · CRIT ${Math.round(st.crit*100)}%`;if(statsEl.textContent!==label)statsEl.textContent=label;{const tip=`CRIT DMG ${Math.round(st.critDmg*100)}% · Recovery ${window.RPG_CONQUEST.displayed(st.recovery)} HP`;if(statsEl.title!==tip)statsEl.title=tip;}}}
+    if(operationEl){if(operationEl.hidden!==!conquest)operationEl.hidden=!conquest;if(conquest){const c=window.RPG_CONQUEST.run;const label=`${c.position+1}/${c.encounters.length} · ENHANCEMENTS ${c.rewards.length}`;if(operationEl.textContent!==label)operationEl.textContent=label;{const tip=c.rewards.map(r=>`${r.label} ${r.display}`).join(' · ');if(operationEl.title!==tip)operationEl.title=tip;}}}
     const maraHpActive=operatorPassive?.rule?.id==='shield' && playerMaxHp>BASE_PLAYER_MAX_HP;
     const hpVisual=computePlayerHpSegments(playerHp,playerMaxHp,maraHpActive);
     if(maraHpActive!==uiCache.maraHpActive){
@@ -4958,7 +4961,7 @@ function updateUI(){
     // ---- Score UI ----
     const modeLabel = ((currentMode === "practice")
           ? "Practice"
-          : ((currentMode === "challenge") ? "Challenge" : currentMode === "shared" ? "All Grades" : currentMode === "story" ? (conquest?"Conquest":"Story") : "Normal"));
+          : ((currentMode === "challenge") ? "Challenge" : currentMode === "shared" ? "All Grades" : currentMode === "story" ? "Adventure" : "Normal"));
     if(scoreModeLabel && modeLabel !== uiCache.scoreMode){
       uiCache.scoreMode = modeLabel;
       scoreModeLabel.textContent = modeLabel;
@@ -5031,7 +5034,17 @@ function updateUI(){
     try{ ex5ClearSunSpots(); }catch(_){/* ignore */}
   }
 
-function laneHeight(){ return wordLane.clientHeight; }
+// Reading clientHeight after the frame's DOM writes forces a full layout; on a throttled
+// Chromebook that was the single most expensive call in battle. Cache it and let a
+// ResizeObserver (plus window resize) mark it stale when the lane actually changes size.
+let laneHeightCache=-1;
+try{if(typeof ResizeObserver==='function'&&wordLane)new ResizeObserver(()=>{laneHeightCache=-1;}).observe(wordLane);else laneHeightCache=-2;}catch(_){laneHeightCache=-2;}
+window.addEventListener?.('resize',()=>{if(laneHeightCache!==-2)laneHeightCache=-1;});
+function laneHeight(){
+  if(laneHeightCache===-2)return wordLane.clientHeight;
+  if(laneHeightCache<0||!laneHeightCache)laneHeightCache=wordLane.clientHeight;
+  return laneHeightCache;
+}
   let lastBattleLaneHeight=-1;
   function wordRows(w){return Math.max(1,Number(w?.valcrestRows)||1);}
   function laneCapacity(){ return Math.floor(laneHeight() / 30); }
@@ -5042,11 +5055,15 @@ function laneHeight(){ return wordLane.clientHeight; }
 
   // PERF: Use a CSS variable + translate3d to move words without triggering layout.
   function setWordY(el, y){
-    el.style.setProperty("--y", `${y}px`);
+    // Sub-pixel moves are invisible; skipping them saves a style pass per word per frame.
+    const yq=Math.round(y*2)/2;
+    if(el.__y!==yq){el.__y=yq;el.style.setProperty("--y", `${yq}px`);}
     // Make "ghosting past each other" visually obvious: lower words render above higher words,
     // but still let sun spots fully cover comet words.
     const isChallengeCometEl = !!(el && el.classList && el.classList.contains("challengeComet") && !el.classList.contains("landed"));
-    el.style.zIndex = String((isChallengeCometEl ? 8000 : 1000) + Math.round(y));
+    // Paint order only needs to change every few pixels (each change re-layers the word).
+    const z=(isChallengeCometEl ? 8000 : 1000) + (Math.round(y/6)*6);
+    if(el.__z!==z){el.__z=z;el.style.zIndex = String(z);}
   }
 
 
@@ -6791,7 +6808,7 @@ if(gameState === "paused"){ try{ showOverlay(false); }catch(_){/* ignore */} }
     setInputsEnabled(false);
     hideBossBubble();
     pushMsg("✅ Boss defeated!");
-    if(currentMode==='story'&&window.RPG_CONQUEST?.run){void completeConquestEncounter().catch(error=>{console.error('Conquest transition:',error);window.RPG_STORY?.cancelConquestOverlay?.();resetGame(false);alert('Conquest could not continue. Please try again.');});return;}
+    if(currentMode==='story'&&window.RPG_CONQUEST?.run){void completeConquestEncounter().catch(error=>{console.error('Conquest transition:',error);window.RPG_STORY?.cancelConquestOverlay?.();resetGame(false);alert('Adventure could not continue. Please try again.');});return;}
 
     (async () => {
       const clearedStage = STAGES[stageIndex];

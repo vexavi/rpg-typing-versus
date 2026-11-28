@@ -18,23 +18,22 @@ body{margin:0}.wrap{max-width:1120px;margin:22px auto;padding:0 16px 40px}header
 <div id="v66Startup" style="position:fixed;inset:0;z-index:2147483646;background:#111225;color:#ffecc0;display:grid;place-items:center;padding:20px;font:800 18px system-ui;text-align:center">CONNECTING TO FIREBASE…</div>
 <main class="wrap">
 <header><div><h1>Recruitment banner</h1></div></header>
-<section class="panel"><h2>Featured Recruitment</h2><p class="muted">Select the featured 6★ and update banner text. Changes save to Firebase.</p></section>
+<section class="panel"><h2>Featured Recruitment</h2><p class="muted">Pick the featured 6★ operator and banner text. Rates and costs are not changed here.</p></section>
 <section class="grid">
 <section class="panel"><h2>Banner text</h2><form id="editor">
 <div class="fields">
-<div class="field full"><label for="featured_character_id">Featured 6★ character</label><select id="featured_character_id" required><option value="tavi">Tavi</option></select><span class="help">Select an existing 6★ operator. Artwork and filenames do not change.</span></div>
+<div class="field full"><label for="featured_character_id">Featured 6★ character</label><select id="featured_character_id" required><option value="tavi">Tavi</option></select></div>
 <div class="field"><label for="tab">Banner tab label</label><input id="tab" maxlength="22" required><span class="help">Max 22 characters</span></div>
 <div class="field"><label for="kicker">Small category heading</label><input id="kicker" maxlength="50" required><span class="help">Max 50 characters</span></div>
 <div class="field full"><label for="title">Large banner title</label><input id="title" maxlength="70" required><span class="help">Max 70 characters</span></div>
 <div class="field full"><label for="subtitle">Subtitle</label><input id="subtitle" maxlength="110"><span class="help">Max 110 characters</span></div>
 <div class="field full"><label for="description">Description / Scout details</label><textarea id="description" maxlength="260"></textarea><span class="help">Max 260 characters</span></div>
 </div>
-<div class="row" style="margin-top:15px"><button type="submit" class="primary" id="save">Save to Firebase</button><button type="button" id="reload">Reload saved</button><span id="revision" class="muted"></span></div>
+<div class="row" style="margin-top:15px"><button type="submit" class="primary" id="save">Save</button><button type="button" id="reload">Reload saved</button><span id="revision" class="muted"></span></div>
 <p role="status" id="status" class="status"></p>
 </form></section>
-<section class="panel"><h2>Live preview</h2><div class="preview"><img id="previewOperatorArt" alt="Featured operator preview" style="display:block;float:right;width:37%;height:265px;object-fit:contain;object-position:center bottom;margin:-10px -8px 0 12px"/><div id="previewOperatorName" style="font-size:12px;color:#ffe2a2;letter-spacing:.1em;font-weight:800"></div><div id="previewKicker" class="eyebrow"></div><h3 id="previewTitle"></h3><div id="previewSubtitle" class="sub"></div><p id="previewDescription" class="desc"></p><div id="previewTab" class="tab"></div></div><p class="muted">Changes appear here while typing. Students see the saved text when they next open or reload Recruitment.</p></section>
+<section class="panel"><h2>Live preview</h2><div class="preview"><img id="previewOperatorArt" alt="Featured operator preview" style="display:block;float:right;width:37%;height:265px;object-fit:contain;object-position:center bottom;margin:-10px -8px 0 12px"/><div id="previewOperatorName" style="font-size:12px;color:#ffe2a2;letter-spacing:.1em;font-weight:800"></div><div id="previewKicker" class="eyebrow"></div><h3 id="previewTitle"></h3><div id="previewSubtitle" class="sub"></div><p id="previewDescription" class="desc"></p><div id="previewTab" class="tab"></div></div><p class="muted">Students see saved changes the next time they open Recruitment.</p></section>
 </section>
-<section class="panel"><div class="note"><strong>How it works.</strong> Pick the featured 6★ operator and write the banner text, then press <b>Save to Firebase</b>. Students see it the next time they open or reload Recruitment. Pull rates, costs and rewards are not changed here, and operator artwork comes from the roster.</div></section>
 </main>
 <script src="recruitment-banner-config.js?v=148.9"></script>
 <script type="module" src="recruitment-admin.js?v=148.9"></script>

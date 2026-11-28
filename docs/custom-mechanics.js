@@ -115,9 +115,12 @@ window.RPG_MECHANICS?.register({
  function setClosure(fraction){
   if(!overlay)return;
   const f=Math.max(0,Math.min(1,Number(fraction)||0));
-  eyelidClosure=f;
-  overlay.hidden=f<=0.001;
-  if(overlay.hidden)return;
+  // Runs every frame: skip the DOM entirely when nothing changed (Chromebook perf).
+  const hide=f<=0.001;
+  if(f===eyelidClosure&&overlay.__drawn&&overlay.hidden===hide)return;
+  eyelidClosure=f;overlay.__drawn=true;
+  if(overlay.hidden!==hide)overlay.hidden=hide;
+  if(hide)return;
   const topY=765*f, bottomY=1000-295*f;
   const upperBow=115*f,lowerBow=36*f;
   const upperCurve=`M0 0 H1000 V${topY.toFixed(2)} C825 ${(topY+upperBow*.68).toFixed(2)} 665 ${(topY+upperBow).toFixed(2)} 494 ${(topY+upperBow).toFixed(2)} C315 ${(topY+upperBow).toFixed(2)} 135 ${(topY+upperBow*.54).toFixed(2)} 0 ${(topY-12*f).toFixed(2)} Z`;

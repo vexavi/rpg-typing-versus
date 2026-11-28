@@ -11,7 +11,7 @@ label{display:block;font-weight:780;font-size:12px;color:#e3e3ef;margin:16px 0 7
 <link rel="stylesheet" href="teacher-nav.css?v=148.9"><script defer src="teacher-nav.js?v=149.0"></script>
 </head><body><main>
 
-<header><h1>Grant Guild Coins</h1><p class="muted">Add coins to one registered player. The transaction is saved to Firebase and logged.</p></header>
+<header><h1>Grant Guild Coins</h1><p class="muted">Add coins to one player. Every grant is logged below.</p></header>
 
 <section class="card"><div class="identity"><span id="identity">Checking teacher sign-in…</span><button id="login" type="button">Sign in with Google</button><button id="reload" type="button" disabled>Refresh players &amp; history</button></div><p id="authStatus" class="status" role="status"></p></section>
 <div class="columns">
@@ -21,7 +21,7 @@ label{display:block;font-weight:780;font-size:12px;color:#e3e3ef;margin:16px 0 7
 <p id="playerDetails" class="muted">Choose a registered player to see their current balance.</p>
 <label for="amount">Guild Coins to add</label><input id="amount" type="number" min="1" max="1000000" step="1" value="100" required disabled>
 <label for="note">Reason (optional)</label><input id="note" maxlength="100" placeholder="Class event, prize, correction…" disabled>
-<p class="note">The coins are <strong>added</strong> to the player's current balance, not replacing it. Grants cannot be negative, and a confirmation is required.</p>
+<p class="note">Coins are <strong>added</strong> to the current balance.</p>
 <div class="row"><button class="primary" id="grant" type="submit" disabled>GRANT COINS</button></div>
 <p id="grantStatus" class="status" role="status" aria-live="polite"></p>
 </form></section>
@@ -29,9 +29,9 @@ label{display:block;font-weight:780;font-size:12px;color:#e3e3ef;margin:16px 0 7
 <div class="info"><span class="muted">Current balance</span><strong id="before">—</strong></div>
 <div class="info"><span class="muted">Grant</span><strong id="adding">—</strong></div>
 <div class="info"><span class="muted">New balance</span><strong id="after" class="balance">—</strong></div>
-<p class="muted" style="margin-top:20px">A Firestore transaction calculates the final balance again when you confirm. If the player earns coins in the meantime, their new balance is used.</p>
+
 </section></div>
-<section class="card"><div class="row" style="justify-content:space-between"><h2>Recent grants</h2><small>20 most recent · teacher only · no automatic polling</small></div>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>Recent grants</h2><small>20 most recent</small></div>
 <div class="scroll"><table class="history"><thead><tr><th>When</th><th>Player</th><th>Added</th><th>Balance after</th><th>Reason</th></tr></thead><tbody id="history"><tr><td colspan="5" class="muted">Sign in to view grants.</td></tr></tbody></table></div>
 </section>
 <p class="muted">Players see their updated balance when Recruitment or Profile refreshes.</p>

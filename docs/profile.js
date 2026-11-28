@@ -69,8 +69,8 @@
   <button class="smallbtn" type="submit">USE CARD</button></form><p class="error" role="alert">${esc(error)}</p></section>`;
  }
  async function waitFirebase(){
-  if(!window.RPG_V66?.ready)throw Error('Firebase session is not initialized. Reload this page.');
-  if(!await window.RPG_V66.ready)throw Error('Firebase connection unavailable. Check your connection and reload.');
+  if(!window.RPG_V66?.ready)throw Error('Not connected yet. Reload this page.');
+  if(!await window.RPG_V66.ready)throw Error('No connection. Check your internet and reload.');
  }
  async function setPlayer(next){
   player=next;mode='server';code=cleanCode(next.card_code||code);

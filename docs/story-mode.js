@@ -33,7 +33,7 @@ async function serverProgress(action='load',territoryId=null,stages=null){
  try{const response=await fetch('/api/story/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!response.ok)return null;return await response.json()}catch{return null}
 }
 async function loadProgress(){const remote=await serverProgress();if(!Array.isArray(remote?.completed)){
- if(serverOnline&&navigator.onLine&&!window.RPG_V66_DISCONNECTED)throw Error('Conquest progress unavailable. Check your connection and Firebase rules, then reopen Conquest.');
+ if(serverOnline&&navigator.onLine&&!window.RPG_V66_DISCONNECTED)throw Error('Adventure progress unavailable. Check your connection, then reopen Adventure.');
  completed=new Set(storageGet());bestStars=starGet();return; // offline display only
  }if(Array.isArray(remote?.completed)){completed=new Set(remote.completed.filter(validId));bestStars={}}if(remote?.best_stars&&typeof remote.best_stars==='object'){for(const [id,n] of Object.entries(remote.best_stars))if(validId(id)&&Number.isInteger(n)&&n>=0&&n<=4)bestStars[id]=Math.max(bestStars[id]??0,n)}storageSave()}
 function acceptTerritorySave(saved,id,required){
@@ -239,7 +239,7 @@ async function markCompleted(id,result={}){
  if(!validId(id))return null;
  const territory=id.split('-')[0],stars=result?.isBattle?starsForDamage(result.damageTaken,id):null;
  const saved=await serverProgress('save',territory,{[id]:stars??-1});
- if(!acceptTerritorySave(saved,territory,[id]))throw Error('Conquest progress was not saved to Firebase.');
+ if(!acceptTerritorySave(saved,territory,[id]))throw Error('Adventure progress was not saved. Check your connection.');
  return {stars,best:bestStars[id]??null,firstClear:saved.first_clears.includes(id)};
 }
 async function markConquestCompleted(run){

@@ -10,7 +10,7 @@ gate.setAttribute('role','region');
 gate.setAttribute('aria-label','Adventure Card sign in');
 gate.innerHTML=`
   <div class="ag-background" aria-hidden="true"></div>
-  <img class="ag-mc" src="assets/characters/mc.webp" alt="" aria-hidden="true" />
+  <img class="ag-mc" src="assets/characters/mc.webp?v=c2e8b1f629ab" alt="" aria-hidden="true" />
   <div class="ag-line" aria-hidden="true"></div>
   <div class="ag-brand"><span>RPG TYPING VERSUS</span><strong>ADVENTURE</strong></div>
   <main class="ag-card">
@@ -105,8 +105,8 @@ function installOfflineBridge(){
  document.getElementById('v66Startup')?.remove();
  sessionStorage.setItem('rpgV66Interrupted','1');
  window.RPG_V66={ready:Promise.resolve(false),
-  call:async()=>{throw Error('Online Firebase required for this operation.');},
-  prepareBalanceRun:async()=>{throw Error('Ranked runs require Firebase.');},
+  call:async()=>{throw Error('This needs an internet connection.');},
+  prepareBalanceRun:async()=>{throw Error('Ranked runs need an internet connection.');},
   watchRankings:()=>()=>{},ping:async()=>{throw Error('Offline session.');}};
  window.RPG_V68_CONNECTION={get connected(){return false;},get blocked(){return true;}};
 }
@@ -137,20 +137,20 @@ function view(mode,title,message){
  status(message);
 }
 async function onlineReady(){
- if(!navigator.onLine)throw Error('Offline: Firebase unavailable.');
+ if(!navigator.onLine)throw Error('You are offline.');
  if(!readyPromise){readyPromise=(async()=>{
    window.RPG_PERF?.begin('Firebase connection');
    // Never import Firebase on the offline path: the SDK is hosted on a different origin.
    await import('./online-spark.js?v=148.9');
    const connected=await window.RPG_V66.ready;
    window.RPG_PERF?.end('Firebase connection');
-   if(!connected)throw Error('Online Firebase connection required.');
+   if(!connected)throw Error('Could not connect to the server.');
  })();
   // A failed import/handshake must not poison every later attempt (e.g. a second
   // "Ready" press on the registration form after Wi-Fi returns).
   const attempt=readyPromise;attempt.catch(()=>{if(readyPromise===attempt)readyPromise=null;});}
  // Prevent a broken RTDB handshake from blocking an already-verified card indefinitely.
- let timer;try{return await Promise.race([readyPromise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Firebase connection timeout')),9000);})]);}finally{clearTimeout(timer);}
+ let timer;try{return await Promise.race([readyPromise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Connection timed out. Check your internet.')),9000);})]);}finally{clearTimeout(timer);}
 }
 async function load(identity,progress,{offline=false}={}){
  window.ADVENTURE_PLAYER=identity;

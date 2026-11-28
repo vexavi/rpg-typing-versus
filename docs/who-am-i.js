@@ -675,7 +675,7 @@ async function start(){
  try{
   if(!rule||!cat||cat.rarity<5||!SCRIPTS[opId])throw Error('This operator does not have a Who Am I? lesson.');
   if(!context.card_code)throw Error('Open Adventure with your card first.');
-  if(!cloud||!await cloud.ready)throw Error('Firebase connection required.');
+  if(!cloud||!await cloud.ready)throw Error('Internet connection required.');
   prof=await cloud.call('/api/profile',{card_code:context.card_code});
   if(!prof?.collection?.owned?.includes(opId))throw Error('Recruit this operator first to unlock their Who Am I?.');
  }catch(e){loading.textContent=e?.message||String(e);loading.insertAdjacentHTML('beforeend','<p><a href="collection.html" style="color:#fff200">‹ Back to Collection</a></p>');return;}

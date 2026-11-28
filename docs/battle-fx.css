@@ -459,3 +459,8 @@ body.story-squad-layout .storySquadDeploy::after{content:'';width:70%;height:4px
 body.story-squad-layout .storySquadDeploy.show{animation:fx-deploy-in .35s cubic-bezier(.2,.8,.2,1) both}
 @keyframes fx-deploy-bar{to{background-size:100% 100%,auto}}
 @keyframes fx-deploy-in{from{opacity:0;clip-path:inset(0 0 100% 0)}to{opacity:1;clip-path:inset(0)}}
+/* Chromebook performance: a live blur behind the falling-word lane and the input bar
+   re-renders every frame while the background animates. The panels are already
+   ~70-90% opaque, so a slightly darker fill looks the same and costs nothing. */
+body .wordLane,body .inputBar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+body.adventure-client .wordLane{background-color:#101214d9}

@@ -23,16 +23,16 @@ details{color:#52637c;font-size:13px}details summary{cursor:pointer;font-weight:
 <label>Students playing <input id="students" type="number" min="1" max="500" value="65"></label>
 <label>Battles per student <input id="runs" type="number" min="0" max="30" value="5"></label>
 <label>Leaderboard visits per student <input id="boards" type="number" min="0" max="30" value="2"></label>
-<label>Conquest map visits per student <input id="conquest" type="number" min="0" max="30" value="2"></label>
+<label>Adventure map visits per student <input id="conquest" type="number" min="0" max="30" value="2"></label>
 <label>Territories each student has started <input id="territories" type="number" min="0" max="100" value="3"></label>
-<label>Conquest operations finished per student <input id="captures" type="number" min="0" max="30" value="1"></label>
+<label>Adventure runs finished per student <input id="captures" type="number" min="0" max="30" value="1"></label>
 <label>Recruitment pulls per student <input id="draws" type="number" min="0" max="30" value="1"></label>
 </div></section>
 <section class="card"><h2>Estimated use per day</h2><div class="results">
 <div class="meter"><small>Firestore reads</small><strong id="reads">—</strong><small id="readpct">of 50,000 free</small><div class="bar"><span id="readbar"></span></div></div>
 <div class="meter"><small>Firestore writes</small><strong id="writes">—</strong><small id="writepct">of 20,000 free</small><div class="bar"><span id="writebar"></span></div></div>
 </div><p id="note" role="status" aria-live="polite"></p></section>
-<section class="card"><details><summary>How this is estimated</summary><p>Measured in v148.9, including the extra reads Firestore’s security rules make: about 14 reads and 6 writes per ranked battle (score, coins, progress); about 22 reads per leaderboard visit (the top 20 rows; re-opening within a minute is free); about 3 reads plus one per started territory for each Conquest map visit; about 12 reads / 5 writes per finished operation; about 6 reads / 3 writes per recruitment pull; plus around 24 reads and 3 writes for signing in and moving between screens. Teacher pages, reconnects and busy leaderboards add a little more. The free quota is shared by everyone using your Firebase project and resets each day at midnight Pacific time (5 pm in Japan, or 4 pm during US daylight saving time).</p></details></section>
+<section class="card"><details><summary>How this is estimated</summary><p>Measured in v148.9, including the extra reads Firestore’s security rules make: about 14 reads and 6 writes per ranked battle (score, coins, progress); about 22 reads per leaderboard visit (the top 20 rows; re-opening within a minute is free); about 3 reads plus one per started territory for each Adventure map visit; about 12 reads / 5 writes per finished operation; about 6 reads / 3 writes per recruitment pull; plus around 24 reads and 3 writes for signing in and moving between screens. Teacher pages, reconnects and busy leaderboards add a little more. The free quota is shared by everyone using your Firebase project and resets each day at midnight Pacific time (5 pm in Japan, or 4 pm during US daylight saving time).</p></details></section>
 </main><script>
 const $=id=>document.getElementById(id),n=id=>Math.max(0,Number($(id).value)||0);
 function paint(bar,pct){const el=$(bar);el.style.width=Math.min(100,pct)+'%';el.className=pct>=100?'bad':pct>=80?'warn':'';}

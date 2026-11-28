@@ -31,7 +31,7 @@
     'Collection':{key:'collection',code:'06',jp:'図鑑',en:'OPERATORS · AURAS'},
     'Rankings':{key:'rankings',code:'07',jp:'ランキング',en:'LEADERBOARD'},
     'Tournament':{key:'tournament',code:'08',jp:'大会',en:'QR ENTRY'},
-    'Reconnect':{key:'reconnect',code:'09',jp:'再接続',en:'GO ONLINE'}
+    'Reconnect':{key:'reconnect',code:'08',jp:'再接続',en:'GO ONLINE'}
   };
   const svg=(name,cls)=>{
     const el=document.createElementNS(NS,'svg');

@@ -448,7 +448,7 @@ async function guildClaim(b){
   if(mode==='story'){
    if(!hasClear(d.story,stageId)){
     const progress=await tx.get(territoryRef(p.id,territoryOf(stageId)));
-    if(!hasClear(d.story,stageId,progress.data()?.stages))err('Conquest clear not saved.');
+    if(!hasClear(d.story,stageId,progress.data()?.stages))err('Adventure clear not saved.');
    }
    const firstRef=ref('guildClaims',`${p.id}__${firstKey}`),first=await tx.get(firstRef);
    if(!first.exists()){refKey=firstKey;firstClear=b.first_clear===true;amount=firstClear?20:5;}
@@ -838,7 +838,7 @@ window.fetch=async(input,init)=>{
  if(url.origin!==location.origin||!url.pathname.startsWith('/api/'))return fetchNative(input,init);
  try{if(blocked)err('Connection interrupted. Reload after reconnecting.');let b={};try{b=init?.body?JSON.parse(init.body):{};}catch{err('Invalid JSON');}
  const response=await call(url.pathname,b);return new Response(JSON.stringify(response),{status:200,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
- }catch(e){if(!navigator.onLine||/unavailable|offline|network|deadline/i.test(String(e.code||e.message||'')))lost('Lost Firebase connection; ranked run invalidated.');
+ }catch(e){if(!navigator.onLine||/unavailable|offline|network|deadline/i.test(String(e.code||e.message||'')))lost('Connection lost. This ranked run will not count.');
  return new Response(JSON.stringify({ok:false,error:String(e.message||e)}),{status:400,headers:{'Content-Type':'application/json'}});}
 };
 window.addEventListener('offline',()=>lost('Internet connection lost.'));

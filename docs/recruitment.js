@@ -2,7 +2,7 @@
  'use strict';
  const $=id=>document.getElementById(id);
  const validArt=p=>typeof p==='string' && /^assets\/recruitment\/[\w-]+\.(?:webp|png|jpe?g|avif)$/.test(p);
- const fallback=[{id:'featured',tab:'FEATURED',title:'CRIMSON SIGNAL',kicker:'SPECIAL RECRUITMENT',subtitle:'FEATURED 6★ OPERATOR',description:'Featured recruitment operator preview.',featured_character_id:'tavi',art:null}];
+ const fallback=[{id:'featured',tab:'FEATURED',title:'CRIMSON SIGNAL',kicker:'SPECIAL RECRUITMENT',subtitle:'FEATURED 6★ OPERATOR',description:'Duplicates become shards you can spend on aura upgrades.',featured_character_id:'tavi',art:null}];
  let banners=fallback,displayName='',catalog=[],playerState=null,playerCode='',pullBusy=false;
  const tutorialParam=new URLSearchParams(location.search).get('tutorial');
  const previewPage=/recruitment-preview-v84\.html$/.test(location.pathname);
@@ -277,8 +277,8 @@
   paint();await Promise.all([loadBannerConfig(),loadRoster()]);paint();
   window.RPG_RECRUITMENT_REVEAL?.setFeatured?.(banners[0]?.featured_character_id);
   if(guided)startRecruitmentSpotlight();
-  const cloud=window.RPG_V66;if(!cloud){console.error('Firebase bridge unavailable.');if(guided)tutorialGuide('Firebase did not load. Reload this page.');return;}
-  const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected){tutorialGuide('Firebase connection unavailable. Reload after reconnecting.');return;}
+  const cloud=window.RPG_V66;if(!cloud){console.error('Could not connect. Reload this page.');if(guided)tutorialGuide('Could not connect. Reload this page.');return;}
+  const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected){tutorialGuide('No connection. Reconnect, then reload.');return;}
   // Text-only cloud overrides. A missing config doc means use the versioned JSON defaults.
   try{
    const result=await cloud.call('/api/recruitment/banners');

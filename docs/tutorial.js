@@ -378,7 +378,7 @@ function fillPlayer(){
 async function start(){
  try{
   if(!code)throw Error('Scan your Adventure Card QR before starting the tutorial.');
-  if(!cloud||!await cloud.ready)throw Error('Firebase connection required.');
+  if(!cloud||!await cloud.ready)throw Error('Internet connection required.');
   const data=await cloud.call('/api/tutorial/state',{card_code:code});
   fillPlayer();
   $('loading').hidden=true;$('tutorialApp').hidden=false;
