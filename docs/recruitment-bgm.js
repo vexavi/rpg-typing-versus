@@ -22,8 +22,8 @@
   const old=audio;if(old){fade(0,400,()=>{old.pause();});}
   const a=new Audio(`story/audio/recruit-${id}.webm`);
   a.loop=true;a.preload='auto';a.volume=0;audio=a;
-  a.addEventListener('error',()=>{if(audio===a)audio=null;},{once:true}); // no theme for this operator yet
-  a.play().then(()=>{if(audio===a)fade(VOL,800);}).catch(()=>unlock());
+  a.addEventListener('error',()=>{console.info(`[Recruit BGM] no track at story/audio/recruit-${id}.webm`);if(audio===a)audio=null;},{once:true}); // no theme for this operator yet
+  a.play().then(()=>{if(audio===a)fade(VOL,800);}).catch(e=>{console.info('[Recruit BGM] waiting for a click/key to start music:',e?.name||e);unlock();});
  }
  function stop(ms=450){leaving=true;if(audio)fade(0,ms,()=>{try{audio.pause();}catch(_){}});}
  // Leaving through any same-origin link fades the music while the page transition plays.
@@ -34,6 +34,8 @@
   if(url.origin===location.origin&&url.pathname!==location.pathname)stop();
  },true);
  window.addEventListener('pagehide',()=>{try{audio?.pause();}catch(_){}});
+ /** Banner editor preview: play the theme for the length of the intro, then fade. */
+ function preview(id,ms=5200){leaving=false;current='';play(id);setTimeout(()=>{stop(700);setTimeout(()=>{leaving=false;current='';},800);},ms);}
  window.addEventListener('pageshow',e=>{if(e.persisted&&audio){leaving=false;audio.volume=0;audio.play().then(()=>fade(VOL,800)).catch(()=>unlock());}});
- window.RPG_RECRUIT_BGM={play,stop,state:()=>({id:current,paused:audio?audio.paused:null,volume:audio?+audio.volume.toFixed(2):null})};
+ window.RPG_RECRUIT_BGM={play,stop,preview,state:()=>({id:current,paused:audio?audio.paused:null,volume:audio?+audio.volume.toFixed(2):null})};
 })();

@@ -277,8 +277,9 @@
   paint();await Promise.all([loadBannerConfig(),loadRoster()]);paint();
   window.RPG_RECRUITMENT_REVEAL?.setFeatured?.(banners[0]?.featured_character_id);
   if(guided)startRecruitmentSpotlight();
-  const cloud=window.RPG_V66;if(!cloud){console.error('Could not connect. Reload this page.');if(guided)tutorialGuide('Could not connect. Reload this page.');return;}
-  const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected){tutorialGuide('No connection. Reconnect, then reload.');return;}
+  const music=()=>window.RPG_RECRUIT_BGM?.play?.(banners[0]?.featured_character_id);
+  const cloud=window.RPG_V66;if(!cloud){music();console.error('Could not connect. Reload this page.');if(guided)tutorialGuide('Could not connect. Reload this page.');return;}
+  const ready=await cloud.ready;if(!ready||!window.RPG_V68_CONNECTION?.connected){music();tutorialGuide('No connection. Reconnect, then reload.');return;}
   // Text-only cloud overrides. A missing config doc means use the versioned JSON defaults.
   try{
    const result=await cloud.call('/api/recruitment/banners');
@@ -286,9 +287,10 @@
     banners=window.RPG_RECRUITMENT_BANNERS.merge(banners,result.banners);
     paint();
     window.RPG_RECRUITMENT_REVEAL?.setFeatured?.(banners[0]?.featured_character_id);
-    window.RPG_RECRUIT_BGM?.play?.(banners[0]?.featured_character_id);
    }
   }catch(e){console.warn('Recruitment banner text unavailable; showing packaged titles.',e);}
+  // Featured theme (also started earlier by the intro; same track is not restarted).
+  music();
 
   try{
    const context=JSON.parse(sessionStorage.getItem('rpgAdventureContext')||'{}');

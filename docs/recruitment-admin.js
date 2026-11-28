@@ -28,6 +28,7 @@ if(intro){
  $('introPresets').addEventListener('click',e=>{const btn=e.target.closest('button[data-theme]');if(!btn)return;const [a,l,d]=btn.dataset.theme.split(',');$('introA').value=a;$('introL').value=l;$('introD').value=d;readTheme();});
  for(const id of ['introA','introL','introD'])$(id).addEventListener('input',readTheme);
  $('introPreview').addEventListener('click',()=>{const b=current();if(!b)return;readTheme();const c=sixStars.find(x=>x.id===b.featured_character_id);if(!c){status('Pick a featured 6★ first.','error');return;}
+  window.RPG_RECRUIT_BGM?.preview?.(c.id);
   void intro.play({id:c.id,name:c.name,rarity:6,art:c.art,title:b.title||'FEATURED RECRUITMENT',theme:b.intro_theme});});
 }else $('introColors').hidden=true;
 function preview(){const b=current();if(!b)return;
