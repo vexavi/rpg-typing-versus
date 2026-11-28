@@ -389,9 +389,13 @@ window.RPG_WORD_READABLE=(w,height=Infinity)=>!!w&&Number.isFinite(w.y)&&w.y>=0&
    return;
   }
  }
+ // v148.11: once a modifier has done its job the word becomes an ordinary word again. Before,
+ // spent Blood Pact / Poison / Infiltration words kept their mark in the stack and still counted
+ // toward "Maximum words", so those modifiers stopped appearing until the player cleared them.
+ function demote(w){if(!w?.vesperKind)return;const kind=w.vesperKind;delete w.vesperKind;delete w.vesperLanded;klass(w,'vesper-'+kind,false);klass(w,'vesper-poison-active',false);}
  function land(w,t,heal=()=>{}){if(!active||!w?.vesperKind||w.vesperLanded)return;w.vesperLanded=true;
-  if(w.vesperKind==='blood_pact')heal(settings.blood_pact.healPct/100);
-  else if(w.vesperKind==='poison'&&!poison){poison={id:w.id,remaining:settings.poison.durationSec,acc:0,clock:t};klass(w,'vesper-poison-active',true);}
+  if(w.vesperKind==='blood_pact'){heal(settings.blood_pact.healPct/100);demote(w);}
+  else if(w.vesperKind==='poison'){if(!poison){poison={id:w.id,remaining:settings.poison.durationSec,acc:0,clock:t};klass(w,'vesper-poison-active',true);}else demote(w);} // poison never stacks
   else if(w.vesperKind==='infiltration'){lock={id:w.id,remaining:settings.infiltration.lockSec,clock:t};w.ignoreCollision=false;w.vesperBottom=true;refreshLocks();}
  }
  function removed(w,t=lastTime){if(!active||!w)return;if(poison?.id===w.id)poison=null;if(lock?.id===w.id){lock=null;refreshLocks();}if(execution?.ids.delete(w.id)&&!execution.ids.size)clearExecution(t);}
@@ -409,9 +413,9 @@ window.RPG_WORD_READABLE=(w,height=Infinity)=>!!w&&Number.isFinite(w.y)&&w.y>=0&
    if(candidates.length){execution={ids:new Set(candidates.map(w=>w.id)),remaining:settings.moonlit_execution.durationSec};for(const w of candidates){w.vesperExecution=true;klass(w,'vesper-execution-target',true);}display(lane,'data-vesper-execution',`MOONLIT EXECUTION · ${execution.remaining.toFixed(1)}s · ${execution.ids.size}`);notify('MOONLIT EXECUTION');}
   }
   const suspended=wasExecution||!!execution||grace;
-  if(lock){const w=words.find(v=>v.id===lock.id&&v.state==='landed');if(!w)lock=null;else {if(!suspended)lock.remaining-=Math.max(0,t-Math.max(t-dt,lock.clock));if(lock.remaining<=0)lock=null;}}
+  if(lock){const w=words.find(v=>v.id===lock.id&&v.state==='landed');if(!w)lock=null;else {if(!suspended)lock.remaining-=Math.max(0,t-Math.max(t-dt,lock.clock));if(lock.remaining<=0){lock=null;demote(w);}}}
   if(poison){const w=words.find(v=>v.id===poison.id&&v.state==='landed');if(!w){if(words.some(v=>v.id===poison.id))klass(words.find(v=>v.id===poison.id),'vesper-poison-active',false);poison=null;}
-   else if(!suspended){const d=Math.min(poison.remaining,Math.max(0,t-Math.max(t-dt,poison.clock)));poison.remaining-=d;poison.acc+=d;const ticks=Math.floor(poison.acc+1e-8);poison.acc-=ticks;hits+=ticks*settings.poison.damage;if(poison.remaining<=1e-8){klass(w,'vesper-poison-active',false);poison=null;}}
+   else if(!suspended){const d=Math.min(poison.remaining,Math.max(0,t-Math.max(t-dt,poison.clock)));poison.remaining-=d;poison.acc+=d;const ticks=Math.floor(poison.acc+1e-8);poison.acc-=ticks;hits+=ticks*settings.poison.damage;if(poison.remaining<=1e-8){poison=null;demote(w);}}
   }
   for(const w of words){if(w.vesperKind!=='death_mark')continue;const d=Math.max(0,t-Math.max(t-dt,w.vesperClock??t));w.vesperClock=t;const unreadable=!window.RPG_WORD_READABLE(w,height);if(!suspended&&!unreadable&&!w.vesperUnreadable)w.vesperRemaining-=d;w.vesperUnreadable=unreadable;
    if(w.vesperRemaining<=0){hits+=settings.death_mark.damage;delete w.vesperKind;klass(w,'vesper-death_mark',false);w.el?.removeAttribute?.('data-vesper-time');w.tagEl?.removeAttribute?.('data-vesper-time');w.fallMult=(w.fallMult||1)*100/settings.death_mark.speedPct;}
