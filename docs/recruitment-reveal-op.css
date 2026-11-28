@@ -1,0 +1,103 @@
+/* v153 one-by-one operator reveal (recruitment-reveal.js → .rk-op).
+ * 1) dark stage: falling-light bokeh, floor glow, black silhouette, stars pop in one per rarity
+ * 2) white flash  3) reveal: art, triangle emblem, stars, name, shard reward on the right.
+ * Timings come from JS as --t-* (seconds). Everything that moves animates transform/opacity. */
+.rv .rk-op{position:absolute;inset:0;overflow:hidden;background:#07080a;color:#fff;font-family:var(--disp);cursor:pointer;
+ --rc:#a57bff;--glow:color-mix(in srgb,var(--rc) 55%,#ffb070)}
+.rv .rk-op *,.rv .rk-op *::before,.rv .rk-op *::after{box-sizing:border-box}
+.rv .rk-op .rk-l{position:absolute;inset:0}
+
+/* ---------- shared background: haze, light shafts, drifting triangles, floor glow */
+.rv .rk-bg{background:radial-gradient(120% 80% at 50% 0%,#3a3d44 0%,#1a1c20 45%,#07080a 100%)}
+.rv .rk-shafts i{position:absolute;bottom:22%;width:clamp(8px,1.2vw,18px);height:46%;left:var(--x);
+ background:linear-gradient(to top,color-mix(in srgb,var(--glow) 70%,transparent),transparent);opacity:.18;animation:rkPulse var(--s) ease-in-out var(--d) infinite alternate}
+.rv .rk-bits i{position:absolute;left:var(--x);bottom:-4%;width:var(--z);height:var(--z);background:var(--c);opacity:0;
+ clip-path:polygon(50% 0,100% 100%,0 100%);transform:rotate(var(--r));animation:rkRise var(--s) linear var(--d) infinite}
+.rv .rk-bits i.v{clip-path:polygon(0 0,100% 0,50% 100%)}
+.rv .rk-floor{background:radial-gradient(60% 22% at 50% 96%,#ffffffd0 0%,#ffffff55 35%,transparent 70%),radial-gradient(30% 12% at 18% 92%,#ffffff70,transparent 70%),radial-gradient(30% 12% at 82% 92%,#ffffff70,transparent 70%)}
+
+/* ---------- 1. dark stage */
+.rv .rk-dark{animation:rkHide .01s linear var(--t-r) both}
+.rv .rk-sil{position:absolute;left:50%;bottom:-2vh;height:96vh;width:auto;max-width:none;transform:translate(-50%,3%);opacity:0;filter:brightness(0);
+ animation:rkSil .55s cubic-bezier(.2,.8,.2,1) .15s both}
+.rv .rk-stars-a{position:absolute;left:50%;top:64%;transform:translateX(-50%);display:flex;gap:.4vh}
+.rv .rk-star{position:relative;width:7vh;height:7vh;max-width:64px;max-height:64px;opacity:0;transform:scale(2.2) rotate(-25deg)}
+.rv .rk-star svg{width:100%;height:100%;fill:#fff;stroke:#0006;stroke-width:3}
+.rv .rk-stars-a .rk-star{animation:rkStar .26s cubic-bezier(.2,.9,.3,1.25) calc(.45s + var(--i)*var(--t-star)) both}
+.rv .rk-star::after{content:"";position:absolute;inset:-60%;background:radial-gradient(circle,#fff 0,#ffffffaa 18%,transparent 55%);opacity:0}
+.rv .rk-stars-a .rk-star::after{animation:rkSpark .35s ease-out calc(.45s + var(--i)*var(--t-star)) both}
+
+/* ---------- 2. flash */
+.rv .rk-core{background:radial-gradient(circle at 50% 55%,#fff 0,#fff 14%,#ffffffb0 26%,transparent 46%);opacity:0;transform:scale(.25);
+ animation:rkCore .45s cubic-bezier(.5,0,.8,.4) var(--t-f) both;z-index:3}
+.rv .rk-white{background:#fff;opacity:0;z-index:4;animation:rkWhite var(--t-wd) linear calc(var(--t-f) + .25s) both}
+
+/* ---------- 3. reveal */
+.rv .rk-show{opacity:0;animation:rkShow .01s linear calc(var(--t-r) - .05s) both;z-index:2}
+.rv .rk-hex i{position:absolute;left:var(--x);top:var(--y);width:var(--z);aspect-ratio:1.1;opacity:.16;
+ background:radial-gradient(circle at 40% 40%,color-mix(in srgb,var(--glow) 70%,#fff),transparent 75%);clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+ animation:rkDrift 9s ease-in-out var(--d) infinite alternate}
+.rv .rk-art{position:absolute;left:58%;bottom:-6vh;height:108vh;width:auto;max-width:none;transform:translate(-50%,0) scale(1.06);opacity:0;
+ animation:rkArt .7s cubic-bezier(.2,.8,.2,1) calc(var(--t-r) - .05s) both}
+.rv .rk-shade{background:linear-gradient(to top,#000c 0%,#0006 20%,transparent 42%),linear-gradient(to right,#0008,transparent 40%)}
+.rv .rk-streak{position:absolute;left:0;right:0;top:calc(57vh + 3.4vh);height:2px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--glow) 60%,#fff) 30%,#fff 58%,color-mix(in srgb,var(--glow) 60%,#fff) 80%,transparent);
+ box-shadow:0 0 18px 4px color-mix(in srgb,var(--glow) 50%,transparent);transform:scaleX(0);opacity:0;animation:rkStreak .9s ease-out calc(var(--t-r) + .05s) both}
+.rv .rk-emblem{position:absolute;left:12vw;top:20vh;width:38vh;height:34vh;opacity:0;transform:scale(1.35);
+ animation:rkPop .4s cubic-bezier(.2,.9,.3,1.15) calc(var(--t-r) + .05s) both}
+.rv .rk-emblem svg{width:100%;height:100%;fill:none;stroke:#fff;stroke-linejoin:miter}
+.rv .rk-stars-b{position:absolute;left:calc(12vw + 15vh);top:47vh;display:flex;gap:.2vh}
+.rv .rk-stars-b .rk-star{width:7.4vh;height:7.4vh;max-width:none;max-height:none;animation:rkStar .24s cubic-bezier(.2,.9,.3,1.25) calc(var(--t-r) + .15s + var(--i)*.05s) both}
+.rv .rk-name{position:absolute;left:calc(12vw + 6vh);top:56.5vh;margin:0;font:900 clamp(40px,10vh,96px)/1 var(--disp);font-stretch:82%;letter-spacing:.005em;color:#fff;white-space:nowrap;
+ text-shadow:0 2px 0 #0008,0 0 24px #000a;opacity:0;transform:translateX(-3vw);animation:rkName .45s cubic-bezier(.2,.8,.2,1) calc(var(--t-r) + .25s) both}
+.rv .rk-reward{position:absolute;right:clamp(12px,2.6vw,40px);top:44vh;display:grid;gap:10px;opacity:0;transform:translateX(3vw);
+ animation:rkName .45s cubic-bezier(.2,.8,.2,1) calc(var(--t-r) + .4s) both}
+.rv .rk-item{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px;min-width:210px;padding:8px 14px 8px 8px;background:linear-gradient(90deg,#000a,#0006);border-left:3px solid var(--rc)}
+.rv .rk-item .rk-gem{width:46px;height:46px;display:grid;place-items:center;position:relative}
+.rv .rk-gem::before{content:"";position:absolute;inset:7px;transform:rotate(45deg);background:linear-gradient(135deg,#fff,var(--rc) 55%,color-mix(in srgb,var(--rc) 50%,#000));border:2px solid #fff}
+.rv .rk-gem b{position:relative;font:900 13px/1 var(--disp);color:#111;text-shadow:0 0 3px #fff}
+.rv .rk-item small{display:block;font:800 10px/1 var(--disp);letter-spacing:.2em;opacity:.75}
+.rv .rk-item strong{display:block;font:900 26px/1.05 var(--disp);font-stretch:85%}
+.rv .rk-item span{display:block;font:700 12px/1.1 var(--disp);letter-spacing:.06em}
+.rv .rk-item.is-new{border-left-color:#fff200}.rv .rk-item.is-new strong{color:#fff200}
+.rv .rk-item.is-preview{border-left-color:#888}
+
+/* rarity tints */
+.rv .rk-op.r5{--rc:#ffc21a}
+.rv .rk-op.r6{--rc:#ff6a2a;--glow:#ff8a3a}
+.rv .rk-op.r6 .rk-floor{background:radial-gradient(60% 24% at 50% 96%,#fff 0%,#ffd9b0aa 35%,transparent 72%),radial-gradient(30% 12% at 18% 92%,#ffcf9a80,transparent 70%),radial-gradient(30% 12% at 82% 92%,#ffcf9a80,transparent 70%)}
+
+/* count / pips / hint sit above everything */
+.rv .rk-op .rv-count,.rv .rk-op .rv-pips,.rv .rk-op .rv-hint{z-index:6}
+.rv .rk-op .rv-count{top:72px}
+.rv .rk-op.is-done .rv-hint{opacity:.75;animation:rv-blink 1.2s .4s steps(2,start) infinite}
+
+/* tap before the end: jump straight to the reveal */
+.rv .rk-op.is-instant .rk-a,.rv .rk-op.is-instant .rk-a::after{animation-duration:.01s!important;animation-delay:0s!important}
+
+@keyframes rkHide{to{opacity:0;visibility:hidden}}
+@keyframes rkShow{to{opacity:1}}
+@keyframes rkSil{to{opacity:1;transform:translate(-50%,0)}}
+@keyframes rkStar{to{opacity:1;transform:none}}
+@keyframes rkSpark{0%{opacity:0;transform:scale(.3)}30%{opacity:1}100%{opacity:0;transform:scale(1.4)}}
+@keyframes rkCore{0%{opacity:0;transform:scale(.25)}40%{opacity:1}90%{opacity:1;transform:scale(3.6)}100%{opacity:0;transform:scale(4)}}
+@keyframes rkWhite{0%{opacity:0}18%{opacity:1}70%{opacity:1}100%{opacity:0}}
+@keyframes rkArt{to{opacity:1;transform:translate(-50%,0) scale(1)}}
+@keyframes rkPop{to{opacity:1;transform:none}}
+@keyframes rkName{to{opacity:1;transform:none}}
+@keyframes rkStreak{0%{opacity:0;transform:scaleX(0)}30%{opacity:1}100%{opacity:.55;transform:scaleX(1)}}
+@keyframes rkRise{0%{opacity:0;transform:translateY(0) rotate(var(--r))}15%{opacity:var(--o)}85%{opacity:var(--o)}100%{opacity:0;transform:translateY(-95vh) rotate(var(--r))}}
+@keyframes rkPulse{from{opacity:.08}to{opacity:.3}}
+@keyframes rkDrift{to{transform:translate(2vw,-2vh)}}
+
+@media (max-width:760px){
+ .rv .rk-emblem{left:4vw;top:24vh;width:28vh;height:25vh}
+ .rv .rk-stars-b{left:calc(4vw + 9vh);top:44vh}.rv .rk-stars-b .rk-star{width:5.4vh;height:5.4vh}
+ .rv .rk-name{left:5vw;top:52vh;font-size:clamp(34px,8vh,64px)}
+ .rv .rk-reward{top:auto;bottom:90px;right:10px}.rv .rk-item{min-width:170px}
+ .rv .rk-art{left:62%}
+}
+@media (prefers-reduced-motion:reduce){
+ .rv .rk-bits i,.rv .rk-shafts i,.rv .rk-hex i{animation:none}
+}
+/* stars stay readable where they cross the white emblem */
+.rv .rk-stars-b .rk-star svg{stroke:#111;stroke-width:7;paint-order:stroke;stroke-linejoin:round}

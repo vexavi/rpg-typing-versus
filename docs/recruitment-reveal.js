@@ -11,8 +11,6 @@
   5:{label:'5★ OPERATOR',signal:'ENHANCED SIGNAL',color:'#ffc21a',deep:'#5a3c00',soft:'#fff2c4'},
   6:{label:'6★ OPERATOR',signal:'EXCEPTIONAL SIGNAL',color:'#ff6a2a',deep:'#6a1800',soft:'#ffe2d4'}
  };
- // Total length of each rarity's entrance; a tap before this completes the animation instantly.
- const revealMs={4:1050,5:1500,6:2500};
  const demoRarities=[4,4,5,4,4,4,6,4,5,4];
  // Lineup cards use the portrait full-body art (assets/deployment, 480×900). Face centres
  // [x%, y%] were measured by matching each profile-icon portrait against that art, so the
@@ -93,37 +91,69 @@
   ready.then(()=>{loaded=true;go();});
  }
 
- // ---- 3: one-by-one reveal -------------------------------------------------------
+ // ---- 3: one-by-one reveal (v153: dark stage → stars → white flash → operator card) ----------
+ // Seconds. Stars pop one per rarity, then the flash; a tap finishes the entrance instantly.
+ const pace={4:{star:.1,white:.15},5:{star:.13,white:.3},6:{star:.16,white:.5}};
+ function timing(r){const p=pace[r]||pace[4];const f=.45+r*p.star+.18,wd=.55+p.white,rv=f+.25+wd*.7;return {star:p.star,f,wd,rv,done:rv+.9};}
+ const STAR='<svg viewBox="0 0 100 95" aria-hidden="true"><path d="M50 2 62 36 98 36 69 58 80 93 50 72 20 93 31 58 2 36 38 36Z"/></svg>';
+ const EMBLEM='<svg viewBox="0 0 200 180" aria-hidden="true"><path d="M100 8 192 172H8Z" stroke-width="11"/><path d="M100 52 152 146H48Z" stroke-width="9"/><path d="M100 92 124 136H76Z" stroke-width="7"/><path d="M100 0 112 14 100 28 88 14Z" fill="#fff" stroke="none"/></svg>';
+ function starRow(r,cls){return `<div class="${cls}" aria-hidden="true">${Array.from({length:r},(_,i)=>`<i class="rk-star rk-a" style="--i:${i}">${STAR}</i>`).join('')}</div>`;}
+ function seeded(n,seed){let x=seed;return ()=>{x=(x*9301+49297)%233280;return x/233280;};}
+ function bokeh(i,r){
+  const rnd=seeded(0,i*97+r*13+7);
+  const shafts=Array.from({length:8},(_,k)=>`<i style="--x:${(6+k*12+rnd()*6).toFixed(1)}%;--s:${(1.6+rnd()*1.8).toFixed(2)}s;--d:${(-rnd()*2).toFixed(2)}s"></i>`).join('');
+  const cols=['var(--glow)','#ffffffcc','var(--glow)','#ffd2a6'];
+  const bits=Array.from({length:22},(_,k)=>{const z=(6+rnd()*14).toFixed(0);return `<i class="${k%3?'':'v'}" style="--x:${(rnd()*100).toFixed(1)}%;--z:${z}px;--c:${cols[k%4]};--o:${(.35+rnd()*.5).toFixed(2)};--r:${(rnd()*30-15).toFixed(0)}deg;--s:${(4+rnd()*5).toFixed(1)}s;--d:${(-rnd()*8).toFixed(1)}s"></i>`;}).join('');
+  const hex=Array.from({length:6},(_,k)=>`<i style="--x:${(rnd()*90-5).toFixed(0)}%;--y:${(rnd()*70).toFixed(0)}%;--z:${(14+rnd()*16).toFixed(0)}vh;--d:${(-rnd()*9).toFixed(1)}s"></i>`).join('');
+  return {shafts,bits,hex};
+ }
+ function rewardPanel(op){
+  if(!session.real)return '<div class="rk-item is-preview"><span class="rk-gem"><b>?</b></span><div><small>PREVIEW</small><strong>NO REWARD</strong></div></div>';
+  if(!op.duplicate)return '<div class="rk-item is-new"><span class="rk-gem"><b>NEW</b></span><div><small>NEW OPERATOR</small><strong>RECRUITED</strong><span>Added to Collection</span></div></div>';
+  const n=Math.max(0,op.shards|0);
+  return `<div class="rk-item"><span class="rk-gem"><b>${op.rarity}★</b></span><div><small>DUPLICATE</small><strong>+${n}</strong><span>${op.rarity}★ SHARD${n===1?'':'S'}</span></div></div>`;
+ }
  function showOperator(i,{replay=false}={}){
   clearTimers();
   const op=session.operators[i];if(!op){lineup();return;}
   session.index=i;session.replay=replay;session.stepDone=false;setStage(replay?'replay':'reveal');
-  const r=op.rarity,t=tiers[r]||tiers[4];
+  const r=op.rarity,t=timing(r),fx=bokeh(i,r);
   const pips=session.count>1&&!replay?`<div class="rv-pips">${session.operators.map((o,k)=>`<i class="${k<i?'done':''} ${k===i?'now':''} r${o.rarity}"></i>`).join('')}</div>`:'';
+  const art=safeArt(op.art)?esc(op.art):'';
   view().innerHTML=`
-   <section class="rv-reveal r${r} ${op.duplicate&&session.real?'is-dup':'is-new'}" style="${vars(r)}">
-    <div class="rv-bg"><i class="rv-shaft a"></i><i class="rv-shaft b"></i><i class="rv-shaft c"></i><div class="rv-dust"></div><div class="rv-bignum">${pad(i+1)}</div></div>
-    ${r===6?`<div class="rv-build"><i></i><i></i><i></i><i></i><span>${t.signal}</span></div>`:''}
-    <div class="rv-flash"></div>
-    <div class="rv-art">${img(op,'rv-sil')}${img(op,'rv-img')}</div>
-    <div class="rv-info">
-     <div class="rv-rarity">${t.label}</div>
-     <div class="rv-stars" aria-label="${r} stars">${stars(r)}</div>
-     <h2 class="rv-name">${esc(op.name)}</h2>
-     <div class="rv-reward">${rewardTag(op)}</div>
+   <section class="rk-op r${r} ${op.duplicate&&session.real?'is-dup':'is-new'}" style="--t-star:${t.star}s;--t-f:${t.f.toFixed(2)}s;--t-wd:${t.wd.toFixed(2)}s;--t-r:${t.rv.toFixed(2)}s">
+    <div class="rk-l rk-bg"><div class="rk-l rk-shafts">${fx.shafts}</div><div class="rk-l rk-bits">${fx.bits}</div></div>
+    <div class="rk-l rk-dark rk-a">
+     <div class="rk-l rk-floor"></div>
+     ${art?`<img class="rk-sil rk-a" src="${art}" alt="" decoding="async" draggable="false">`:''}
+     ${starRow(r,'rk-stars-a')}
     </div>
+    <div class="rk-l rk-show rk-a">
+     <div class="rk-l rk-hex">${fx.hex}</div>
+     ${art?`<img class="rk-art rk-a" src="${art}" alt="" decoding="async" draggable="false">`:''}
+     <div class="rk-l rk-shade"></div>
+     <i class="rk-streak rk-a"></i>
+     <div class="rk-emblem rk-a">${EMBLEM}</div>
+     ${starRow(r,'rk-stars-b')}
+     <h2 class="rk-name rk-a">${esc(op.name)}</h2>
+     <div class="rk-reward rk-a">${rewardPanel(op)}</div>
+    </div>
+    <div class="rk-l rk-core rk-a"></div>
+    <div class="rk-l rk-white rk-a"></div>
     <div class="rv-count">${pad(i+1)}<small>/ ${pad(session.count)}</small></div>
     <div class="rv-hint">${replay?'TAP TO RETURN':'TAP TO CONTINUE'} <span aria-hidden="true">▸</span></div>
     ${pips}
    </section>`;
   live(`${op.name}, ${r} stars${session.real?(op.duplicate?`, duplicate, +${op.shards} ${r}-star shard${op.shards===1?'':'s'}`:', new recruit'):''}.`);
-  later(()=>{session.stepDone=true;view()?.querySelector('.rv-reveal')?.classList.add('is-done');},revealMs[r]||1000);
+  const el=view().querySelector('.rk-op');
+  if(reducedMotion())el.classList.add('is-instant');
+  later(()=>{session.stepDone=true;view()?.querySelector('.rk-op')?.classList.add('is-done');},Math.round(t.done*1000));
  }
  function advance(){
   if(!session)return;
   if(session.stage==='intro'){showOperator(0);return;}
   if(session.stage!=='reveal'&&session.stage!=='replay')return;
-  const el=view()?.querySelector('.rv-reveal');
+  const el=view()?.querySelector('.rk-op');
   if(!session.stepDone){session.stepDone=true;el?.classList.add('is-instant','is-done');return;}
   if(session.stage==='replay'){lineup({fromReplay:true});return;}
   if(session.index<session.count-1)showOperator(session.index+1);else lineup();
@@ -184,7 +214,7 @@
     if(a==='skip')lineup();else if(a==='close')close();
     else if(a==='view')showOperator(Number(el.dataset.index)||0,{replay:true});
     return;}
-   if(e.target.closest('.rv-intro,.rv-reveal'))advance();
+   if(e.target.closest('.rv-intro,.rk-op'))advance();
   });
   document.addEventListener('keydown',keyboard);
  }
