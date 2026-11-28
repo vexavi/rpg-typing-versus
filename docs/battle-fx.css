@@ -464,3 +464,9 @@ body.story-squad-layout .storySquadDeploy.show{animation:fx-deploy-in .35s cubic
    ~70-90% opaque, so a slightly darker fill looks the same and costs nothing. */
 body .wordLane,body .inputBar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 body.adventure-client .wordLane{background-color:#101214d9}
+/* v148.11 short screens (Chromebook browser windows ≈ 600–720 px tall): give the falling
+   lane the space the margins were using, so words stay near full size. */
+@media (max-height:720px) and (min-width:900px){
+ body.adventure-client .battlefield .wordLane{top:10px!important;bottom:60px!important;height:auto!important}
+ body.adventure-client .battlefield .inputBar{bottom:10px!important;height:42px!important;top:auto!important}
+}

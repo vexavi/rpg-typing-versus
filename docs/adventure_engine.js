@@ -4604,7 +4604,7 @@ async function debugJumpTo(mode, idx){
         word.groupId=0;word.groupIndex=0;word.spawnBaseCount=undefined;
         word.el?.classList?.remove('landed','operator-foxfire-released');
         word.el?.classList?.add('operator-foxfire-hidden','operator-foxfire-rewinding');
-        word.el?.style?.setProperty('--tavi-rewind-distance',`${Math.max(0,fromY+30*wordRows(word))}px`);
+        word.el?.style?.setProperty('--tavi-rewind-distance',`${Math.max(0,fromY+30*wordRows(word))*(typeof laneK==='number'?laneK:1)}px`);
         if(wasLanded){
           // Landed-only special timers should not expire while rewound.
           word.ex1DamageArmed=false;word.ex1DeadlineMs=0;
@@ -4688,7 +4688,7 @@ async function debugJumpTo(mode, idx){
     const slash=grantRewards?document.createElement('span'):null;
     if(slash){
       slash.className=operatorId==='cassian'?'operator-sovereign-slash':'operator-phantom-slash';
-      slash.style.top=`${Math.max(0,word.y)}px`;
+      slash.style.top=`${Math.max(0,word.y)*(typeof laneK==='number'?laneK:1)}px`;
       slash.setAttribute('aria-hidden','true');
       wordLane.appendChild(slash);
       setTimeout(()=>slash.remove(),500);
@@ -5041,12 +5041,28 @@ function updateUI(){
 // Chromebook that was the single most expensive call in battle. Cache it and let a
 // ResizeObserver (plus window resize) mark it stale when the lane actually changes size.
 let laneHeightCache=-1;
-try{if(typeof ResizeObserver==='function'&&wordLane)new ResizeObserver(()=>{laneHeightCache=-1;}).observe(wordLane);else laneHeightCache=-2;}catch(_){laneHeightCache=-2;}
-window.addEventListener?.('resize',()=>{if(laneHeightCache!==-2)laneHeightCache=-1;});
-function laneHeight(){
+try{if(typeof ResizeObserver==='function'&&wordLane)new ResizeObserver(()=>{laneHeightCache=-1;laneResized();}).observe(wordLane);else laneHeightCache=-2;}catch(_){laneHeightCache=-2;}
+window.addEventListener?.('resize',()=>{if(laneHeightCache!==-2)laneHeightCache=-1;laneResized();});
+function lanePx(){
   if(laneHeightCache===-2)return wordLane.clientHeight;
   if(laneHeightCache<0||!laneHeightCache)laneHeightCache=wordLane.clientHeight;
   return laneHeightCache;
+}
+// v148.11 — same game on every screen. All lane logic (falling, stacking, overflow, specials)
+// runs in a fixed logical lane of LANE_ROWS rows × 30. Only the drawing is stretched to the
+// real lane, so a Chromebook and a large monitor get the same seconds per word and the same
+// stack room. Words are drawn at the same scale as the lane, so the stack looks the same
+// everywhere: slightly smaller words on short lanes, larger ones on tall lanes.
+const LANE_ROWS=14,LANE_LOGICAL=LANE_ROWS*30;
+let laneK=1;
+function laneHeight(){return LANE_LOGICAL;}
+function laneScale(){const px=lanePx();laneK=px>0?px/LANE_LOGICAL:1;return laneK;}
+function laneResized(){
+  const k=laneScale();
+  // Words are drawn at the lane's scale (smaller on short lanes, larger on tall ones), so stacked
+  // words always touch like they do on a Chromebook instead of leaving gaps on big screens.
+  try{wordLane?.style?.setProperty('--lane-k',String(Math.max(0.5,Math.min(3,k)).toFixed(4)));}catch(_){}
+  try{restackDirty=true;}catch(_){}
 }
   let lastBattleLaneHeight=-1;
   function wordRows(w){return Math.max(1,Number(w?.valcrestRows)||1);}
@@ -5059,7 +5075,7 @@ function laneHeight(){
   // PERF: Use a CSS variable + translate3d to move words without triggering layout.
   function setWordY(el, y){
     // Sub-pixel moves are invisible; skipping them saves a style pass per word per frame.
-    const yq=Math.round(y*2)/2;
+    const yq=Math.round(y*laneK*2)/2; // logical → on-screen pixels
     if(el.__y!==yq){el.__y=yq;el.style.setProperty("--y", `${yq}px`);}
     // Make "ghosting past each other" visually obvious: lower words render above higher words,
     // but still let sun spots fully cover comet words.
@@ -7102,6 +7118,7 @@ if(gameState === "paused"){
       // Operator effects advance after new spawns. Hidden Foxfire words cannot
       // be typed/moved until their turn, and Hound can force a chain target.
       const frameLaneHeight=laneHeight();
+      if(laneHeightCache<0)laneResized(); // first frame after a resize: refresh the pixel scale
       const fieldEffect=operatorPassive?.updateField(wordsOnField,elapsed,{hp:playerHp,laneHeight:frameLaneHeight,isReadable,restricted:operatorEventRestricted()});
       // Lupa's focus/6-second countdown must advance with the live stage clock.
       // Do this AFTER updateField so a timeout removes the marks immediately.
