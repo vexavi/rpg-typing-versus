@@ -303,7 +303,7 @@ window.RPG_MECHANICS?.register({
   if(enabled('fortification')&&count(words,'fortification')<f.maxActive&&Math.random()*100<f.chancePct){mark(w,'fortification');w.valcrestArmor=f.hits-1;w.fallMult=(w.fallMult||1)*f.speedPct/100;w.el?.setAttribute?.('data-armor',String(w.valcrestArmor));}
  }
  function armorHit(w){if(!(w?.valcrestArmor>0))return false;w.valcrestArmor--;if(w.valcrestArmor>0)w.el?.setAttribute?.('data-armor',String(w.valcrestArmor));else{w.el?.classList?.remove('valcrest-fortification');w.el?.removeAttribute?.('data-armor');}return true;}
- function finish(t){if(!event)return;due[event.id]=t+settings[event.id].intervalSec;event=null;recovery=t+3;for(const k of timed)if(enabled(k)&&due[k]<=t)due[k]=t+settings[k].intervalSec;lane?.removeAttribute?.('data-valcrest-event');lane?.removeAttribute?.('data-valcrest-side');}
+ function finish(t){if(!event)return;due[event.id]=t+settings[event.id].intervalSec;event=null;recovery=t+3;lane?.removeAttribute?.('data-valcrest-event');lane?.removeAttribute?.('data-valcrest-side');}
  function removed(w,t=lastTime){if(event?.id==='duel'&&event.wordId===w?.id)finish(t);}
  function frame(t,{words=[],height=0,paused=false,spawn,notify=()=>{},field=null,fallSpeed=50,lupaActive=false}={}){
   if(!active)return false;lastTime=t;lane=field||lane;
@@ -312,19 +312,30 @@ window.RPG_MECHANICS?.register({
   if(paused){if(event)event.next=Math.max(event.next,t+0.1);return !!event;}
   const stack=words.reduce((n,w)=>n+(w.state==='landed'?30*rows(w):0),0);
   const safe=height-stack>=120;
-  if(!event){if(t<recovery||!safe)return false;const id=timed.find(k=>enabled(k)&&t>=due[k]&&(k!=='duel'||(!lupaActive&&!words.some(w=>w.ex1Highlighted||w.challengeComet)))); if(!id)return false;
+  // v148.11: fair queue — of the events that are due, the one that has waited longest goes first
+  // (before, Duel/Reinforcements always won ties and kept pushing Encirclement back).
+  if(!event){if(t<recovery||!safe)return false;const id=timed.filter(k=>enabled(k)&&t>=due[k]&&(k!=='duel'||(!lupaActive&&!words.some(w=>w.ex1Highlighted||w.challengeComet)))).sort((a,b)=>due[a]-due[b])[0]; if(!id)return false;
    const s=settings[id];event={id,next:t+(id==='duel'?0.75:s.warningSec),remaining:s.count||1,wordId:null};lane?.setAttribute?.('data-valcrest-event',id);if(id==='encirclement')lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');notify(id.toUpperCase());return true;}
   if(t<event.next||event.entryUntil!=null)return true;
   const {id}=event,s=settings[id];if(!safe){finish(t);return false;}
   let y=-30;
   if(id==='reinforcements')y=words.reduce((min,w)=>w.state==='falling'&&!w.foxfireHidden?Math.min(min,w.y-30):min,-30);
   if(id==='encirclement'){
-   y=Math.floor(height*s.heightPct/100);const bottom=height-stack;
-   // The entire entry row and 90px below it must be clear. Postpone instead of dropping onto a word.
-   if(bottom-y<Math.max(120,30+2*fallSpeed)||words.some(w=>w.state==='falling'&&!w.foxfireHidden&&y<w.y+30*rows(w)+4&&y+34>w.y)){event.next=t+0.25;event.retries=(event.retries||0)+1;if(event.retries>=8){finish(t);return false;}return true;}
+   // v148.11: find an entry row instead of giving up. Try the set depth first, then rows
+   // above it, then (if there is room) below it. The row must be clear of falling words and
+   // leave some space underneath. Only after ~5 s of no free row is the event dropped.
+   const bottom=height-stack,need=Math.min(150,Math.max(60,30+fallSpeed));
+   const free=y=>bottom-y>=need&&!words.some(w=>w.state==='falling'&&!w.foxfireHidden&&y<w.y+30*rows(w)+4&&y+34>w.y);
+   const preferred=Math.floor(height*s.heightPct/100);
+   const tries=[preferred];for(let d=15;d<=preferred;d+=15)tries.push(preferred-d);
+   for(let d=15;preferred+d<=bottom-need;d+=15)tries.push(preferred+d);
+   const pick=tries.find(free);
+   if(pick===undefined){event.next=t+0.25;event.retries=(event.retries||0)+1;if(event.retries>=20){finish(t);return false;}return true;}
+   y=Math.max(0,pick);
   }
   const w=spawn?.({state:'falling',y,countSpawn:false,skipMechanicHooks:true,valcrestEvent:id});
-  if(!w){event.next=t+0.25;return true;}
+  // No word could be created (e.g. every word is already on the field): retry briefly, never stall.
+  if(!w){event.next=t+0.25;event.retries=(event.retries||0)+1;if(event.retries>=20){finish(t);return false;}return true;}
   mark(w,id);
   if(id==='duel'){w.ignoreCollision=true;w.fallMult=(w.fallMult||1)*s.speedPct/100;w.valcrestDuelDamage=s.damagePct/100;w.valcrestMiss=s.damage;event.wordId=w.id;return true;}
   if(id==='encirclement'){w.valcrestEntryUntil=t+s.entrySec;w.el?.style?.setProperty('--valcrest-entry',`${s.entrySec}s`);w.el?.style?.setProperty('--valcrest-side',`${side*105}%`);lane?.setAttribute?.('data-valcrest-side',side>0?'right':'left');side=-side;event.entryUntil=t+s.entrySec;w.el?.classList?.add('valcrest-entering');}
