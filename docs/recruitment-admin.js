@@ -15,7 +15,21 @@ async function loadFeaturedOptions(){
  if(!sixStars.length)throw Error('The catalog must contain at least one 6★ operator.');
  $('featured_character_id').innerHTML=sixStars.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
 }
-function fieldValues(){const b=current();if(!b)return;for(const f of fields)$(f).value=b[f]||'';}
+function fieldValues(){const b=current();if(!b)return;for(const f of fields)$(f).value=b[f]||'';themeInputs();}
+// ---- Recruit animation colours (banner field intro_theme: "#main,#light,#dark"; '' = default)
+const intro=window.RPG_RECRUIT_INTRO;
+function themeInputs(){const b=current();if(!b||!intro)return;const t=intro.parseTheme(b.intro_theme);$('introA').value=t.a;$('introL').value=t.l;$('introD').value=t.d;markPreset();}
+function markPreset(){const now=[$('introA').value,$('introL').value,$('introD').value].join(',');
+ document.querySelectorAll('#introPresets button').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.theme===now)));}
+function readTheme(){const b=current();if(!b||!intro)return;const s=intro.themeString({a:$('introA').value,l:$('introL').value,d:$('introD').value});
+ const d=intro.DEFAULT;b.intro_theme=s===[d.a,d.l,d.d].join(',')?'':s;markPreset();}
+if(intro){
+ $('introPresets').innerHTML=intro.PRESETS.map(p=>`<button type="button" data-theme="${p.a},${p.l},${p.d}"><span><i style="background:${p.a}"></i><i style="background:${p.l}"></i><i style="background:${p.d}"></i></span>${p.name}</button>`).join('');
+ $('introPresets').addEventListener('click',e=>{const btn=e.target.closest('button[data-theme]');if(!btn)return;const [a,l,d]=btn.dataset.theme.split(',');$('introA').value=a;$('introL').value=l;$('introD').value=d;readTheme();});
+ for(const id of ['introA','introL','introD'])$(id).addEventListener('input',readTheme);
+ $('introPreview').addEventListener('click',()=>{const b=current();if(!b)return;readTheme();const c=sixStars.find(x=>x.id===b.featured_character_id);if(!c){status('Pick a featured 6★ first.','error');return;}
+  void intro.play({id:c.id,name:c.name,rarity:6,art:c.art,title:b.title||'FEATURED RECRUITMENT',theme:b.intro_theme});});
+}else $('introColors').hidden=true;
 function preview(){const b=current();if(!b)return;
  const character=sixStars.find(c=>c.id===b.featured_character_id);$('previewOperatorName').textContent=character?`FEATURED 6★ · ${character.name.toUpperCase()}`:'CHOOSE A 6★';if(character){$('previewOperatorArt').src=character.art;}else $('previewOperatorArt').removeAttribute('src');$('previewOperatorArt').hidden=!character;
  for(const [id,key] of [['previewKicker','kicker'],['previewTitle','title'],['previewSubtitle','subtitle'],['previewDescription','description'],['previewTab','tab']])$(id).textContent=b[key]||'';

@@ -236,16 +236,23 @@ async function recruitmentBannersAdmin(body={}){
   }
   if(!obj.tab||!obj.title||!obj.kicker)err('Tab label, title, and kicker are required.');
   if(!/^[a-z][a-z0-9_]{0,39}$/.test(obj.featured_character_id))err('Invalid featured character ID.');
+  // v148.11: optional recruit-intro colours "#main,#light,#dark". Left out when default, so a
+  // teacher who has not republished the v148.11 rules can still save banner text.
+  const theme=String(b.intro_theme??'').trim().toLowerCase();
+  if(theme){if(!/^#[0-9a-f]{6},#[0-9a-f]{6},#[0-9a-f]{6}$/.test(theme))err('Invalid animation colors.');obj.intro_theme=theme;}
   return obj;
  });
  const target=ref('recruitmentConfig','banners');
  const revision=await runTransaction(db,async tx=>{
   const snapshot=await tx.get(target),oldRevision=snapshot.exists()?Number(snapshot.data().revision)||0:0;
   if(oldRevision!==expected)err('Another teacher tab changed the banners. Reload to avoid overwriting their changes.');
-  const signature=items=>Array.isArray(items)?JSON.stringify(items.map(x=>[x?.id,...fields.map(f=>x?.[f])])):'';
+  const signature=items=>Array.isArray(items)?JSON.stringify(items.map(x=>[x?.id,...fields.map(f=>x?.[f]),x?.intro_theme||''])):'';
   if(snapshot.exists()&&signature(snapshot.data().banners)===signature(safe))return oldRevision;
   tx.set(target,{revision:oldRevision+1,banners:safe,updatedAt:serverTimestamp()});
   return oldRevision+1;
+ }).catch(e=>{
+  if(safe[0].intro_theme&&/permission|insufficient/i.test(String(e?.code||e?.message||e)))err('Animation colors need the new Firestore rules: publish FIRESTORE_RULES_V148_11_COMPLETE.txt (Firebase setup page), then save again.');
+  throw e;
  });
  return {ok:true,revision,banners:safe};
 }

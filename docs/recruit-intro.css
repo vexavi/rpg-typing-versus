@@ -1,0 +1,147 @@
+/* Featured-operator intro played on the way into Recruitment (recruit-intro.js).
+ * Colors come from three variables set by the teacher in the Recruitment banner editor:
+ *   --ri-a  main (accent)   --ri-l  light   --ri-d  dark
+ * Chromebook rule: everything that moves animates transform/opacity only. */
+@font-face{font-family:"AK Display";src:url("assets/fonts/ak-roboto-var.woff2") format("woff2");font-weight:100 900;font-stretch:75% 100%;font-display:swap}
+.ri{--ri-a:#fff200;--ri-l:#ecece8;--ri-d:#111214;position:fixed;inset:0;z-index:2147483647;overflow:hidden;contain:strict;
+ font-family:"AK Display","Arial Narrow",system-ui,sans-serif;color:var(--ri-d);background:transparent;cursor:pointer;user-select:none;-webkit-user-select:none}
+.ri *,.ri *::before,.ri *::after{box-sizing:border-box}
+.ri>div{position:absolute;inset:0;opacity:0}
+.ri i,.ri b,.ri em,.ri small{font-style:normal}
+
+/* ---------- 0. cover: main-color tiles snap over the screen (played on the page you leave) */
+.ri .ri-cover{opacity:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(5,1fr)}
+.ri .ri-cover i{background:var(--ri-a);transform:scale(0);animation:riTileIn .16s cubic-bezier(.2,.9,.2,1) var(--d) both}
+.ri .ri-cover .ri-cslash{position:absolute;left:-30%;top:38%;width:160%;height:16%;background:var(--ri-d);transform:translateX(-110%) rotate(-38deg);animation:riSlash .38s cubic-bezier(.6,0,.2,1) .06s both}
+.ri.ri-arrive .ri-cover{display:none}
+@keyframes riTileIn{to{transform:scale(1.02)}}
+@keyframes riSlash{to{transform:translateX(110%) rotate(-38deg)}}
+
+/* ---------- 1. main-color stage: giant name, slash, light silhouette, rarity row */
+.ri .ri-s1{background:var(--ri-a);opacity:1}
+.ri:not(.ri-arrive) .ri-s1{opacity:0}
+.ri.ri-run .ri-s1{animation:riShow 1.45s linear forwards}
+.ri .ri-bigv{position:absolute;left:52%;top:50%;font:900 48vh/0.8 "AK Display","Arial Narrow",sans-serif;font-stretch:75%;letter-spacing:-.02em;white-space:nowrap;
+ transform:translate(-50%,-50%) rotate(90deg);color:transparent;background:repeating-linear-gradient(135deg,var(--ri-d) 0 2px,transparent 2px 7px);-webkit-background-clip:text;background-clip:text;opacity:.13}
+.ri.ri-run .ri-bigv{animation:riDrift 1.45s linear both}
+.ri .ri-topo{position:absolute;inset:-10%;width:120%;height:120%;opacity:.16}
+.ri .ri-topo path{fill:none;stroke:var(--ri-d);stroke-width:1.2}
+.ri .ri-band{position:absolute;left:-40%;top:30%;width:180%;height:20%;background:var(--ri-d);transform:translateX(-120%) rotate(-38deg)}
+.ri .ri-band.l{top:46%;height:9%;background:var(--ri-l)}
+.ri.ri-run .ri-band{animation:riBand .42s cubic-bezier(.7,0,.2,1) both}
+.ri.ri-run .ri-band.l{animation-delay:.1s}
+.ri .ri-sil{position:absolute;left:30%;top:-6%;width:74%;height:112%;opacity:0;
+ background:repeating-linear-gradient(135deg,var(--ri-l) 0 5px,color-mix(in srgb,var(--ri-l) 82%,var(--ri-d)) 5px 6px);
+ -webkit-mask:var(--ri-art) center/contain no-repeat;mask:var(--ri-art) center/contain no-repeat}
+.ri.ri-run .ri-sil{animation:riSil 1.15s cubic-bezier(.15,.8,.2,1) .3s both}
+.ri .ri-tag{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;width:60vw}
+.ri .ri-tag small{display:block;font:800 1.45vh/1 "AK Display",sans-serif;letter-spacing:.18em;opacity:0}
+.ri.ri-run .ri-tag small{animation:riFlicker .3s linear .42s both}
+.ri .ri-chev{display:flex;justify-content:center;gap:.35vh;margin:1.2vh 0}
+.ri .ri-chev svg{width:5.4vh;height:5.4vh;fill:var(--ri-d);opacity:0;transform:scale(1.6)}
+.ri.ri-run .ri-chev svg{animation:riPop .16s cubic-bezier(.2,.9,.3,1.3) calc(.48s + var(--i)*.05s) both}
+.ri .ri-tri{display:flex;justify-content:center;gap:.6vh;transform:scaleX(0)}
+.ri .ri-tri i{width:4.5vh;height:.45vh;background:var(--ri-d)}
+.ri .ri-tri i:nth-child(2){background:#ff2e86}.ri .ri-tri i:nth-child(3){background:var(--ri-a);outline:1px solid var(--ri-d)}.ri .ri-tri i:nth-child(4){background:#22d3ee}
+.ri.ri-run .ri-tri{animation:riGrowX .25s ease-out .78s both}
+
+/* ---------- 2. dark band closes from the centre line; halftone + loader */
+.ri.ri-run .ri-s2{animation:riShow 1s linear 1.35s forwards}
+.ri .ri-shut{position:absolute;inset:0;background:var(--ri-d);transform:scaleY(.06)}
+.ri.ri-run .ri-shut{animation:riShut .24s cubic-bezier(.7,0,.2,1) 1.35s both}
+.ri .ri-dots{position:absolute;left:0;right:0;height:22%;opacity:0;
+ background:radial-gradient(circle,color-mix(in srgb,var(--ri-a) 55%,transparent) 1.1px,transparent 1.5px) 0 0/9px 9px}
+.ri .ri-dots.t{top:6%}.ri .ri-dots.b{bottom:4%;height:30%}
+.ri.ri-run .ri-dots{animation:riFade .3s ease-out 1.55s both}
+.ri .ri-load{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:1.2vh}
+.ri .ri-load b{position:relative;width:14vh;height:1.6vh;background:color-mix(in srgb,var(--ri-l) 18%,transparent);overflow:hidden}
+.ri .ri-load b::after{content:"";position:absolute;inset:0;background:var(--ri-l);transform:scaleX(0);transform-origin:left}
+.ri.ri-run .ri-load b::after{animation:riGrowX .75s cubic-bezier(.4,0,.2,1) 1.5s both}
+.ri .ri-load span{font:900 3.6vh/1 "AK Display",sans-serif;color:var(--ri-l);font-style:italic;letter-spacing:-.1em}
+.ri .ri-load em{width:1.8vh;height:1.8vh;background:var(--ri-a)}
+
+/* ---------- 3. art reveals block by block, then glitch bars */
+.ri.ri-run .ri-s3{animation:riShow .75s linear 2.25s forwards}
+.ri .ri-s3{background:var(--ri-d)}
+.ri .ri-face{position:absolute;max-width:none}
+.ri .ri-mos{position:absolute;inset:0;display:grid;grid-template-columns:repeat(10,1fr);grid-template-rows:repeat(6,1fr)}
+.ri .ri-mos i{background:var(--ri-d)}
+.ri.ri-run .ri-mos i{animation:riHide .01s linear calc(2.27s + var(--d)) both}
+.ri .ri-bars{opacity:1;pointer-events:none}
+.ri .ri-bars i{position:absolute;left:0;height:var(--h);top:var(--t);width:var(--w);background:var(--c);transform:translateX(-101%)}
+.ri.ri-run .ri-bars i{animation:riBar .3s cubic-bezier(.8,0,.2,1) calc(2.68s + var(--d)) both}
+
+/* ---------- 4. operator card */
+.ri.ri-run .ri-s4{animation:riShow 1.6s linear 2.9s forwards}
+.ri .ri-s4{background:var(--ri-l)}
+.ri .ri-s4::before{content:"";position:absolute;inset:0;background:radial-gradient(circle,color-mix(in srgb,var(--ri-d) 16%,transparent) 1px,transparent 1.4px) 0 0/22px 22px;opacity:.55}
+.ri .ri-ghost{position:absolute;right:-1vw;top:3vh;font:900 15vh/0.85 "AK Display",sans-serif;font-stretch:75%;color:transparent;-webkit-text-stroke:2px color-mix(in srgb,var(--ri-d) 13%,transparent);letter-spacing:.02em;white-space:nowrap}
+.ri .ri-big{position:absolute;left:3vw;bottom:15vh;font:900 21vh/0.8 "AK Display",sans-serif;font-stretch:80%;color:color-mix(in srgb,var(--ri-l) 80%,var(--ri-d));-webkit-text-stroke:1px color-mix(in srgb,var(--ri-d) 30%,transparent);white-space:nowrap;letter-spacing:-.01em;opacity:0;transform:translateX(-8vw)}
+.ri.ri-run .ri-big{animation:riSlideIn .4s cubic-bezier(.2,.8,.2,1) 2.98s both}
+.ri .ri-art{position:absolute;max-width:none;opacity:0;transform:translateX(4vw) scale(1.04)}
+.ri.ri-run .ri-art{animation:riArt .5s cubic-bezier(.2,.8,.2,1) 2.92s both}
+.ri .ri-accent{position:absolute;left:0;right:0;bottom:22vh;height:1.4vh;background:var(--ri-a);transform:scaleX(0);transform-origin:left}
+.ri.ri-run .ri-accent{animation:riGrowX .35s ease-out 3.05s both}
+.ri .ri-plate{position:absolute;right:0;top:38vh;width:42vw;opacity:0;transform:translateX(6vw)}
+.ri.ri-run .ri-plate{animation:riSlideIn .35s cubic-bezier(.2,.8,.2,1) 3.12s both}
+.ri .ri-plate small{display:inline-block;background:var(--ri-l);border:1px solid color-mix(in srgb,var(--ri-d) 25%,transparent);border-bottom:0;padding:.6vh 1.6vh;font:900 1.7vh/1 "AK Display",sans-serif;letter-spacing:.08em}
+.ri .ri-plate div{display:flex;align-items:stretch;height:8.5vh}
+.ri .ri-plate b{flex:1;display:flex;align-items:center;padding:0 2.2vh;background:#fff;font:700 5.4vh/1 "AK Display",sans-serif;font-stretch:90%;color:var(--ri-d);border:1px solid color-mix(in srgb,var(--ri-d) 25%,transparent);white-space:nowrap;overflow:hidden}
+.ri .ri-plate em{width:8.5vh;background:var(--ri-d);color:var(--ri-l);display:grid;place-items:center;font:900 3.8vh/1 "AK Display",sans-serif;font-style:italic;letter-spacing:-.12em}
+.ri .ri-plate u{width:6vw;background:color-mix(in srgb,var(--ri-d) 35%,var(--ri-l));text-decoration:none}
+.ri .ri-chev2{position:absolute;right:6vw;top:52.5vh;display:flex;gap:.4vh}
+.ri .ri-chev2 svg{width:5vh;height:5vh;fill:var(--ri-d);opacity:0;transform:translateY(-1.5vh)}
+.ri.ri-run .ri-chev2 svg{animation:riDrop .18s ease-out calc(3.3s + var(--i)*.045s) both}
+.ri .ri-chip{position:absolute;left:3vw;bottom:9.5vh;display:flex;align-items:center;gap:1vh;opacity:0}
+.ri .ri-chip i{width:2.2vh;height:2.2vh;border-radius:50%;background:var(--ri-d)}
+.ri .ri-chip span{background:var(--ri-a);color:var(--ri-d);font:800 1.7vh/1 "AK Display",sans-serif;padding:.5vh 1.2vh;letter-spacing:.06em}
+.ri.ri-run .ri-chip{animation:riFlicker .3s linear 3.35s both}
+
+/* ---------- 5. pixel dissolve to the name, then black */
+.ri.ri-run .ri-s5{animation:riShow 1s linear 3.95s forwards}
+.ri .ri-pix{position:absolute;inset:0;display:grid;grid-template-columns:repeat(16,1fr);grid-template-rows:repeat(9,1fr)}
+.ri .ri-pix i{background:var(--ri-l);opacity:0}
+.ri .ri-pix i:nth-child(5n){background:color-mix(in srgb,var(--ri-l) 88%,var(--ri-d))}
+.ri .ri-pix i:nth-child(11n){background:color-mix(in srgb,var(--ri-a) 60%,var(--ri-l))}
+.ri .ri-s5::before{content:"";position:absolute;inset:0;background:var(--ri-l);opacity:0}
+.ri.ri-run .ri-s5::before{animation:riFade .35s ease-out 4.3s both}
+.ri.ri-run .ri-pix{animation:riDim .35s ease-out 4.32s both}
+@keyframes riDim{to{opacity:.28}}
+.ri.ri-run .ri-pix i{animation:riPix .2s linear calc(3.95s + var(--d)) both}
+.ri .ri-final{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;opacity:0;z-index:1}
+.ri.ri-run .ri-final{animation:riFlicker .25s linear 4.18s both}
+.ri .ri-final small{display:block;font:800 1.3vh/1 "AK Display",sans-serif;letter-spacing:.2em;margin-bottom:1.2vh}
+.ri .ri-final b{position:relative;display:block;font:900 8vh/1 "AK Display",sans-serif;font-stretch:85%;letter-spacing:.02em}
+.ri .ri-final b::before,.ri .ri-final b::after{content:attr(data-t);position:absolute;inset:0;opacity:.75;mix-blend-mode:multiply}
+.ri .ri-final b::before{color:#22d3ee}.ri .ri-final b::after{color:#ff2e86}
+.ri.ri-run .ri-final b::before{animation:riRgbA .5s linear 4.25s both}
+.ri.ri-run .ri-final b::after{animation:riRgbB .5s linear 4.25s both}
+.ri .ri-scan{position:absolute;inset:0;z-index:2;background:repeating-linear-gradient(0deg,color-mix(in srgb,var(--ri-d) 22%,transparent) 0 1px,transparent 1px 4px);opacity:0}
+.ri.ri-run .ri-scan{animation:riFade .2s linear 4.45s both}
+.ri .ri-black{background:#000}
+.ri.ri-run .ri-black{animation:riFade .2s linear 4.62s both}
+
+/* ---------- end / skip */
+.ri.ri-run{animation:riOut .3s ease-in 4.85s both}
+.ri.ri-out{animation:riOut .22s ease-in both!important}
+.ri .ri-skip{inset:auto 2.2vw 2.4vh auto;opacity:.6;font:800 1.5vh/1 "AK Display",sans-serif;letter-spacing:.16em;color:#fff;mix-blend-mode:difference;pointer-events:none}
+.ri:not(.ri-arrive) .ri-skip{display:none}
+
+@keyframes riShow{0%{opacity:1}99.9%{opacity:1}100%{opacity:0}}
+@keyframes riDrift{from{transform:translate(-50%,-47%) rotate(90deg)}to{transform:translate(-50%,-55%) rotate(90deg)}}
+@keyframes riBand{to{transform:translateX(120%) rotate(-38deg)}}
+@keyframes riSil{from{opacity:0;transform:scale(1.14)}25%{opacity:1}to{opacity:1;transform:scale(1)}}
+@keyframes riFlicker{0%{opacity:0}33%{opacity:1}66%{opacity:.25}100%{opacity:1}}
+@keyframes riPop{to{opacity:1;transform:scale(1)}}
+@keyframes riDrop{to{opacity:1;transform:none}}
+@keyframes riGrowX{to{transform:scaleX(1)}}
+@keyframes riShut{to{transform:scaleY(1)}}
+@keyframes riFade{to{opacity:1}}
+@keyframes riHide{to{opacity:0}}
+@keyframes riBar{0%{transform:translateX(-101%)}50%{transform:translateX(0)}100%{transform:translateX(110vw)}}
+@keyframes riSlideIn{to{opacity:1;transform:none}}
+@keyframes riArt{to{opacity:1;transform:none}}
+@keyframes riPix{to{opacity:1}}
+@keyframes riRgbA{0%{transform:translate(-.6vh,0)}40%{transform:translate(.5vh,.2vh)}80%{transform:translate(-.3vh,0)}100%{transform:none;opacity:0}}
+@keyframes riRgbB{0%{transform:translate(.6vh,0)}40%{transform:translate(-.5vh,-.2vh)}80%{transform:translate(.3vh,0)}100%{transform:none;opacity:0}}
+@keyframes riOut{to{opacity:0;visibility:hidden}}

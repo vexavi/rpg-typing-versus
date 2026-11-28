@@ -10,6 +10,10 @@ body{margin:0}.wrap{max-width:1120px;margin:22px auto;padding:0 16px 40px}header
 .panel{border:1px solid #cbd4df;background:#fff;border-radius:11px;padding:17px;margin-top:14px;box-shadow:0 4px 16px #202f490b}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}button{font:inherit;cursor:pointer;border:1px solid #9ca9ba;background:#f7f9fb;border-radius:6px;padding:10px 13px;font-weight:700;color:#1c2b42}button:disabled{opacity:.5;cursor:not-allowed}button.active,button.primary{background:#213650;border-color:#213650;color:#fff}button:hover:not(:disabled){filter:brightness(.96)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:5px;min-width:0}.field.full{grid-column:1/-1}label{font-weight:700;font-size:12px;color:#44556d}input,textarea,select{width:100%;font:inherit;padding:10px 11px;border:1px solid #adbacb;border-radius:6px;color:#182638;background:#fff}textarea{min-height:85px;resize:vertical}input:focus,textarea:focus,select:focus{outline:2px solid #789cdd}.help{font-size:11px;color:#69778c;text-align:right}.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}.preview{background:linear-gradient(133deg,#292b33,#c50032 65%,#8f0026);color:#fff;border-radius:9px;padding:24px;min-height:285px;overflow-wrap:anywhere}.preview .eyebrow{font-size:11px;letter-spacing:.2em;font-weight:800;border-left:4px solid #fff;padding-left:8px}.preview h3{font-size:clamp(24px,3.1vw,44px);line-height:1;letter-spacing:-.04em;margin:24px 0 12px;text-transform:uppercase}.preview .sub{font-size:12px;font-weight:800;letter-spacing:.08em}.preview .desc{font-size:13px;max-width:380px;line-height:1.5;margin-top:25px}.preview .tab{display:inline-block;font-size:11px;font-weight:800;border:1px solid white;padding:7px 12px;margin-top:14px}.note{border-left:4px solid #c30032;padding:10px 12px;background:#fff1f4;color:#5b2940;font-size:13px}.status{font-size:13px;font-weight:650;min-height:20px}.status.error{color:#b42318}.status.good{color:#176a40}
 #previewOperatorArt[hidden]{display:none!important}
+.ri-colors{border:1px solid #cbd4df;border-radius:9px;margin:16px 0 0;padding:10px 14px 14px}.ri-colors legend{font-weight:800;font-size:14px;padding:0 6px}
+.ri-presets{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}.ri-presets button{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px}
+.ri-presets button span{display:flex}.ri-presets button i{width:14px;height:20px;border:1px solid #0002}.ri-presets button[aria-pressed="true"]{outline:3px solid #2f6fd6;outline-offset:1px}
+.ri-pickers{display:flex;flex-wrap:wrap;gap:14px;align-items:center}.ri-pickers label{display:flex;align-items:center;gap:6px}.ri-pickers input{width:44px;height:30px;padding:0;border:1px solid #9ca9ba;border-radius:5px;background:#fff;cursor:pointer}
 @media(max-width:780px){.grid,.fields{grid-template-columns:1fr}.field.full{grid-column:auto}}
 </style>
 
@@ -29,6 +33,12 @@ body{margin:0}.wrap{max-width:1120px;margin:22px auto;padding:0 16px 40px}header
 <div class="field full"><label for="subtitle">Subtitle</label><input id="subtitle" maxlength="110"><span class="help">Max 110 characters</span></div>
 <div class="field full"><label for="description">Description / Scout details</label><textarea id="description" maxlength="260"></textarea><span class="help">Max 260 characters</span></div>
 </div>
+<fieldset class="ri-colors" id="introColors"><legend>Recruit animation colors</legend>
+<p class="muted">Plays when students open Recruitment. It shows the featured operator and their name.</p>
+<div class="ri-presets" id="introPresets"></div>
+<div class="ri-pickers"><label>Main <input type="color" id="introA"></label><label>Light <input type="color" id="introL"></label><label>Dark <input type="color" id="introD"></label>
+<button type="button" id="introPreview">▶ Preview animation</button></div>
+</fieldset>
 <div class="row" style="margin-top:15px"><button type="submit" class="primary" id="save">Save</button><button type="button" id="reload">Reload saved</button><span id="revision" class="muted"></span></div>
 <p role="status" id="status" class="status"></p>
 </form></section>
@@ -36,5 +46,6 @@ body{margin:0}.wrap{max-width:1120px;margin:22px auto;padding:0 16px 40px}header
 </section>
 </main>
 <script src="recruitment-banner-config.js?v=148.9"></script>
-<script type="module" src="recruitment-admin.js?v=148.9"></script>
+<script src="recruit-intro.js?v=1"></script>
+<script type="module" src="recruitment-admin.js?v=148.11"></script>
 </body></html>

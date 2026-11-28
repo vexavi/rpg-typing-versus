@@ -3,7 +3,8 @@
 (function(root){
  'use strict';
  const IDS=['featured'];
- const LIMITS={tab:22,title:70,kicker:50,subtitle:110,description:260,featured_character_id:40};
+ const LIMITS={tab:22,title:70,kicker:50,subtitle:110,description:260,featured_character_id:40,intro_theme:23};
+ const THEME_RE=/^#[0-9a-f]{6},#[0-9a-f]{6},#[0-9a-f]{6}$/;
  const FIELDS=Object.keys(LIMITS);
  function normalize(source){
    if(!Array.isArray(source))return [];
@@ -19,6 +20,9 @@
    if(!Array.isArray(source)||source.length!==IDS.length)throw Error('Exactly one Featured banner is required.');
    if(source.some((x,i)=>!x||x.id!==IDS[i]))throw Error('The only banner ID must be featured.');
    for(const row of source){
+     // v148.11: intro_theme is optional (older saved banners do not have it).
+     if(row.intro_theme==null)row.intro_theme='';
+     if(row.intro_theme&&!THEME_RE.test(String(row.intro_theme).toLowerCase()))throw Error('Choose valid animation colors.');
      for(const field of FIELDS){
        if(typeof row[field]!=='string'||row[field].length>LIMITS[field])throw Error(field+' exceeds the maximum length.');
      }
@@ -43,6 +47,7 @@
        out[field]=value;
      }
      if(!/^[a-z][a-z0-9_]{0,39}$/.test(out.featured_character_id||''))out.featured_character_id=row.featured_character_id||'tavi';
+     if(out.intro_theme&&!THEME_RE.test(String(out.intro_theme).toLowerCase()))out.intro_theme='';
      // Never let teacher text overwrite file-backed artwork, ID, or game behavior.
      out.art=row.art;
      return out;

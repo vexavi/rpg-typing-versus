@@ -3246,7 +3246,9 @@ function showModeSelectScreen(){
   }});
   addMode('Recruitment', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,lockedReason:'Needs internet',onClick:()=>{
     // Lesson 4 of the first-time tutorial continues on the guided Recruitment page.
-    window.location.assign(tutorialLesson4Pending()?'recruitment.html?tutorial=1':'recruitment.html');
+    const url=tutorialLesson4Pending()?'recruitment.html?tutorial=1':'recruitment.html';
+    // Featured-operator intro (recruit-intro.js), then Recruitment.
+    if(window.RPG_RECRUIT_INTRO?.go)void window.RPG_RECRUIT_INTRO.go(url);else window.location.assign(url);
   }});
   // v148.9: the Aura Workshop now lives inside Collection (each operator page has an Aura row).
   addMode('Collection', {disabled:!ADVENTURE_CONTEXT.online||!!window.RPG_V66_DISCONNECTED,
