@@ -82,11 +82,16 @@ function currentOrder(){return chapters.flatMap(ch=>ch.stages.map(st=>st.id));}
 function writeDraft(automatic=false){
  clearTimeout(draftTimer);
  const payload={...cleanStory({chapters}),revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};
- localStorage.setItem(DRAFT_KEY,JSON.stringify(payload));dirty=false;status(automatic?'Draft autosaved · unpublished':'Draft saved · unpublished',false,true);
+ localStorage.setItem(DRAFT_KEY,JSON.stringify(payload));dirty=false;
+ // An autosave must not wipe an error the teacher still needs to read (e.g. a failed Publish).
+ if(!(automatic&&$('status').className==='error'))status(automatic?'Draft autosaved · unpublished':'Draft saved · unpublished',false,true);
 }
 function swap(arr,i,j){if(j<0||j>=arr.length)return false;[arr[i],arr[j]]=[arr[j],arr[i]];return true;}
 function scenePreview(scene){return stagedPhotos.get(scene.image)?.url||(safeStoryImage(scene.image)?scene.image:'story/images/placeholder-01.svg');}
-function assetOptions(current=''){const options=sharedOptions(chapters,[...onlineImageNames,...Object.values(window.RPG_CONQUEST_MAP.defaultArt)],[...stagedPhotos.keys()]);if(current&&!options.includes(current)&&safeStoryImage(current))options.unshift(current);return options;}
+// Pictures that ship with the game (from asset-manifest.js) are always choosable, plus any
+// found on GitHub and any uploaded in this browser. Slide placeholders are left out.
+function packagedImages(){return Object.keys(window.RPG_ASSET_MANIFEST||{}).filter(p=>/^story\/images\/[\w.-]+\.(?:png|webp|jpg|jpeg|svg)$/i.test(p)&&!/placeholder-0\d|map-placeholder|conquest-world/.test(p)).concat(['story/images/boss-placeholder.svg','story/images/stage-bg-placeholder.svg']);}
+function assetOptions(current=''){const options=sharedOptions(chapters,[...onlineImageNames,...packagedImages(),...Object.values(window.RPG_CONQUEST_MAP.defaultArt)],[...stagedPhotos.keys()]);if(current&&!options.includes(current)&&safeStoryImage(current))options.unshift(current);return options;}
 function optionMarkup(selected=''){return `<option value="">None</option>`+assetOptions(selected).map(path=>`<option value="${esc(path)}" ${path===selected?'selected':''}>${esc(path.slice('story/images/'.length))}</option>`).join('');}
 function stageArtPath(key){return currentStage()?.battle?.[key]||'';}
 function assetPreview(path){return stagedPhotos.get(path)?.url||(safeStoryImage(path)?path:'');}
@@ -452,7 +457,9 @@ async function shortenExistingImages(){
  }catch(error){status('Short-name export stopped without changing your draft: '+error.message,true)}
  finally{busy=false;updateAuth()}
 }
-const verifiedAssets=new Set();
+const verifiedAssets=new Set();let missingImages=[];
+// One click: every reference to a picture that is not on the website goes back to None (built-in default art).
+function clearMissingImages(){if(!missingImages.length)return;const gone=new Set(missingImages);let n=0;for(const ch of chapters){if(gone.has(ch.conquest?.banner?.art)){ch.conquest.banner.art='';n++;}for(const st of ch.stages||[])for(const key of ['bossSprite','battleBackground'])if(gone.has(st.battle?.[key])){st.battle[key]='';n++;}}missingImages=[];$('fixMissing')?.remove();markDirty();render();status(`${n} missing picture${n===1?'':'s'} set to None. Press Publish again.`,false,true);}
 async function verifyImageFiles(payload){
  const paths=referencedImages(battleAssetChapters(payload.chapters)).filter(path=>!verifiedAssets.has(path)||stagedPhotos.has(path));
  if(!paths.length)return;
@@ -463,7 +470,9 @@ async function verifyImageFiles(payload){
  }
  if(missing.length){
   photoReport(missing.map(path=>({ok:false,label:path.split('/').at(-1),text:stagedPhotos.has(path)?'Only stored in browser — upload photo pack':'Not on published website; use Find Existing Images'})));
-  throw Error(`${missing.length} chapter images cannot be found online. See the Photo Report below. Click Find Existing Images to repair old filenames; do not reselect or rename the photos.`);
+  const where=path=>{const out=[];for(const ch of chapters){if(ch.conquest?.banner?.art===path)out.push(`${territoryName(ch.id)} banner`);for(const st of ch.stages||[]){if(st.battle?.bossSprite===path)out.push(`${st.id} boss`);if(st.battle?.battleBackground===path)out.push(`${st.id} background`);}}return out.join(', ')||'unused';};
+  missingImages=missing.slice();
+  throw Error(`Picture not found on the website: ${missing.map(p=>`${p.split('/').at(-1)} (${where(p)})`).join('; ')}. Upload it to docs/story/images/ on GitHub, or press "Use None for missing pictures" and publish again.`);
  }
 }
 function battleStages(ch){return (ch?.stages||[]).filter(s=>s.type!=='story-only');}
@@ -841,7 +850,7 @@ async function publish(){
   loadedRevision=next;publishedOrder=currentOrder();dirty=false;clearTimeout(draftTimer);try{localStorage.removeItem(DRAFT_KEY);}catch{}
   try{localStorage.removeItem('rpgStoryPublished');}catch{}
   status(`Published revision ${next}. Students receive it within 10 minutes (the next time they open Adventure after that).`,false,true);
- }catch(e){status('Publish failed: '+errorMessage(e),true)}finally{busy=false;updateAuth();}
+ }catch(e){status('Publish failed: '+errorMessage(e),true);if(missingImages.length&&!$('fixMissing')){const b=document.createElement('button');b.id='fixMissing';b.type='button';b.textContent='Use None for missing pictures';b.onclick=clearMissingImages;$('status').after(b);}}finally{busy=false;updateAuth();}
 }
 function exportFile(){try{const payload=cleanStory({chapters});const output={...payload,revision:loadedRevision,retiredStageIds:[...retiredStages],retiredChapterIds:[...retiredChapters]};const blob=new Blob([JSON.stringify(output,null,2)+'\n'],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='conquest-backup.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1500);status('JSON exported.',false,true);}catch(e){status(e.message,true);}}
 async function importFile(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;
@@ -885,6 +894,8 @@ async function boot(){
  });
  $('repoName').value=localStorage.getItem(REPO_KEY)||githubRepoGuess(location);
  $('repoName').addEventListener('change',()=>{if(validGithubRepo($('repoName').value))localStorage.setItem(REPO_KEY,$('repoName').value.trim());});
+ // List pictures already on GitHub once, so they show in "Choose a saved picture" without a manual scan.
+ (async()=>{const repo=$('repoName').value.trim();if(!validGithubRepo(repo))return;try{const r=await fetch(`https://api.github.com/repos/${repo}/contents/docs/story/images`,{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)return;const files=await r.json();if(Array.isArray(files)){onlineImageNames=[...new Set([...onlineImageNames,...files.filter(x=>x.type==='file').map(x=>x.name)])];if(activeTab==='encounters')renderFields();}}catch(_){}})();
  $('export').onclick=exportFile;$('import').onchange=importFile;$('publish').onclick=publish;
  $('google').onclick=signIn;$('signout').onclick=async()=>{++authReadId;try{await teacherSignOut();teacher=null;++liveRequestId;balanceCache.clear();liveBalance={};updateAuth();fillLiveValues();status('Signed out.')}catch(e){status(errorMessage(e),true)}};
  $('reload').onclick=async()=>{balanceCache.clear();verifiedAssets.clear();if(dirty||localStorage.getItem(DRAFT_KEY)){if(!confirm('Discard draft and reload published territories?'))return;}if(await loadRemote(false,{requireCloud:true})){clearTimeout(draftTimer);localStorage.removeItem(DRAFT_KEY);clearPhotoSelection();clearAudioSelection();}};
