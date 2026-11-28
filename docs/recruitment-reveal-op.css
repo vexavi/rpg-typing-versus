@@ -1,6 +1,6 @@
 /* v153 one-by-one operator reveal (recruitment-reveal.js → .rk-op).
  * 1) dark stage: falling-light bokeh, floor glow, black silhouette, stars pop in one per rarity
- * 2) white flash  3) reveal: art, triangle emblem, stars, name, shard reward on the right.
+ * 2) white flash  3) reveal: art, stars, name, shard reward on the right.
  * Timings come from JS as --t-* (seconds). Everything that moves animates transform/opacity. */
 .rv .rk-op{position:absolute;inset:0;overflow:hidden;background:#07080a;color:#fff;font-family:var(--disp);cursor:pointer;
  --rc:#a57bff;--glow:color-mix(in srgb,var(--rc) 55%,#ffb070)}
@@ -40,14 +40,11 @@
 .rv .rk-art{position:absolute;left:58%;bottom:-6vh;height:108vh;width:auto;max-width:none;transform:translate(-50%,0) scale(1.06);opacity:0;
  animation:rkArt .7s cubic-bezier(.2,.8,.2,1) calc(var(--t-r) - .05s) both}
 .rv .rk-shade{background:linear-gradient(to top,#000c 0%,#0006 20%,transparent 42%),linear-gradient(to right,#0008,transparent 40%)}
-.rv .rk-streak{position:absolute;left:0;right:0;top:calc(57vh + 3.4vh);height:2px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--glow) 60%,#fff) 30%,#fff 58%,color-mix(in srgb,var(--glow) 60%,#fff) 80%,transparent);
+.rv .rk-streak{position:absolute;left:0;right:0;top:62.5vh;height:2px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--glow) 60%,#fff) 30%,#fff 58%,color-mix(in srgb,var(--glow) 60%,#fff) 80%,transparent);
  box-shadow:0 0 18px 4px color-mix(in srgb,var(--glow) 50%,transparent);transform:scaleX(0);opacity:0;animation:rkStreak .9s ease-out calc(var(--t-r) + .05s) both}
-.rv .rk-emblem{position:absolute;left:12vw;top:20vh;width:38vh;height:34vh;opacity:0;transform:scale(1.35);
- animation:rkPop .4s cubic-bezier(.2,.9,.3,1.15) calc(var(--t-r) + .05s) both}
-.rv .rk-emblem svg{width:100%;height:100%;fill:none;stroke:#fff;stroke-linejoin:miter}
-.rv .rk-stars-b{position:absolute;left:calc(12vw + 15vh);top:47vh;display:flex;gap:.2vh}
-.rv .rk-stars-b .rk-star{width:7.4vh;height:7.4vh;max-width:none;max-height:none;animation:rkStar .24s cubic-bezier(.2,.9,.3,1.25) calc(var(--t-r) + .15s + var(--i)*.05s) both}
-.rv .rk-name{position:absolute;left:calc(12vw + 6vh);top:56.5vh;margin:0;font:900 clamp(40px,10vh,96px)/1 var(--disp);font-stretch:82%;letter-spacing:.005em;color:#fff;white-space:nowrap;
+.rv .rk-stars-b{position:absolute;left:7vw;top:33vh;display:flex;gap:.6vh}
+.rv .rk-stars-b .rk-star{width:10.5vh;height:10.5vh;max-width:none;max-height:none;animation:rkStar .24s cubic-bezier(.2,.9,.3,1.25) calc(var(--t-r) + .1s + var(--i)*.06s) both}
+.rv .rk-name{position:absolute;left:7vw;top:45vh;margin:0;max-width:52vw;overflow:hidden;text-overflow:ellipsis;font:900 clamp(48px,17vh,150px)/1 var(--disp);font-stretch:82%;letter-spacing:.005em;color:#fff;white-space:nowrap;
  text-shadow:0 2px 0 #0008,0 0 24px #000a;opacity:0;transform:translateX(-3vw);animation:rkName .45s cubic-bezier(.2,.8,.2,1) calc(var(--t-r) + .25s) both}
 .rv .rk-reward{position:absolute;right:clamp(12px,2.6vw,40px);top:44vh;display:grid;gap:10px;opacity:0;transform:translateX(3vw);
  animation:rkName .45s cubic-bezier(.2,.8,.2,1) calc(var(--t-r) + .4s) both}
@@ -90,14 +87,13 @@
 @keyframes rkDrift{to{transform:translate(2vw,-2vh)}}
 
 @media (max-width:760px){
- .rv .rk-emblem{left:4vw;top:24vh;width:28vh;height:25vh}
- .rv .rk-stars-b{left:calc(4vw + 9vh);top:44vh}.rv .rk-stars-b .rk-star{width:5.4vh;height:5.4vh}
- .rv .rk-name{left:5vw;top:52vh;font-size:clamp(34px,8vh,64px)}
+ .rv .rk-stars-b{left:5vw;top:36vh}.rv .rk-stars-b .rk-star{width:7vh;height:7vh}
+ .rv .rk-name{left:5vw;top:45vh;max-width:90vw;font-size:clamp(40px,11vh,90px)}
  .rv .rk-reward{top:auto;bottom:90px;right:10px}.rv .rk-item{min-width:170px}
  .rv .rk-art{left:62%}
 }
 @media (prefers-reduced-motion:reduce){
  .rv .rk-bits i,.rv .rk-shafts i,.rv .rk-hex i{animation:none}
 }
-/* stars stay readable where they cross the white emblem */
-.rv .rk-stars-b .rk-star svg{stroke:#111;stroke-width:7;paint-order:stroke;stroke-linejoin:round}
+/* dark outline keeps the white stars readable over bright art */
+.rv .rk-stars-b .rk-star svg{stroke:#111;stroke-width:5;paint-order:stroke;stroke-linejoin:round}

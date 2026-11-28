@@ -96,7 +96,6 @@
  const pace={4:{star:.1,white:.15},5:{star:.13,white:.3},6:{star:.16,white:.5}};
  function timing(r){const p=pace[r]||pace[4];const f=.45+r*p.star+.18,wd=.55+p.white,rv=f+.25+wd*.7;return {star:p.star,f,wd,rv,done:rv+.9};}
  const STAR='<svg viewBox="0 0 100 95" aria-hidden="true"><path d="M50 2 62 36 98 36 69 58 80 93 50 72 20 93 31 58 2 36 38 36Z"/></svg>';
- const EMBLEM='<svg viewBox="0 0 200 180" aria-hidden="true"><path d="M100 8 192 172H8Z" stroke-width="11"/><path d="M100 52 152 146H48Z" stroke-width="9"/><path d="M100 92 124 136H76Z" stroke-width="7"/><path d="M100 0 112 14 100 28 88 14Z" fill="#fff" stroke="none"/></svg>';
  function starRow(r,cls){return `<div class="${cls}" aria-hidden="true">${Array.from({length:r},(_,i)=>`<i class="rk-star rk-a" style="--i:${i}">${STAR}</i>`).join('')}</div>`;}
  function seeded(n,seed){let x=seed;return ()=>{x=(x*9301+49297)%233280;return x/233280;};}
  function bokeh(i,r){
@@ -133,7 +132,6 @@
      ${art?`<img class="rk-art rk-a" src="${art}" alt="" decoding="async" draggable="false">`:''}
      <div class="rk-l rk-shade"></div>
      <i class="rk-streak rk-a"></i>
-     <div class="rk-emblem rk-a">${EMBLEM}</div>
      ${starRow(r,'rk-stars-b')}
      <h2 class="rk-name rk-a">${esc(op.name)}</h2>
      <div class="rk-reward rk-a">${rewardPanel(op)}</div>
