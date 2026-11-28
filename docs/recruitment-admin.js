@@ -50,8 +50,8 @@ async function load(){setBusy(true);status('Loading banner text…');try{
 async function save(){if(busy)return;collect();let safe;try{safe=utils.assertEditable(banners);}catch(e){status(e.message,'error');return;}
  if(!sixStars.some(c=>c.id===safe[0].featured_character_id)){status('Select an operator from the available 6★ roster.','error');return;}
  setBusy(true);status('Saving…');try{const r=await api('save',{expected_revision:revision,banners:safe});
- banners=r.banners;revision=r.revision;$('revision').textContent='Revision '+revision;
- status('Saved to Firebase. Students see the update on their next Recruitment visit or reload.','good');
+ banners=utils.normalize(r.banners).map((x,i)=>({...x,intro_theme:x.intro_theme||safe[i]?.intro_theme||''}));revision=r.revision;$('revision').textContent='Revision '+revision;
+ if(r.warning)status(r.warning,'error');else status('Saved to Firebase. Students see the update on their next Recruitment visit or reload.','good');
  }catch(e){status(e.message||String(e),'error');}finally{setBusy(false)}}
 for(const f of fields)$(f).addEventListener('input',collect);
 $('featured_character_id').addEventListener('change',collect);

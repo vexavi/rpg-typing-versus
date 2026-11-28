@@ -126,6 +126,7 @@
 .ri.ri-out{animation:riOut .22s ease-in both!important}
 .ri .ri-skip{inset:auto 2.2vw 2.4vh auto;opacity:.6;font:800 1.5vh/1 "AK Display",sans-serif;letter-spacing:.16em;color:#fff;mix-blend-mode:difference;pointer-events:none}
 .ri:not(.ri-arrive) .ri-skip{display:none}
+.ri.ri-locked{cursor:default}.ri.ri-locked .ri-skip{display:none}
 
 @keyframes riShow{0%{opacity:1}99.9%{opacity:1}100%{opacity:0}}
 @keyframes riDrift{from{transform:translate(-50%,-47%) rotate(90deg)}to{transform:translate(-50%,-55%) rotate(90deg)}}

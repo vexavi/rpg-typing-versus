@@ -6,10 +6,14 @@
  * it connects underneath, so the animation also hides the loading time.
  *
  * Teachers pick the colors in the Recruitment banner editor (banner field `intro_theme`,
- * "#main,#light,#dark"). Click or press any key to skip. Reduced-motion users skip it. */
+ * "#main,#light,#dark"). Reduced-motion users skip it.
+ *
+ * Skipping (click / any key) is only allowed once the player has watched this featured run to
+ * the end on this Chromebook. A run is operator + featured_since (the banner revision when
+ * that operator went up), so a re-run (Kurone → Tavi → Kurone) must be watched again. */
 (function(){
  'use strict';
- const STASH='rpgRecruitIntro',BANNER_CACHE='rpgSparkBanner',VERSION='1';
+ const STASH='rpgRecruitIntro',BANNER_CACHE='rpgSparkBanner',SEEN='rpgRecruitIntroSeen',VERSION='2';
  const PRESETS=[
   {id:'signal',name:'Signal Yellow',a:'#fff200',l:'#ecece8',d:'#111214'},
   {id:'stream',name:'Stream Pink',a:'#ff2e86',l:'#f3edf1',d:'#140b12'},
@@ -33,6 +37,18 @@
   const v=String(value||'').trim().toLowerCase();
   if(!THEME_RE.test(v))return {...DEFAULT};
   const [a,l,d]=v.split(',');return {a,l,d};
+ }
+ // ---------- "watched at least once" per player (shared Chromebooks keep one entry per player)
+ function playerKey(){
+  try{const v=JSON.parse(sessionStorage.getItem('rpgSparkIdentity')||'null');const id=v?.session?.publicId;if(id)return String(id).slice(0,32);}catch(_){}
+  return 'device';
+ }
+ function seenMap(){try{const m=JSON.parse(localStorage.getItem(SEEN)||'{}');return m&&typeof m==='object'&&!Array.isArray(m)?m:{};}catch(_){return {};}}
+ function hasSeen(player,run){return !!run&&seenMap()[player]===run;}
+ function markSeen(player,run){
+  if(!run)return;try{const m=seenMap();delete m[player];m[player]=run;
+   const keys=Object.keys(m);for(const k of keys.slice(0,Math.max(0,keys.length-60)))delete m[k];
+   localStorage.setItem(SEEN,JSON.stringify(m));}catch(_){}
  }
  function themeString(t){const s=[t.a,t.l,t.d].map(x=>String(x||'').toLowerCase()).join(',');return THEME_RE.test(s)?s:'';}
 
@@ -65,7 +81,8 @@
   const id=String(b?.featured_character_id||'tavi');
   const c=chars.find(x=>x&&x.id===id)||chars.find(x=>x&&x.id==='tavi')||{id,name:id,rarity:6,art:`assets/recruitment/${id}.webp`};
   return {id:c.id,name:String(c.name||c.id),rarity:Number(c.rarity)||6,art:String(c.art||`assets/recruitment/${c.id}.webp`),
-   title:String(b?.title||'FEATURED RECRUITMENT').slice(0,70),theme:themeString(parseTheme(b?.intro_theme))};
+   title:String(b?.title||'FEATURED RECRUITMENT').slice(0,70),theme:themeString(parseTheme(b?.intro_theme)),
+   run:`${c.id}@${Number.isInteger(b?.featured_since)?b.featured_since:0}`};
  }
  function loadArt(src){
   return new Promise(resolve=>{const img=new Image();img.decoding='async';img.onload=()=>{(img.decode?img.decode():Promise.resolve()).catch(()=>{}).then(()=>resolve(img));};img.onerror=()=>resolve(null);img.src=src;});
@@ -125,14 +142,21 @@
   if(!el||el.__done)return;el.__done=true;
   el.classList.add('ri-out');setTimeout(()=>{el.remove();if(active===el)active=null;resolve?.();},240);
  }
- function run(el,img,data){
+ function run(el,img,data,{skippable=true,onWatched=null}={}){
   return new Promise(resolve=>{
    placeArt(el,img,data);
-   const skip=e=>{if(e.type==='keydown'&&['Shift','Control','Alt','Meta'].includes(e.key))return;e.preventDefault?.();cleanup();finish(el,resolve);};
+   // First viewing of this featured run: clicks and keys do nothing (the page underneath
+   // cannot be used either), and there is no skip hint. It always ends on its own.
+   el.classList.toggle('ri-locked',!skippable);
+   const block=e=>{e.preventDefault?.();e.stopPropagation?.();};
+   const skip=e=>{if(e.type==='keydown'&&['Shift','Control','Alt','Meta'].includes(e.key))return;if(!skippable){block(e);return;}e.preventDefault?.();cleanup();finish(el,resolve);};
    const cleanup=()=>{el.removeEventListener('pointerdown',skip);window.removeEventListener('keydown',skip,true);};
    el.addEventListener('pointerdown',skip);window.addEventListener('keydown',skip,true);
+   // Only counts as watched if the tab stayed in front the whole time.
+   let away=document.visibilityState==='hidden';const vis=()=>{if(document.visibilityState==='hidden')away=true;};
+   document.addEventListener('visibilitychange',vis);
    void el.offsetWidth;el.classList.add('ri-run');
-   setTimeout(()=>{cleanup();finish(el,resolve);},5150);
+   setTimeout(()=>{cleanup();document.removeEventListener('visibilitychange',vis);if(!away)onWatched?.();finish(el,resolve);},5150);
   });
  }
 
@@ -163,7 +187,7 @@
    const data=early||await within(lookup,1400,null);
    if(data){
     const t=parseTheme(data.theme);el.style.setProperty('--ri-a',t.a);el.style.setProperty('--ri-d',t.d);
-    try{sessionStorage.setItem(STASH,JSON.stringify({at:Date.now(),...data}));}catch(_){}
+    try{sessionStorage.setItem(STASH,JSON.stringify({at:Date.now(),player:playerKey(),...data}));}catch(_){}
     await within(loadArt(data.art),900);
    }
    await wait(120);
@@ -180,7 +204,8 @@
   if(!data||!(Date.now()-data.at<20000)||!data.art||reduce())return;
   const el=build(data,{arrive:true});active=el;
   (document.body||document.documentElement).appendChild(el);
-  within(loadArt(data.art),1500,null).then(img=>run(el,img,data));
+  const player=String(data.player||playerKey()),runId=String(data.run||'');
+  within(loadArt(data.art),1500,null).then(img=>run(el,img,data,{skippable:hasSeen(player,runId),onWatched:()=>markSeen(player,runId)}));
  }
  if(/recruitment\.html$/.test(location.pathname)&&!document.documentElement.dataset.v66Teacher)arrive();
 
@@ -192,5 +217,5 @@
   e.preventDefault();void go(a.getAttribute('href'));
  });
 
- window.RPG_RECRUIT_INTRO={go,play,featured,parseTheme,themeString,PRESETS,DEFAULT};
+ window.RPG_RECRUIT_INTRO={go,play,featured,parseTheme,themeString,hasSeen,PRESETS,DEFAULT};
 })();

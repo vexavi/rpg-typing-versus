@@ -243,18 +243,33 @@ async function recruitmentBannersAdmin(body={}){
   return obj;
  });
  const target=ref('recruitmentConfig','banners');
- const revision=await runTransaction(db,async tx=>{
+ // v148.11: featured_since = the revision at which the current featured operator was put on
+ // the banner. A re-run (Kurone → Tavi → Kurone) gets a new value, so the Recruitment intro
+ // becomes unskippable again until each student has watched it once.
+ const write=extras=>runTransaction(db,async tx=>{
   const snapshot=await tx.get(target),oldRevision=snapshot.exists()?Number(snapshot.data().revision)||0:0;
   if(oldRevision!==expected)err('Another teacher tab changed the banners. Reload to avoid overwriting their changes.');
-  const signature=items=>Array.isArray(items)?JSON.stringify(items.map(x=>[x?.id,...fields.map(f=>x?.[f]),x?.intro_theme||''])):'';
-  if(snapshot.exists()&&signature(snapshot.data().banners)===signature(safe))return oldRevision;
-  tx.set(target,{revision:oldRevision+1,banners:safe,updatedAt:serverTimestamp()});
-  return oldRevision+1;
- }).catch(e=>{
-  if(safe[0].intro_theme&&/permission|insufficient/i.test(String(e?.code||e?.message||e)))err('Animation colors need the new Firestore rules: publish FIRESTORE_RULES_V148_11_COMPLETE.txt (Firebase setup page), then save again.');
-  throw e;
+  const prev=snapshot.exists()?snapshot.data().banners?.[0]:null;
+  const rows=safe.map(row=>{const out={...row};
+   if(!extras){delete out.intro_theme;delete out.featured_since;return out;}
+   out.featured_since=prev&&prev.featured_character_id===row.featured_character_id&&Number.isInteger(prev.featured_since)?prev.featured_since:oldRevision+1;
+   return out;});
+  const signature=items=>Array.isArray(items)?JSON.stringify(items.map(x=>[x?.id,...fields.map(f=>x?.[f]),x?.intro_theme||'',extras?(x?.featured_since||0):0])):'';
+  if(snapshot.exists()&&signature(snapshot.data().banners)===signature(rows))return {revision:oldRevision,rows};
+  tx.set(target,{revision:oldRevision+1,banners:rows,updatedAt:serverTimestamp()});
+  return {revision:oldRevision+1,rows};
  });
- return {ok:true,revision,banners:safe};
+ let result,warning='';
+ try{result=await write(true);}
+ catch(e){
+  if(!/permission|insufficient/i.test(String(e?.code||e?.message||e)))throw e;
+  // Older rules (v148.9) do not know the new optional fields: save the banner text anyway.
+  result=await write(false);
+  warning=safe[0].intro_theme
+   ?'Banner text saved, but animation colors were not: publish FIRESTORE_RULES_V148_11_COMPLETE.txt (Firebase setup page), then save again.'
+   :'Banner text saved. Publish FIRESTORE_RULES_V148_11_COMPLETE.txt (Firebase setup page) so a re-run operator\'s intro must be watched again.';
+ }
+ return {ok:true,revision:result.revision,banners:result.rows,warning};
 }
 async function cardsList(){await teacher();const snaps=await getDocsFromServer(collection(db,'cloudCards'));
  // Keep reads down: card documents carry grade for the teacher table and sync it during assignments.
