@@ -2823,7 +2823,8 @@ async function launchStoryStage(stage){
   if(!stage)return;
   if(Array.isArray(stage.stages)){
     if(!normalCleared||window.RPG_CONQUEST.visibility(stage)!=='enabled'){showModeSelectScreen();return;}
-    const chosen=await chooseStorySquad(stage.conquest);
+    // Adventure Editor stage test: the squad comes from the test panel, not Squad Assembly.
+    const chosen=window.RPG_SIM_MODE&&Array.isArray(window.RPG_SIM_SQUAD)&&window.RPG_SIM_SQUAD.length===3?window.RPG_SIM_SQUAD.slice():await chooseStorySquad(stage.conquest);
     if(!chosen){showModeSelectScreen();window.RPG_STORY.openStageSelect(String(stage.id));return;}
     const operation=window.RPG_CONQUEST.begin(stage,chosen);
     storySquad.ids=chosen;
@@ -7358,18 +7359,27 @@ runCmd.addEventListener("click", () => {
     },150);
     setInterval(()=>{if(simStage&&gameState==='playing')post({type:'live',seconds:Math.round(stageElapsedSec()),damage:Math.round(damageTakenThisStage*10),bossHpLeft:Math.round(bossHp*10),bossHpMax:Math.round(bossMaxHp*10),words:wordsOnField.length,mistakes});},500);
     window.RPG_SIM={
-      launch(stage,squad){
+      // Runs the stage exactly like Adventure does: as a one-stage territory operation with a
+      // 3-operator squad, Adventure HP/ATK/DEF, Adventure damage rules and the Adventure HUD.
+      launch(stage,squad,chapter){
         try{stopDefeatUI();}catch(_){}
         try{stopBgm();}catch(_){}
+        try{window.RPG_STORY?.cancelConquestOverlay?.();}catch(_){}
         resetGame(false);
         storySquad.ids=[];window.RPG_CONQUEST?.abort?.();
-        window.RPG_SIM_SQUAD=Array.isArray(squad)?squad.filter(id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)).slice(0,3):[];
-        if(window.ADVENTURE_PLAYER&&window.RPG_SIM_SQUAD[0])window.ADVENTURE_PLAYER.selected_character=window.RPG_SIM_SQUAD[0];
+        const ids=[...new Set((Array.isArray(squad)?squad:[]).filter(id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)))];
+        for(const id of ['alden','livia','kade','mc'])if(ids.length<3&&!ids.includes(id))ids.push(id);
+        window.RPG_SIM_SQUAD=ids.slice(0,3);
         simStage={...stage,intro:[],outro:[],type:'battle-only'};lastState='';startedAt=0;
         try{hideIntroStartScreen();}catch(_){}
+        if(chapter&&window.RPG_CONQUEST?.begin){
+          const op={...chapter,stages:[simStage],conquest:{...(chapter.conquest||{}),visibility:'enabled',enabled:true}};
+          return launchStoryStage(op);
+        }
         return launchStoryStage(simStage);
       },
       stop(){simStage=null;try{stopDefeatUI();}catch(_){}idle();}
+      ,state(){return {gameState,bossHp,bossMaxHp,elapsed:stageElapsedSec(),words:wordsOnField.length,run:!!window.RPG_CONQUEST?.run};}
     };
   }
   bootGame();

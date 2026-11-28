@@ -341,9 +341,9 @@ async function startSimulator(){
    const seen=new Set(),words=[];
    for(const w of m.words.slice(0,1000)){const prompt=String(w?.prompt||'').trim(),answer=String(w?.answer||'').trim();if(prompt&&answer&&!seen.has(answer.toLowerCase())){seen.add(answer.toLowerCase());words.push({prompt,answer});}}
    try{localStorage.setItem('bossTyping_verifiedVocab_v3__'+SIM_ID,JSON.stringify({v:3,publicId:SIM_ID,pool:'1',grade:'1',rankGrade:'1',revision:1,updatedAt:Date.now(),words}));}catch(_){}
-   let stage=m.stage;
-   try{stage=window.RPG_STORY.normalizeManifest({chapters:[m.chapter]}).flatMap(c=>c.stages).find(x=>x.id===m.stage.id)||m.stage;}catch(err){console.warn('Stage test:',err);}
-   void window.RPG_SIM?.launch(stage,m.squad);
+   let stage=m.stage,chapter=null;
+   try{chapter=window.RPG_STORY.normalizeManifest({chapters:[m.chapter]})[0]||null;stage=chapter?.stages.find(x=>x.id===m.stage.id)||m.stage;}catch(err){console.warn('Stage test:',err);}
+   void window.RPG_SIM?.launch(stage,m.squad,chapter);
   }
   if(m.type==='rpg-sim-stop')window.RPG_SIM?.stop();
  });

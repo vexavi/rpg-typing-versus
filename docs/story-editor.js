@@ -986,11 +986,11 @@ function simPanel(){
    <div><span>TIME</span><b id="simTime">0:00</b></div><div><span>DAMAGE TAKEN</span><b id="simDamage">0</b></div><div><span>MISTAKES</span><b id="simMistakes">0</b></div><div><span>WORDS ON FIELD</span><b id="simWordsOn">0</b></div></div>
   <p class="sim-result" id="simResult" hidden></p>
   <div class="sim-frame-wrap" id="simFrameWrap"><iframe id="simFrame" title="Stage test" allow="autoplay"></iframe><div class="sim-frame-note" id="simNote">Press ▶ Run test. Click inside the game to type.</div></div>
-  <p class="muted sim-foot">Uses your current edits, including ones you haven't published. Results are not saved. After changing a value, press ▶ Run test again (or tick “Restart when I change a value”).</p>
+  <p class="muted sim-foot">Plays exactly like Adventure: Adventure HP, attack and damage for your squad, the stage's background and effects. Starts at this stage with no enhancements from earlier stages. Uses your current edits, including ones you haven't published. Results are not saved. After changing a value, press ▶ Run test again (or tick “Restart when I change a value”).</p>
   </div></div>`;
  document.body.appendChild(p);
  const fill=async()=>{const roster=await simRoster();for(const sel of p.querySelectorAll('[data-sim-squad]')){const i=Number(sel.dataset.simSquad);sel.innerHTML=(i?'<option value="">—</option>':'')+roster.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.rarity?` (${c.rarity}★)`:''}</option>`).join('');sel.value=simPrefs.squad[i]||'';if(!i&&!sel.value)sel.value='mc';}};
- void fill();
+ sim.filled=fill();
  $('simPool').value=simPrefs.pool;$('simAuto').checked=!!simPrefs.auto;$('simScreen').value=simPrefs.screen;
  $('simScreen').onchange=()=>{simPrefs.screen=$('simScreen').value;saveSimPrefs();simFit();};
  try{new ResizeObserver(()=>simFit()).observe($('simFrameWrap'));}catch(_){window.addEventListener('resize',simFit);}
@@ -1019,9 +1019,8 @@ function simSync(){
  const st=currentStage(),ch=currentChapter();if(!st)return;
  $('simTitle').textContent=`${st.title||'Stage'} · ${st.id}`;
  if(document.activeElement!==$('simBossHp'))$('simBossHp').value=Math.round((st.battle?.bossHp??20)*10);
- const squadTerritory=/^[12]$/.test(String(ch?.id));
- $('simSquadLabel').textContent=squadTerritory?'Squad (1st plays first)':'Operator';
- $('simPanel').querySelectorAll('[data-sim-squad]').forEach((sel,i)=>{sel.hidden=!squadTerritory&&i>0;});
+ // Adventure always plays with a 3-operator squad; empty slots are filled with starter operators.
+ $('simSquadLabel').textContent='Squad (1st plays first)';
 }
 function simOpen(){
  const p=simPanel();p.hidden=false;sim.open=true;document.body.classList.add('sim-open');simSync();
@@ -1032,13 +1031,17 @@ function simClose(){simPost({type:'rpg-sim-stop'});$('simPanel').hidden=true;sim
 async function simRun(){
  const st=currentStage(),ch=currentChapter();if(!st||!ch||st.type==='story-only')return;
  simSync();
+ await sim.filled; // squad lists must be filled before reading them
  const pool=$('simPool').value||'1',{words,source}=await simWords(pool);
  if(!words.length){$('simNote').hidden=false;$('simNote').textContent='No words found for this group.';return;}
- const squad=[...$('simPanel').querySelectorAll('[data-sim-squad]')].filter(s=>!s.hidden).map(s=>s.value).filter(Boolean);
+ const squad=[...new Set([...$('simPanel').querySelectorAll('[data-sim-squad]')].map(s=>s.value).filter(Boolean))];
  const stage=simResolvedStage(st);
  const chapter={...clone(ch),stages:[stage]};
- sim.pending={type:'rpg-sim-run',stage,chapter,squad:squad.length?squad:['mc'],words};
- $('simResult').hidden=true;$('simNote').hidden=false;$('simNote').textContent=sim.ready?'Starting…':'Loading the game…';
+ chapter.conquest={...clone(ensureConfig(ch)),operators:clone(globalOperators())};
+ sim.pending={type:'rpg-sim-run',stage,chapter,squad,words};
+ $('simResult').hidden=true;$('simNote').hidden=false;
+ {const hp=Math.round((stage.battle?.bossHp??20)*10);simLive({bossHpLeft:hp,bossHpMax:hp,seconds:0,damage:0,mistakes:0,words:0});}
+$('simNote').textContent=sim.ready?'Starting…':'Loading the game…';
  $('simRun').textContent='↻ Restart test';
  $('simStats').dataset.source=`${source} · ${words.length} words`;
  if(sim.ready){simPost(sim.pending);sim.pending=null;}
