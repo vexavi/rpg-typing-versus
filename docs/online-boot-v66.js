@@ -315,8 +315,42 @@ document.getElementById('introSwitchPlayer')?.addEventListener('click',()=>{
  window.location.assign('adventure.html?switch=1');
 });
 
+// ---- Adventure Editor stage test -------------------------------------------------------------
+// adventure.html?sim=1 opened inside the editor (same site): run the real game offline as a
+// throwaway "Teacher" player that owns every operator. No sign-in, no Firebase, nothing saved.
+const SIM_ID='P999999';
+const simMode=(()=>{try{return new URLSearchParams(location.search).get('sim')==='1'&&window.parent!==window&&window.parent.location.origin===location.origin;}catch(_){return false;}})();
+async function startSimulator(){
+ window.RPG_SIM_MODE=true;
+ installOfflineBridge();
+ view('checking','STAGE TEST','Loading the game…');
+ let ids=['mc'];
+ try{const c=await fetch('gacha_catalog.json',{cache:'default'}).then(r=>r.json());ids=ids.concat((c.characters||[]).map(x=>x.id).filter(id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)));}catch(_){}
+ const identity={public_id:SIM_ID,name:'Teacher',grade:'1',card_code:'',online:false,cloud:false,offline:true,simulator:true,selected_character:'mc',cosmetics:null,
+  recruitment:{owned:Object.fromEntries(ids.map(id=>[id,1]))},
+  tutorial:{version:1,step:5,squadAssembly:true,squadKnockout:true,pauseGuide:true,collectionGuide:true}};
+ await load(identity,{xp:0,best_normal:0,normal_clear:true,achievements:[]},{offline:true});
+ window.RPG_LOCAL_PRACTICE={record(){},confirmedProgress(){}}; // never store simulator results
+ const badge=()=>{const b=document.getElementById('offlineRunBadge');if(b&&b.textContent!=='STAGE TEST · NOT SAVED')b.textContent='STAGE TEST · NOT SAVED';};
+ setInterval(badge,500);
+ window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||e.source!==window.parent)return;
+  const m=e.data||{};
+  if(m.type==='rpg-sim-run'&&m.stage&&Array.isArray(m.words)){
+   // Words for this test, stored like a verified class list for the throwaway player only.
+   const seen=new Set(),words=[];
+   for(const w of m.words.slice(0,1000)){const prompt=String(w?.prompt||'').trim(),answer=String(w?.answer||'').trim();if(prompt&&answer&&!seen.has(answer.toLowerCase())){seen.add(answer.toLowerCase());words.push({prompt,answer});}}
+   try{localStorage.setItem('bossTyping_verifiedVocab_v3__'+SIM_ID,JSON.stringify({v:3,publicId:SIM_ID,pool:'1',grade:'1',rankGrade:'1',revision:1,updatedAt:Date.now(),words}));}catch(_){}
+   let stage=m.stage;
+   try{stage=window.RPG_STORY.normalizeManifest({chapters:[m.chapter]}).flatMap(c=>c.stages).find(x=>x.id===m.stage.id)||m.stage;}catch(err){console.warn('Stage test:',err);}
+   void window.RPG_SIM?.launch(stage,m.squad);
+  }
+  if(m.type==='rpg-sim-stop')window.RPG_SIM?.stop();
+ });
+}
 // Explicit QR entry always wins; otherwise first try a verified remembered Firebase session.
-if(switchPlayer)void beginSwitchPlayer();
+if(simMode)void startSimulator();
+else if(switchPlayer)void beginSwitchPlayer();
 // Same card as this browser already uses: quick verified return (no session rewrite).
 // returnToModeSelect falls back to the full card check if anything does not match.
 else if(qrCode)void isRememberedCard(qrCode).then(same=>same?returnToModeSelect():resolveCard());

@@ -115,3 +115,63 @@ img[data-missing]:not([src]){background-image:url("data:image/svg+xml,%3Csvg xml
 .se-effect-pick b{display:block}
 .se-effect-pick small{display:block;margin-top:3px;color:#9aa6b8;font-size:12px;line-height:1.35}
 .se-effect-pick em{display:block;margin-top:4px;color:#ffd27f;font-size:11px;font-style:normal}
+
+/* ---- Stage test side panel ---- */
+.se-head-actions{display:flex;gap:8px;align-items:center}
+body.sim-open main{margin-right:min(46vw,760px)}
+body.sim-open.sim-wide main{margin-right:min(66vw,1180px)}
+.sim-panel{position:fixed;top:60px;right:0;bottom:0;z-index:1001;width:min(46vw,760px);display:flex;flex-direction:column;gap:8px;padding:12px 14px;background:#141a22;color:#e8edf3;border-left:3px solid #e8c949;box-shadow:-10px 0 30px #0006;overflow:auto}
+.sim-panel input,.sim-panel select{background:#0d1117;color:#f2f5f8;border:1px solid #4a5666;border-radius:6px;padding:6px 8px}
+.sim-panel select option{background:#0d1117;color:#f2f5f8}
+.sim-panel button{background:#253041;color:#f2f5f8;border:1px solid #4a5666}
+.sim-panel button.primary{background:#e8c949;color:#111;border-color:#e8c949}
+body.sim-wide .sim-panel{width:min(66vw,1180px)}
+.sim-panel[hidden]{display:none}
+.sim-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.sim-head h2{margin:2px 0 0;font-size:18px}
+.sim-head-actions{display:flex;gap:6px}.sim-head-actions button{min-width:36px;padding:6px 10px;font-size:16px}
+.sim-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.sim-field{display:grid;gap:4px;font-size:12px;font-weight:700;color:#aab6c5}
+.sim-field input,.sim-field select{min-height:34px;font:inherit;font-weight:600}
+.sim-field input{width:96px}
+.sim-squad div{display:flex;gap:6px;flex-wrap:wrap}.sim-squad select{max-width:150px}
+.sim-run-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sim-auto{display:flex;gap:6px;align-items:center;font-size:12px;color:#aab6c5}
+.sim-stats{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:6px;background:#0b0f14;border:1px solid #2c3644;color:#fff;padding:8px 10px;border-radius:6px;position:relative}
+.sim-stats::after{content:attr(data-source);position:absolute;right:10px;top:-16px;font-size:10px;color:#69778c}
+.sim-stats span{display:block;font-size:10px;letter-spacing:.12em;opacity:.7}
+.sim-stats b{font-size:16px}
+.sim-boss i{display:block;height:6px;margin-top:4px;background:#ffffff22}
+.sim-boss em{display:block;height:100%;background:linear-gradient(90deg,#e33,#f97);transform-origin:left;transform:scaleX(1);transition:transform .3s}
+.sim-result{margin:0;padding:8px 12px;border-radius:6px;font-weight:800}
+.sim-result.is-clear{background:#dff5e3;color:#14532d}.sim-result.is-fail{background:#fde2e2;color:#7f1d1d}
+.sim-frame-wrap{position:relative;flex:0 0 auto;width:100%;aspect-ratio:1366 / 657;background:#111;border-radius:6px;overflow:hidden}
+.sim-frame-wrap iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0}
+.sim-frame-wrap::after{content:attr(data-scale);position:absolute;right:6px;bottom:4px;font-size:10px;color:#fff9;pointer-events:none}
+.sim-frame-note{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:6px;font-weight:700;pointer-events:none;text-align:center}
+.sim-frame-note[hidden]{display:none}
+.sim-foot{margin:0;font-size:12px;color:#93a0b0}
+.sim-panel .cq-kicker{color:#e8c949}
+@media (max-width:1100px){body.sim-open main{margin-right:0}.sim-panel{width:100vw}}
+/* body + battle view */
+.sim-body{display:block;flex:1 1 auto;min-height:0}
+.sim-main{display:flex;flex-direction:column;gap:8px;min-height:0}
+.sim-tune{display:none}
+body.sim-full{overflow:hidden}
+body.sim-full .sim-panel{top:0;left:0;width:auto;z-index:2500;border-left:0;padding:10px 14px}
+body.sim-full .sim-body{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:14px;min-height:0}
+body.sim-full .sim-main{height:100%}
+body.sim-full .sim-frame-wrap{flex:1 1 auto;min-height:0;aspect-ratio:auto!important}
+body.sim-full .sim-foot{display:none}
+body.sim-full #simWide{display:none}
+body.sim-full .sim-tune{display:block;overflow:auto;min-height:0;padding:4px 10px 12px 2px;border-right:1px solid #2c3644}
+.sim-tune h3{margin:14px 0 6px;font-size:12px;letter-spacing:.14em;color:#e8c949;text-transform:uppercase}
+.sim-tune h3:first-child{margin-top:2px}
+.sim-t-row{display:grid;grid-template-columns:1fr 92px;gap:8px;align-items:center;font-size:12.5px;color:#d5dce5;margin:4px 0}
+.sim-t-row i{font-style:normal;font-size:10px;background:#e8c949;color:#111;padding:0 4px;border-radius:3px;margin-left:4px}
+.sim-t-row input,.sim-t-row select{min-height:30px;width:100%}
+.sim-t-check{display:flex;gap:6px;align-items:center;font-size:12.5px;color:#d5dce5;margin:6px 0}
+.sim-t-effect{border:1px solid #2c3644;border-radius:6px;padding:4px 8px;margin:6px 0;background:#10151c}
+.sim-t-effect.is-on{border-color:#e8c94988}
+.sim-t-head span{font-weight:800}
+.sim-t-note{font-size:11.5px;margin-top:14px}

@@ -2866,6 +2866,7 @@ async function launchStoryStage(stage){
     return;
   }
   if(window.RPG_CONQUEST?.run){storySquad.ids=window.RPG_CONQUEST.run.ids.slice();}
+  else if(window.RPG_SIM_MODE&&Array.isArray(window.RPG_SIM_SQUAD)&&/^[12]-/.test(String(stage.id||''))){storySquad.ids=window.RPG_SIM_SQUAD.slice(0,3);} // Adventure Editor stage test
   else if(/^[12]-/.test(String(stage.id||''))){
     const chosen=await chooseStorySquad();
     if(!chosen){showModeSelectScreen();window.RPG_STORY.openMap(launchStoryStage);return;}
@@ -7337,8 +7338,43 @@ runCmd.addEventListener("click", () => {
     }
   }
 
+  // ---- Adventure Editor stage test (adventure.html?sim=1 inside the editor) -------------------
+  // Plays one stage with the editor's unsaved values. Nothing is saved: the page runs offline
+  // as a throwaway player, results only go back to the editor panel.
+  if(window.RPG_SIM_MODE){
+    const post=msg=>{try{window.parent.postMessage({source:'rpg-sim',...msg},location.origin);}catch(_){}};
+    let simStage=null,lastState='',startedAt=0;
+    const report=outcome=>{post({type:'end',outcome,stageId:simStage?.id||'',damage:Math.round(damageTakenThisStage*10),seconds:Math.round(stageElapsedSec()),mistakes,correct:guildCorrectThisRun,bossHpLeft:Math.round(bossHp*10),bossHpMax:Math.round(bossMaxHp*10),playerHp:Math.round(playerHp*10)});};
+    // After a result the game would open the territory map: show a calm idle screen instead.
+    const idle=()=>{try{stopBgm();}catch(_){}resetGame(false);try{showOverlay(false);}catch(_){}post({type:'idle'});};
+    if(window.RPG_STORY){window.RPG_STORY.openMap=idle;window.RPG_STORY.openStageSelect=idle;}
+    setInterval(()=>{
+      // Skip the "Ready for battle?" line so a test starts straight away.
+      if(simStage&&gameState==='dialogue')window.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}));
+      if(!simStage||gameState===lastState)return;lastState=gameState;
+      if(gameState==='playing'&&!startedAt){startedAt=Date.now();post({type:'started',stageId:simStage.id});}
+      if(['stageclear','stageClearing','victory'].includes(gameState))report('clear');
+      if(['continuePrompt','gameover'].includes(gameState))report('defeat');
+    },150);
+    setInterval(()=>{if(simStage&&gameState==='playing')post({type:'live',seconds:Math.round(stageElapsedSec()),damage:Math.round(damageTakenThisStage*10),bossHpLeft:Math.round(bossHp*10),bossHpMax:Math.round(bossMaxHp*10),words:wordsOnField.length,mistakes});},500);
+    window.RPG_SIM={
+      launch(stage,squad){
+        try{stopDefeatUI();}catch(_){}
+        try{stopBgm();}catch(_){}
+        resetGame(false);
+        storySquad.ids=[];window.RPG_CONQUEST?.abort?.();
+        window.RPG_SIM_SQUAD=Array.isArray(squad)?squad.filter(id=>/^[a-z][a-z0-9_]{0,39}$/.test(id)).slice(0,3):[];
+        if(window.ADVENTURE_PLAYER&&window.RPG_SIM_SQUAD[0])window.ADVENTURE_PLAYER.selected_character=window.RPG_SIM_SQUAD[0];
+        simStage={...stage,intro:[],outro:[],type:'battle-only'};lastState='';startedAt=0;
+        try{hideIntroStartScreen();}catch(_){}
+        return launchStoryStage(simStage);
+      },
+      stop(){simStage=null;try{stopDefeatUI();}catch(_){}idle();}
+    };
+  }
   bootGame();
   window.RPG_ADVENTURE_READY=true;
+  if(window.RPG_SIM_MODE){try{window.parent.postMessage({source:'rpg-sim',type:'ready'},location.origin);}catch(_){}}
 
   requestAnimationFrame(tick);
 })();

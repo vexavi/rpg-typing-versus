@@ -45,7 +45,7 @@ function acceptTerritorySave(saved,id,required){
  for(const [key,n] of Object.entries(saved.best_stars||{}))if(belongs(key)&&completed.has(key)&&Number.isInteger(n)&&n>=0&&n<=4)bestStars[key]=n;
  storageSave();return true;
 }
-const allStages=()=>chapters.flatMap(c=>c.stages);
+const allStages=()=>(chapters||[]).flatMap(c=>c.stages);
 function normalizeManifest(raw){
  if(!raw||!Array.isArray(raw.chapters))throw Error('Invalid story chapters file.');
  const ids=new Set();const chaptersOut=[];
@@ -428,5 +428,5 @@ function showResult(stageId,rating,damage){
   box.addEventListener('keydown',onKey);box.querySelector('#story-result-continue').onclick=finish;box.querySelector('#story-result-continue').focus();
  });
 }
-window.RPG_STORY={openMap,openStageSelect,showSlides,markCompleted,showResult,markConquestCompleted,showConquestReward,showConquestResult,cancelConquestOverlay,loadManifest,getCompleted:()=>[...completed],getBestStars:()=>({...bestStars}),isUnlocked,starsForDamage};
+window.RPG_STORY={normalizeManifest,openMap,openStageSelect,showSlides,markCompleted,showResult,markConquestCompleted,showConquestReward,showConquestResult,cancelConquestOverlay,loadManifest,getCompleted:()=>[...completed],getBestStars:()=>({...bestStars}),isUnlocked,starsForDamage};
 })();

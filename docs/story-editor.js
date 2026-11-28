@@ -544,7 +544,7 @@ function renderFields(){
  const sec=(key,title,hint,body)=>`<details class="se-fold" data-sec="${key}" ${openSections.has(key)?'open':''}><summary><b>${title}</b>${hint?`<small>${hint}</small>`:''}</summary><div class="se-fold-body">${body}</div></details>`;
  const stageNo=battles.indexOf(st)+1;
  const effectCount=effectsFor(ch).filter(m=>effectOn(m,st)).length;
- $('stageFields').innerHTML=`<section class="section se-stage"><div class="editheading se-stage-head"><div><span class="cq-kicker">STAGE ${String(stageNo).padStart(2,'0')}${battles.at(-1)===st?' · FINAL BOSS':''}</span><h2>${esc(st.title||'Stage')}</h2></div><button class="danger" data-action="delete-stage">Delete stage</button></div>
+ $('stageFields').innerHTML=`<section class="section se-stage"><div class="editheading se-stage-head"><div><span class="cq-kicker">STAGE ${String(stageNo).padStart(2,'0')}${battles.at(-1)===st?' · FINAL BOSS':''}</span><h2>${esc(st.title||'Stage')}</h2></div><div class="se-head-actions"><button type="button" class="primary" data-action="sim-open" title="Play this stage with your current values">▶ Test stage</button><button class="danger" data-action="delete-stage">Delete stage</button></div></div>
  <div class="se-card"><h3>Basics</h3><div class="grid se-grid-3">
   <div class="field"><label for="st-title">Stage name</label><input id="st-title" data-stage-field="title" maxlength="85" value="${esc(st.title)}"><span class="muted">Shown in the stage list</span></div>
   <div class="field"><label for="st-bossname">Boss name</label><input id="st-bossname" data-battle-field="bossName" maxlength="40" value="${esc(st.battle?.bossName||'')}"><span class="muted">Shown above the boss</span></div>
@@ -902,3 +902,170 @@ async function boot(){
 void boot();
 // v148.9: fold a mechanic's settings away while it is disabled.
 document.addEventListener('change',e=>{const t=e.target;if(t?.matches?.('select[data-mechanic-key="enabled"]'))t.closest('.mechanicgroup')?.classList.toggle('is-off',t.value!=='true');});
+
+// ---- Stage test (side simulator) -------------------------------------------------------------
+// Plays the selected stage in the real game (adventure.html?sim=1) with the editor's UNSAVED
+// values, fully resolved (stage values, else Game Settings, else built-in defaults) — speed,
+// spawn, damage, boss HP and every stage effect. Nothing is published or saved for students.
+const SIM_PREF='rpg_editor_sim_v1';
+const sim={open:false,ready:false,pending:null,words:new Map(),roster:[],timer:0,lastStage:''};
+const simPrefs=(()=>{const d={squad:['mc','',''],pool:'1',auto:false,screen:'1366x657'};try{return {...d,...JSON.parse(localStorage.getItem(SIM_PREF)||'{}')};}catch(_){return d;}})();
+// The game runs at a real screen size inside the panel and is shrunk to fit, so the battle
+// layout is exactly what students see (not a squeezed narrow-window layout).
+function simFit(){
+ const wrap=$('simFrameWrap'),f=$('simFrame');if(!wrap||!f)return;
+ const [w,h]=String(simPrefs.screen||'1366x657').split('x').map(Number);
+ const full=document.body.classList.contains('sim-full');
+ f.style.width=w+'px';f.style.height=h+'px';wrap.style.aspectRatio=full?'auto':`${w} / ${h}`;
+ const k=Math.min(1,(wrap.clientWidth/w)||1,full?((wrap.clientHeight/h)||1):1);
+ const left=full?Math.max(0,(wrap.clientWidth-w*k)/2):0,top=full?Math.max(0,(wrap.clientHeight-h*k)/2):0;
+ f.style.transform=`translate(${left}px,${top}px) scale(${k})`;
+ wrap.dataset.scale=`${w}×${h} · shown at ${Math.round(k*100)}%`;
+}
+// Battle view: every word-related value for this stage, editable beside the running battle.
+function simTuneRender(){
+ const box=$('simTune'),st=currentStage(),ch=currentChapter();if(!box||!st||!ch||!document.body.classList.contains('sim-full'))return;
+ const num=(key)=>{const [label,min,max,step]=STAGE_FIELDS[key],v=st.battle?.[key]??inherited(key,st).value,own=st.battle?.[key]!==undefined&&st.battle?.[key]!==null;
+  return `<label class="sim-t-row"><span>${esc(label)}${own?' <i>stage</i>':''}</span><input type="number" data-battle-field="${key}" min="${showDamage(key,min)}" max="${showDamage(key,max)}" step="${showDamage(key,step)}" value="${esc(showDamage(key,v))}"></label>`;};
+ const words=Object.keys(STAGE_FIELDS).filter(k=>!(k in DAMAGE_DEFAULTS)).map(num).join('')+num('hitDamage');
+ const damage=Object.keys(DAMAGE_DEFAULTS).filter(k=>k!=='hitDamage').map(num).join('')
+  +`<label class="sim-t-check"><input type="checkbox" data-battle-field="cometEnabled" ${st.battle?.cometEnabled===true?'checked':''}> Comets (every 4th word)</label>`
+  +`<label class="sim-t-check"><input type="checkbox" data-battle-field="shootingStarEnabled" ${st.battle?.shootingStarEnabled===true?'checked':''}> Shooting stars</label>`
+  +(String(ch.id)==='1'?`<label class="sim-t-row"><span>Panic word damage</span><input type="number" data-damage-panic="true" min="10" max="100" step="10" value="${esc(panicDamageValue(st)*10)}"></label>`:'');
+ const effects=effectsFor(ch).map(m=>{const on=effectOn(m,st);
+  const fields=on?effectFields(m).map(f=>{const attr=`data-mechanic-id="${esc(m.id)}" data-mechanic-key="${esc(f.key)}"`,v=effectValue(m,f,st);
+   return f.type==='boolean'?`<label class="sim-t-row"><span>${esc(f.label)}</span><select ${attr}><option value="true" ${v===true?'selected':''}>On</option><option value="false" ${v!==true?'selected':''}>Off</option></select></label>`
+    :`<label class="sim-t-row"><span>${esc(f.label)}</span><input type="number" ${attr} min="${f.min}" max="${f.max}" step="${f.step||1}" value="${esc(v)}"></label>`;}).join(''):'';
+  return `<div class="sim-t-effect${on?' is-on':''}"><label class="sim-t-row sim-t-head"><span>${EFFECT_ICON[m.id]||'✨'} ${esc(effectLabel(m))}</span><select data-mechanic-id="${esc(m.id)}" data-mechanic-key="enabled"><option value="true" ${on?'selected':''}>On</option><option value="false" ${on?'':'selected'}>Off</option></select></label>${EFFECT_NEEDS[m.id]&&on?`<small class="muted">Needs ${esc(EFFECT_NEEDS[m.id])} on too.</small>`:''}${fields}</div>`;}).join('');
+ box.innerHTML=`<h3>Boss</h3><label class="sim-t-row"><span>Boss HP</span><input type="number" data-tune-boss min="10" max="9990" step="10" value="${esc(Math.round((st.battle?.bossHp??20)*10))}"></label>
+  <h3>Words</h3>${words}<h3>Damage</h3>${damage}<h3>Stage effects</h3>${effects||'<p class="muted">No effects for this territory.</p>'}
+  <p class="muted sim-t-note">Changes go into your draft right away (same as the editor). Press ↻ Restart test to play with them, or tick “Restart when I change a value”.</p>`;
+}
+function saveSimPrefs(){try{localStorage.setItem(SIM_PREF,JSON.stringify(simPrefs));}catch(_){}}
+function simResolvedStage(st){
+ const battle=clone(st.battle||{});
+ for(const key of Object.keys(STAGE_FIELDS))if(battle[key]===undefined||battle[key]===null){const v=inherited(key,st).value;if(v!==undefined)battle[key]=v;}
+ const mechanics={};
+ for(const m of catalog()){const row={};for(const f of m.fields){const v=effectValue(m,f,st);if(v!==undefined)row[f.key]=v;}mechanics[m.id]=row;}
+ battle.mechanics=mechanics;
+ return {...clone(st),battle,intro:[],outro:[]};
+}
+async function simWords(pool){
+ if(sim.words.has(pool))return sim.words.get(pool);
+ let words=null,source='';
+ try{
+  if(cloud&&db&&checkAuth()){
+   const snap=await getDocFromServer(doc(db,'vocabPools',pool));
+   const list=snap.exists()?(snap.data().words||[]).filter(w=>w&&w.active!==false):[];
+   if(list.length){words=list;source='class list';}
+  }
+ }catch(e){console.info('Stage test: class words unavailable, using sample words.',e?.message||e);}
+ if(!words){try{const seed=await fetch('seed-vocab.json',{cache:'default'}).then(r=>r.json());words=seed[pool]||seed['1']||[];source='sample words';}catch(_){words=[];}}
+ const out={words,source};sim.words.set(pool,out);return out;
+}
+async function simRoster(){
+ if(sim.roster.length)return sim.roster;
+ try{const c=await fetch('gacha_catalog.json',{cache:'default'}).then(r=>r.json());sim.roster=[{id:'mc',name:'Main Character',rarity:0},...(c.characters||[]).filter(x=>/^[a-z][a-z0-9_]{0,39}$/.test(x.id))];}catch(_){sim.roster=[{id:'mc',name:'Main Character',rarity:0}];}
+ return sim.roster;
+}
+function simPanel(){
+ let p=$('simPanel');if(p)return p;
+ p=document.createElement('aside');p.id='simPanel';p.className='sim-panel';p.hidden=true;p.setAttribute('aria-label','Stage test');
+ p.innerHTML=`<header class="sim-head"><div><span class="cq-kicker">STAGE TEST · NOT SAVED</span><h2 id="simTitle">Stage</h2></div>
+  <div class="sim-head-actions"><button type="button" id="simFull" title="Full battle view with all word settings beside it">⛶ Battle view</button><button type="button" id="simWide" title="Make the side panel wider">⤢</button><button type="button" id="simClose" aria-label="Close stage test">×</button></div></header>
+  <div class="sim-body"><aside class="sim-tune" id="simTune" aria-label="Stage settings"></aside><div class="sim-main">
+  <div class="sim-controls">
+   <label class="sim-field">Boss HP<input type="number" id="simBossHp" min="10" max="9990" step="10"></label>
+   <label class="sim-field">Screen<select id="simScreen"><option value="1366x657">Chromebook (1366×657)</option><option value="1280x609">Small Chromebook (1280×609)</option><option value="1728x993">16-inch laptop (1728×993)</option><option value="1920x969">Full HD monitor (1920×969)</option></select></label>
+   <label class="sim-field">Words<select id="simPool"><option value="1">Grade 1</option><option value="2">Grade 2</option><option value="3">Grade 3</option><option value="b">B group</option><option value="all">All grades</option></select></label>
+   <div class="sim-field sim-squad"><span id="simSquadLabel">Squad</span><div><select data-sim-squad="0"></select><select data-sim-squad="1"></select><select data-sim-squad="2"></select></div></div>
+  </div>
+  <div class="sim-run-row"><button type="button" class="primary" id="simRun">▶ Run test</button><button type="button" id="simStop">■ Stop</button>
+   <label class="sim-auto"><input type="checkbox" id="simAuto"> Restart when I change a value</label></div>
+  <div class="sim-stats" id="simStats"><div class="sim-boss"><span>BOSS HP</span><b id="simBossText">—</b><i><em id="simBossBar"></em></i></div>
+   <div><span>TIME</span><b id="simTime">0:00</b></div><div><span>DAMAGE TAKEN</span><b id="simDamage">0</b></div><div><span>MISTAKES</span><b id="simMistakes">0</b></div><div><span>WORDS ON FIELD</span><b id="simWordsOn">0</b></div></div>
+  <p class="sim-result" id="simResult" hidden></p>
+  <div class="sim-frame-wrap" id="simFrameWrap"><iframe id="simFrame" title="Stage test" allow="autoplay"></iframe><div class="sim-frame-note" id="simNote">Press ▶ Run test. Click inside the game to type.</div></div>
+  <p class="muted sim-foot">Uses your current edits, including ones you haven't published. Results are not saved. After changing a value, press ▶ Run test again (or tick “Restart when I change a value”).</p>
+  </div></div>`;
+ document.body.appendChild(p);
+ const fill=async()=>{const roster=await simRoster();for(const sel of p.querySelectorAll('[data-sim-squad]')){const i=Number(sel.dataset.simSquad);sel.innerHTML=(i?'<option value="">—</option>':'')+roster.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.rarity?` (${c.rarity}★)`:''}</option>`).join('');sel.value=simPrefs.squad[i]||'';if(!i&&!sel.value)sel.value='mc';}};
+ void fill();
+ $('simPool').value=simPrefs.pool;$('simAuto').checked=!!simPrefs.auto;$('simScreen').value=simPrefs.screen;
+ $('simScreen').onchange=()=>{simPrefs.screen=$('simScreen').value;saveSimPrefs();simFit();};
+ try{new ResizeObserver(()=>simFit()).observe($('simFrameWrap'));}catch(_){window.addEventListener('resize',simFit);}
+ simFit();
+ $('simPool').onchange=()=>{simPrefs.pool=$('simPool').value;saveSimPrefs();};
+ $('simAuto').onchange=()=>{simPrefs.auto=$('simAuto').checked;saveSimPrefs();};
+ p.querySelectorAll('[data-sim-squad]').forEach(sel=>sel.onchange=()=>{simPrefs.squad=[...p.querySelectorAll('[data-sim-squad]')].map(s=>s.value);saveSimPrefs();});
+ $('simBossHp').addEventListener('change',()=>{const st=currentStage();if(!st)return;const v=Math.max(10,Math.min(9990,Math.round((Number($('simBossHp').value)||10)/10)*10));$('simBossHp').value=v;st.battle.bossHp=v/10;markDirty();const main=$('st-hp');if(main)main.value=v;simChanged();});
+ $('simRun').onclick=()=>void simRun();
+ $('simStop').onclick=()=>{simPost({type:'rpg-sim-stop'});$('simNote').hidden=false;$('simNote').textContent='Stopped. Press ▶ Run test to play again.';};
+ $('simClose').onclick=()=>simClose();
+ $('simWide').onclick=()=>{document.body.classList.toggle('sim-wide');setTimeout(simFit,50);};
+ $('simFull').onclick=()=>{const on=document.body.classList.toggle('sim-full');$('simFull').textContent=on?'◧ Side panel':'⛶ Battle view';if(on)simTuneRender();setTimeout(simFit,50);};
+ // Settings beside the battle: same data attributes as the editor, so the normal editor logic
+ // stores them (with the same limits), then both views refresh.
+ $('simTune').addEventListener('change',e=>{
+  const t=e.target;if(!t.matches('input,select'))return;
+  if(t.dataset.tuneBoss!==undefined){$('simBossHp').value=t.value;$('simBossHp').dispatchEvent(new Event('change'));simTuneRender();return;}
+  handleEditorInput(e);renderFields();simTuneRender();simSync();simChanged();
+ });
+ window.addEventListener('message',simMessage);
+ return p;
+}
+function simPost(msg){const f=$('simFrame');if(sim.ready&&f?.contentWindow)f.contentWindow.postMessage(msg,location.origin);}
+function simSync(){
+ const st=currentStage(),ch=currentChapter();if(!st)return;
+ $('simTitle').textContent=`${st.title||'Stage'} · ${st.id}`;
+ if(document.activeElement!==$('simBossHp'))$('simBossHp').value=Math.round((st.battle?.bossHp??20)*10);
+ const squadTerritory=/^[12]$/.test(String(ch?.id));
+ $('simSquadLabel').textContent=squadTerritory?'Squad (1st plays first)':'Operator';
+ $('simPanel').querySelectorAll('[data-sim-squad]').forEach((sel,i)=>{sel.hidden=!squadTerritory&&i>0;});
+}
+function simOpen(){
+ const p=simPanel();p.hidden=false;sim.open=true;document.body.classList.add('sim-open');simSync();
+ const f=$('simFrame');if(!f.src){sim.ready=false;f.src='adventure.html?sim=1';}
+ void simRun();
+}
+function simClose(){simPost({type:'rpg-sim-stop'});$('simPanel').hidden=true;sim.open=false;document.body.classList.remove('sim-open','sim-wide','sim-full');$('simFull').textContent='⛶ Battle view';}
+async function simRun(){
+ const st=currentStage(),ch=currentChapter();if(!st||!ch||st.type==='story-only')return;
+ simSync();
+ const pool=$('simPool').value||'1',{words,source}=await simWords(pool);
+ if(!words.length){$('simNote').hidden=false;$('simNote').textContent='No words found for this group.';return;}
+ const squad=[...$('simPanel').querySelectorAll('[data-sim-squad]')].filter(s=>!s.hidden).map(s=>s.value).filter(Boolean);
+ const stage=simResolvedStage(st);
+ const chapter={...clone(ch),stages:[stage]};
+ sim.pending={type:'rpg-sim-run',stage,chapter,squad:squad.length?squad:['mc'],words};
+ $('simResult').hidden=true;$('simNote').hidden=false;$('simNote').textContent=sim.ready?'Starting…':'Loading the game…';
+ $('simRun').textContent='↻ Restart test';
+ $('simStats').dataset.source=`${source} · ${words.length} words`;
+ if(sim.ready){simPost(sim.pending);sim.pending=null;}
+ $('simFrame').focus();
+}
+function simChanged(){simTuneRender();if(!sim.open||!simPrefs.auto)return;clearTimeout(sim.timer);sim.timer=setTimeout(()=>void simRun(),900);}
+const mmss=s=>`${Math.floor((s||0)/60)}:${String((s||0)%60).padStart(2,'0')}`;
+function simLive(d){
+ if(Number.isFinite(d.bossHpMax)&&d.bossHpMax>0){$('simBossText').textContent=`${d.bossHpLeft} / ${d.bossHpMax}`;$('simBossBar').style.transform=`scaleX(${Math.max(0,Math.min(1,d.bossHpLeft/d.bossHpMax))})`;}
+ if(d.seconds!==undefined)$('simTime').textContent=mmss(d.seconds);
+ if(d.damage!==undefined)$('simDamage').textContent=String(d.damage);
+ if(d.mistakes!==undefined)$('simMistakes').textContent=String(d.mistakes);
+ if(d.words!==undefined)$('simWordsOn').textContent=String(d.words);
+}
+function simMessage(e){
+ if(e.origin!==location.origin||e.source!==$('simFrame')?.contentWindow)return;
+ const d=e.data||{};if(d.source!=='rpg-sim')return;
+ if(d.type==='ready'){sim.ready=true;if(sim.pending){simPost(sim.pending);sim.pending=null;}}
+ else if(d.type==='started'){$('simNote').hidden=true;$('simFrame').focus();}
+ else if(d.type==='live')simLive(d);
+ else if(d.type==='end'){
+  simLive(d);const r=$('simResult');r.hidden=false;r.className='sim-result '+(d.outcome==='clear'?'is-clear':'is-fail');
+  r.textContent=d.outcome==='clear'?`CLEARED in ${mmss(d.seconds)} · damage taken ${d.damage} · ${d.mistakes} mistake${d.mistakes===1?'':'s'}`:`DEFEATED at ${mmss(d.seconds)} · boss HP left ${d.bossHpLeft} / ${d.bossHpMax} · ${d.mistakes} mistake${d.mistakes===1?'':'s'}`;
+ }
+ else if(d.type==='idle'){$('simNote').hidden=false;$('simNote').textContent='Test finished. Adjust values, then press ↻ Restart test.';}
+}
+// Entry button on each stage + auto-restart on edits.
+document.addEventListener('click',e=>{if(e.target.closest?.('[data-action="sim-open"]')){e.preventDefault();simOpen();}});
+for(const id of ['stageFields']){const el=$(id);if(el){el.addEventListener('change',()=>{if(sim.open){simSync();simChanged();}});}}
+document.addEventListener('click',e=>{if(sim.open&&e.target.closest?.('#stageList,#chapterList'))setTimeout(()=>{simSync();simChanged();},50);});
